@@ -15,8 +15,9 @@ dangerous, and the shape a fire makes once it grows big enough to build its own 
 
 **Nothing is built yet.** The scope change was put on 15 September 2026 and two rounds of questions
 have been answered against it. What is decided so far — a greenfield Python service in Docker, a
-pluggable model, five endpoints behind a Cloudflare tunnel, and curing derived from satellite
-greenness rather than typed in — is recorded as `W-001` to `W-024`.
+pluggable model, five endpoints behind a Cloudflare tunnel, observations correcting models but models
+never blending, provenance down to the variable, and curing derived from satellite greenness rather
+than typed in — is recorded as `W-001` to `W-034`.
 
-**Start here → [docs/QUESTIONS.md](docs/QUESTIONS.md).** Fifty-two questions, five of them blocking
-the architecture. Answer in place on the `**A:**` lines; answers get applied and logged.
+**Start here → [docs/QUESTIONS.md](docs/QUESTIONS.md).** Forty-eight questions open, two of them
+blocking. Answer in place on the `**A:**` lines; answers get applied and logged.

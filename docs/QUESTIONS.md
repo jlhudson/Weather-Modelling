@@ -3,12 +3,12 @@
 The weather service, split out of
 [The Hub Database](https://github.com/jlhudson/The-Hub-Database) and rebuilt.
 
-**Round 2 changed almost everything.** Round 1 decided a lift-and-shift of working Java; round 2
-reverses it. Anvil is now a **greenfield Python service in Docker**, built to a product definition
-rather than ported from one, with a pluggable model underneath it and a handful of endpoints on top.
+**Round 2 changed almost everything; round 3 settled it.** Round 1 decided a lift-and-shift of
+working Java; round 2 reversed it into a **greenfield Python service in Docker**; round 3 answered the
+five architectural questions that shape entailed. Thirty-four decisions stand.
 
-Round 1's decisions that survive are marked. Round 2's are new. **Section A is five questions and
-they block the architecture, not the approval** — the approval happened.
+**Section A is down to two**, and both are consequences of round 3 rather than survivors of it. The
+architecture is settled: what is left is the shape of the answer on the wire.
 
 ---
 
@@ -69,7 +69,22 @@ Answers get applied here and logged at the bottom; nothing lives only in chat.
 
 ## Decisions
 
-James, 15 September 2026, rounds 1 and 2.
+James, 15 September 2026, rounds 1 to 3.
+
+### Round 3 — the architecture
+
+| #                           | Decision                                                                                                                                                             |
+|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| <a id="w-025"></a>**W-025** | **Observations correct models; models never correct each other.** Built as one-source-wins first, with the resolver shaped so a per-variable correction step slots in when Bureau stations arrive. Answers [A1](#a1) |
+| <a id="w-026"></a>**W-026** | **Provenance at all three levels** — per answer, per block, and **per variable**. Cheap now, impossible later, and it is what makes [W-025](#w-025)'s correction step reachable without a rewrite. Answers [A2](#a2) |
+| <a id="w-027"></a>**W-027** | **A server manifest bounds what exists; a caller narrows by whole block.** `weather`, `drought`, `flood`, `fire`. No per-field selection. Answers [A3](#a3)            |
+| <a id="w-028"></a>**W-028** | **The first cut is nine sources**: Open-Meteo forecast, archive, flood and ACCESS-G (off by default); Google; the height map; the CFS fuel layers; and satellite curing. **MET Norway and Bureau stations are not in v1.** Answers [A4](#a4) |
+| <a id="w-029"></a>**W-029** | **A day is spent establishing whether a published curing product exists** — machine-readable, licensed — before anything is built on one. The manual register is built regardless. Answers [A5](#a5) |
+| <a id="w-030"></a>**W-030** | **The name is Anvil.** Confirmed. Answers [Q1](#q1)                                                                                                                    |
+| <a id="w-031"></a>**W-031** | **The proximity anchor stays**, with its three-dimensional reach. One concept across every source, and the reason twenty appliances on one fire ground cost one call. Answers [F2](#f2) |
+| <a id="w-032"></a>**W-032** | **`xclim` is a dependency where it covers the quantity** — KBDI and the drought factor. **Our own code for FFDI, GFDI and spread**, pinned to Noble, Bary and Gill (1980), which is the form the Hub's tests are cut against. Answers [B5](#b5) |
+| <a id="w-033"></a>**W-033** | **The incident path is asynchronous.** The incident is created without weather; the component attaches when Anvil answers. Two-second timeout, no retry in the request. **Incident creation can never be slowed or failed by Anvil.** Answers [E2](#e2) |
+| <a id="w-034"></a>**W-034** | **The test fixtures are ported before any maths is written.** The Java's expected values — the hand-worked FFDI, the xclim-checked drought factors — become language-neutral JSON and Anvil's first test suite. Answers [I1](#i1) |
 
 ### Round 2 — the rebuild
 
@@ -167,164 +182,88 @@ a reason. Withhold a field and the model does not notice.
 
 ## Status
 
-| Section                             | Questions | Blocking |
-|-------------------------------------|-----------|----------|
-| **A — Blocking**                    | **5**     | **5**    |
-| B — The model                       | 6         | —        |
-| C — The API                         | 6         | —        |
-| D — Curing, fuel and the satellites | 6         | —        |
-| E — The Hub side                    | 6         | —        |
-| F — Storage and the cache           | 5         | —        |
-| G — The manager page                | 4         | —        |
-| H — Deployment, keys and the tunnel | 5         | —        |
-| I — Correctness                     | 4         | —        |
-| J — Later                           | 4         | —        |
-| [Q1 — the name](#q1)                | 1         | —        |
-| **Total**                           | **52**    | **5**    |
+| Section                             | Open  | Blocking |
+|-------------------------------------|-------|----------|
+| **A — Blocking**                    | **2** | **2**    |
+| B — The model                       | 6     | —        |
+| C — The API                         | 6     | —        |
+| D — Curing, fuel and the satellites | 7     | —        |
+| E — The Hub side                    | 6     | —        |
+| F — Storage and the cache           | 4     | —        |
+| G — The manager page                | 4     | —        |
+| H — Deployment, keys and the tunnel | 5     | —        |
+| I — Correctness                     | 4     | —        |
+| J — Later                           | 4     | —        |
+| **Total**                           | **48**| **2**    |
+
+Twenty-four questions have been answered across three rounds and become decisions; six were created
+by round 3 — [A6](#a6), [A7](#a7), [B7](#b7), [D7](#d7), [E7](#e7) and [I5](#i5).
 
 ---
 
 # Section A — Blocking
 
-*Five. Each one decides an architecture rather than a detail.*
+*Two. Both are consequences of round 3, and both are about the shape of the answer on the wire —
+the thing that is cheap today and unfixable once consumers read it.*
 
 ---
 
-<a id="a1"></a>**A1. When two sources can answer the same question, does one win or do they blend?**
+<a id="a6"></a>**A6. Per-variable provenance across a 72-hour series — per timestep, or per series?**
 
-This is the central question of a "comprehensive model" and the Hub answered it the other way, with a
-good argument:
+[W-026](#w-026) is the right call and it has an arithmetic problem behind it. An answer carries 72
+hourly steps across roughly fifteen variables. Attaching a source and an age to each of those is
+**over a thousand provenance objects in a single response**, most of them identical.
 
-> *"Every provider here returns **a model's estimate for a grid cell**, not a station reading, and
-> averaging two global models is not fusion, it is a third model nobody validated. One provider
-> answers; which one answered travels with the answer."*
+|   | Shape                                                                                          | Costs                                                                        |
+|---|---------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| 1 | **Per series.** One provenance entry per variable for the whole horizon — *"temperature: ACCESS-G, run 06Z, fetched 4 min ago"* | Small, readable, and correct almost always, because one source supplies a whole series |
+| 2 | **Per timestep.** Every value carries its own                                                  | Exact, and enormous. Only earns its keep if two sources ever supply different hours of one series |
+| 3 | **Per series, with exceptions.** One entry per variable, plus an override list for timesteps that differ | Small in the common case and correct in the rare one — at the cost of a shape with two ways to read it |
 
-That argument is sound **for models**. It stops being sound the moment real observations enter —
-combining an observation with a model estimate is not averaging two guesses, it is the thing weather
-services actually do. And [W-011](#w-011) says the Bureau permission exists, so observations are
-coming.
+*Why it blocks:* it is the contract, and consumer contracts are being written against it now.
 
-|   | Policy                                                                                     | Consequence                                                                     |
-|---|----------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
-| 1 | **One source wins per variable**, by configured priority. Which one answered travels with the answer | The Hub's rule, kept. Simple, explicable, and it wastes the observations when they arrive |
-| 2 | **Observations correct models; models never correct each other.** A station within *n* km and *m* minutes nudges the model estimate; two models never blend | Honest about the difference in kind. Needs a correction rule and a distance/time window |
-| 3 | **General blending** — weighted by declared per-source error                                | The most "model"-like, and it needs an error model per source per variable that nobody has |
-
-*Why it blocks:* it decides whether a variable has one provenance or several, which decides the
-answer's shape, which decides [A2](#a2) and the API contract. It is very hard to retrofit.
-
-*Default:* **option 2, built as option 1 first.** Ship one-source-wins now, with the resolver designed
-so a correction step can be inserted per variable later without changing the answer's shape — which
-means the provenance block has to be per-variable from day one, not per-answer.
+*Default:* **option 1 for the series, option 2 for `current`.** A forecast series comes from one model
+run and one source; the *now* block is where a station correction would land under
+[W-025](#w-025), so it is the one place a per-value source is worth carrying. If a series ever does
+get spliced, that is option 3 and it can wait until something actually splices one.
 
 **A:**
 
 ---
 
-<a id="a2"></a>**A2. What does provenance look like when the answer is assembled from many sources?**
+<a id="a7"></a>**A7. When an observation corrects a model, does the raw model value travel beside it?**
 
-Carried from round 1, and harder now. Today one line of English carries it: *"cache: anchor 15.0 km
-away, 4 min old"*. Under [W-024](#w-024) an answer might have temperature from ACCESS-G, rain from
-Open-Meteo, curing from a satellite pass three days ago and a drought factor integrated over a year —
-four ages, four distances, four licences, in one payload.
+[W-025](#w-025) says stations will correct model estimates. Stations are not in v1
+([W-028](#w-028)), so nothing is corrected yet — but by [A2](#a2)'s own logic the field has to exist
+before consumers learn its absence.
 
-And [W-009](#w-009) removed the time ceiling, so **the label is the only thing** standing between a
-consumer and an arbitrarily old reading.
+|   | Shape                                                                        | Consequence                                                                  |
+|---|----------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| 1 | **`value` is corrected; `modelValue` and `correction` travel beside it**     | Fully auditable. A consumer that ignores the extras still gets the better number |
+| 2 | **`value` is corrected, `corrected: true` and a basis sentence, no raw**      | Smaller, and you cannot reconstruct what the model actually said                |
+| 3 | **`value` is raw; the correction is a separate optional block**              | Nothing changes for existing consumers — and the default answer is then the worse number |
 
-| Level          | Carries                                                                     |
-|----------------|--------------------------------------------------------------------------------|
-| **Per answer** | `decision` in English, the worst age in it, and whether any rung below the first was used |
-| **Per block**  | `observedAge`, `heldFor`, `offsetMetres`, `degraded`, and the source that answered |
-| **Per variable** | The source and its age — needed if [A1](#a1) lands on option 2 or 3           |
+*Why it blocks:* it decides whether the hindcast scoring in [J2](#section-j--later) can ever run
+against served answers, or only against re-fetched raw data.
 
-*Why it blocks:* [13 · Concerns](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/13-concerns.md)
-calls this the failure the system cares about most, and the consumer contracts are being written
-against this shape right now. A field added in six months is a field everyone has learnt to ignore.
-
-*Default:* **all three levels, from the first version.** Per-variable provenance is cheap to carry and
-impossible to add later, and it is what makes [A1](#a1) option 2 reachable without a rewrite.
+*Default:* **option 1.** The raw value and the correction are two facts, and a system whose whole
+discipline is *say how you know* should not throw one away. `correction` names the station, its
+distance and its age.
 
 **A:**
 
 ---
 
-<a id="a3"></a>**A3. Is field selection a server decision or a caller decision?**
+## Answered in round 3
 
-[W-018](#w-018) says data can be added to and removed from the API. Two very different mechanisms:
-
-|   | Mechanism                                                                     | Costs                                                                        |
-|---|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
-| 1 | **Server-side manifest.** Anvil publishes what it is configured to publish; every caller gets the same shape | One contract, one thing to test, and a change is a deploy. Callers cannot trim a payload they do not want |
-| 2 | **Request-side selection** — `?blocks=weather,fire` or `?fields=`               | Callers take what they need; the Hub can skip flood on a medical callout. Every combination is now a shape somebody depends on |
-| 3 | **Both** — a manifest bounds what exists, a request narrows within it           | Most flexible, most to test, and the cache key now includes the selection      |
-
-*Why it blocks:* it changes the cache key, the contract test, and whether "add a field" is a deploy or
-a conversation.
-
-*Default:* **option 1 with block-level narrowing** — the manifest decides what exists, and a caller
-may ask for whole blocks (`weather`, `drought`, `flood`, `fire`) but not individual fields. Blocks are
-few, cacheable and already how the answer is shaped; per-field selection is a combinatorial contract
-nobody needs yet.
-
-**A:**
-
----
-
-<a id="a4"></a>**A4. Which sources are in the first cut?**
-
-[W-024](#w-024) makes the source list a living thing, which means the first cut is a choice rather
-than a definition. Everything named so far, with what it costs:
-
-| Source                                   | Gives                                          | In v1?                                            |
-|------------------------------------------|------------------------------------------------|---------------------------------------------------|
-| **Open-Meteo** `/v1/forecast`            | The widest variable set, blended best-available | **Yes.** The backbone                             |
-| **Open-Meteo** `/v1/archive`             | A year of daily history for the KBDI spin-up   | **Yes.** Drought does not exist without it        |
-| **Open-Meteo** `/v1/flood` (GloFAS)      | River discharge now and forecast                | **Yes** — cheap, one call per cell per day        |
-| **Open-Meteo** `/v1/bom` (ACCESS-G)      | The Australian national model                   | Yes, but off by default — it answered all-null in September |
-| **Google** Maps Platform Weather         | Rich current conditions. The only one that bills | Yes, last in order                                |
-| **Height map** (TIFF?)                   | True ground height, for the 3-D reach          | **[B1](#b1)** — what it is and where from is not settled |
-| **CFS fuel-type layers**                 | Fuel class at a point, for GFDI                 | **Yes** — GFDI is Anvil's now ([W-006](#w-006))   |
-| **Satellite greenness** (MODIS/Sentinel) | Curing, without a keyboard                      | **[Section D](#section-d--curing-fuel-and-the-satellites)** — the headline new thing, and the least certain |
-| **MET Norway** Locationforecast          | A free provider that permits commercial use     | Later ([W-012](#w-012)) — unless [D6](#d6) pulls it forward |
-| **Bureau station observations**           | Real point readings                             | Later ([W-011](#w-011)) — and the reason [A1](#a1) matters |
-
-*Why it blocks:* it is the scope of the build, and two rows are question marks rather than entries.
-
-*Default:* everything marked **Yes** above, satellite curing as a **stretch goal in v1** with the
-manual override as the guaranteed path, and the height map settled in [B1](#b1).
-
-**A:**
-
----
-
-<a id="a5"></a>**A5. Is there a fetchable, licensed curing product — and what happens if there is not?**
-
-[W-023](#w-023) is the best idea in the whole plan and the least verified. What is known: curing maps
-are made from satellite greenness with ground truthing, the CFS publishes a weekly map for South
-Australia, and there are Australian products in this space — Bureau and CFA curing guidance, and the
-ANU flammability monitoring work. **What is not known is whether any of them is machine-readable, at
-what resolution, under what licence, and how quickly.**
-
-Three routes, in descending order of how much I would trust them:
-
-|   | Route                                                                              | Risk                                                                    |
-|---|----------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| 1 | **Consume a published curing product** as data                                     | Best if it exists and is licensed. Needs finding and confirming first        |
-| 2 | **Derive curing from raw greenness** — MODIS or Sentinel NDVI against a seasonal baseline | Always available. It is our number, not the CFS's, and it will disagree with theirs sometimes |
-| 3 | **Keep the manual register** as the source                                          | What exists today. Blocks GFDI wherever nobody has typed a figure           |
-
-*Why it blocks:* GFDI is Anvil's now ([W-006](#w-006)), and a district with no curing figure has no
-grassland index. If route 1 does not exist and route 2 is a month of work, the honest v1 is route 3
-with the others behind it.
-
-*Default:* **spend a day establishing whether route 1 exists before committing to anything.** Build
-route 3 regardless — it is a table and a form, it is the override in
-[the API](#proposed-the-api) anyway, and it means GFDI is never blocked on a satellite. Then route 1
-if it is real, route 2 if it is not.
-
-**A:**
-
----
+**A1** — fusion. **Observations correct models; models never blend** ([W-025](#w-025)), built as
+one-source-wins with the correction step designed for.
+**A2** — provenance depth. **All three levels** ([W-026](#w-026)) — which is what created
+[A6](#a6).
+**A3** — field selection. **Manifest, narrowed by whole block** ([W-027](#w-027)).
+**A4** — the source list. **Nine, without MET Norway or Bureau stations** ([W-028](#w-028)).
+**A5** — curing. **Prove a published product exists first; build the register regardless**
+([W-029](#w-029)) — the branches are [D7](#d7).
 
 # Section B — The model
 
@@ -353,10 +292,17 @@ produce a number.** A missing input means the derived value is absent with a rea
 figure resting on an assumed input is exactly the failure [W-009](#w-009) forbids one level up.
 **A:**
 
-**B5. Is `xclim` a dependency or a reference?** The Hub hand-ported KBDI and the drought factor and
-caught two bugs by checking against xclim — `41x² + x` not `41x² + 1`, and Finkele's ceiling.
-*Default:* **a dependency where it covers the quantity**, our own code only where it does not. Not
-hand-porting equations is most of the reason to be in Python.
+<a id="b5"></a>**B5. Is `xclim` a dependency or a reference?** **Answered** — [W-032](#w-032). A
+dependency for KBDI and the drought factor; our own code for FFDI, GFDI and spread, because xclim's
+fire-weather variants may not be the Noble, Bary and Gill form the fixtures are cut against.
+
+<a id="b7"></a>**B7. Is the vertical term switched on at launch, and at what weight?** *(new)*
+[W-031](#w-031) keeps the three-dimensional reach; the Hub ships it at `vertical-weight: 0`, which
+reproduces a flat radius exactly, with 67 as the intended value — three hundred metres of climb
+costing the same as twenty kilometres of travel. Greenfield, there is no old behaviour to reproduce.
+*Default:* **ship at 67.** The reason it sits at 0 in the Hub is so the numbers could be compared
+against the flat rule they replaced; Anvil has nothing to compare against, and the Hills and the
+plains still do not share a wind.
 **A:**
 
 **B6. How are the fire indices themselves implemented?** FFDI is McArthur Mk5 in Noble, Bary and
@@ -431,6 +377,15 @@ Hub's key writes, the operator's name travels in the payload, a failure is an er
 nothing is queued or shadowed. Observer, date and source are stored with the row.
 **A:**
 
+<a id="d7"></a>**D7. What happens on each outcome of the curing investigation?** *(new)*
+[W-028](#w-028) puts satellite curing in v1; [W-029](#w-029) says spend a day proving a published
+product exists first. Those two need a gate between them. *Default:* **a licensed product exists** →
+consume it, and the register becomes the override. **It exists but is not licensed for our use** →
+route 2, derive from raw greenness, and [D3](#d3)'s disagreement log becomes the safeguard. **Nothing
+usable exists** → the register is the source for v1, satellite work moves to [Section J](#section-j--later),
+and GFDI is exactly as good as it is today rather than worse.
+**A:**
+
 <a id="d6"></a>**D6. Does the CFS fuel-type layer move cleanly?** GFDI needs fuel class at a point, off
 layers the Hub reads today. *Default:* the layers move to Anvil as files, the same way the height map
 does.
@@ -445,9 +400,15 @@ retries off — behind `WeatherManager`, which keeps deciding when to ask. Nothi
 knows Anvil exists.
 **A:**
 
-**E2. Is the call on the incident path synchronous?** Weather attaches when an incident is raised, and
-that now crosses a network. *Default:* **asynchronous** — the incident is created without weather and
-the component attaches when the answer arrives. Two-second timeout, no retry in the request.
+<a id="e2"></a>**E2. Is the call on the incident path synchronous?** **Answered — asynchronous**
+([W-033](#w-033)). Incident creation can never be slowed or failed by Anvil.
+
+<a id="e7"></a>**E7. What fills the gap [W-033](#w-033) opens, and who closes it?** *(new)* An incident
+now exists, briefly, with no weather block — and if Anvil is down at the moment it is raised, for
+longer than briefly. *Default:* the block is **absent, not empty** — consumers already tolerate
+absence, because not every incident type gets weather at all — and the **staggered sweep is what
+backfills it**, since it already walks open incidents whose turn has come. No separate retry queue,
+no second mechanism.
 **A:**
 
 **E3. What happens to `MetricsManager`?** With GFDI, spread, the registers and the fuel layers gone
@@ -474,17 +435,13 @@ Anvil's page ([Section G](#section-g--the-manager-page)).
 
 # Section F — Storage and the cache
 
+<a id="f2"></a>**F2. What is the unit of the cache?** **Answered** — [W-031](#w-031). The proximity
+anchor stays, with its three-dimensional reach. The weight it runs at is [B7](#b7).
+
 <a id="f1"></a>**F1. Cold start or migration?** [W-008](#w-008) said migrate. Under [W-015](#w-015)
 there is no shared schema to migrate into, and [W-014](#w-014) plus *"we would only be losing three
 weeks"* makes the loss trivial. *Default:* **cold start.** The drought spin-up re-runs per cell on
 demand — it is the expensive path, but it is bounded by activity and it buys a clean schema.
-**A:**
-
-**F2. What is the unit of the cache?** The Hub uses a proximity anchor with a three-dimensional reach.
-A greenfield alternative is to key on the provider's own grid cell, which is what the reach
-approximates. *Default:* **keep the anchor.** The grid cell is per-provider and unknowable for some;
-the anchor is one concept that works across all of them, and it is the reason twenty appliances on one
-fire ground cost one call.
 **A:**
 
 **F3. Postgres and PostGIS?** *Default:* **yes**, same as the Hub — proximity queries want it, and it
@@ -558,12 +515,14 @@ access on the day it matters.
 
 # Section I — Correctness
 
-<a id="i1"></a>**I1. How do we know the Python arithmetic matches the Java?** The Java carries an FFDI
-value worked by hand from the published equation, KBDI checked against xclim, and 1,511 lines of
-tests. A rewrite is exactly where those drift silently. *Default:* **port the expected values first,
-as language-neutral JSON fixtures** — inputs and known-correct outputs — and make them a test suite in
-Anvil before any of the maths is written. A day's work, and it is the difference between a rewrite
-that is safe and one that is brave.
+<a id="i1"></a>**I1. How do we know the Python arithmetic matches the Java?** **Answered** —
+[W-034](#w-034). The expected values are ported first, as language-neutral JSON, and they are Anvil's
+first test suite. Nothing is written against them afterwards to make them pass.
+
+<a id="i5"></a>**I5. Where do the fixtures live?** *(new)* They are extracted from the Hub and
+consumed by Anvil, and the Hub's Java is being deleted ([W-010](#w-010)). *Default:* **in this
+repository**, under `tests/fixtures/`, extracted once before the deletion — because after the switch
+the Java is gone and the values only exist here.
 **A:**
 
 **I2. Is there a contract test between the Hub and Anvil?** *Default:* a golden payload, checked into
@@ -608,16 +567,15 @@ Anvil stays internal-only. PropertyWatch is the trigger to revisit.
 
 <a id="q1"></a>## Q1 — the name
 
-**Anvil** is the recommendation and it is used throughout this document. If it does not land:
+**Answered: Anvil** ([W-030](#w-030)). The alternates it was chosen over, kept because a name is
+worth being able to defend later:
 
 | Name         | For                                                                                     | Against                                     |
 |--------------|-------------------------------------------------------------------------------------------|---------------------------------------------|
-| **Anvil**    | The cumulonimbus top; the shape a fire makes when it builds its own weather. Solid, hammered on. Unmistakably not "the Hub" | Does not say *weather* to a non-meteorologist |
-| **Beaufort** | A wind scale, so it says weather immediately — and Anvil's job is scales and bands       | Sounds like a person; three syllables        |
-| **Stevenson**| The louvred screen every Bureau observation is taken inside. Exactly on-domain            | Also sounds like a person                   |
-| **Southerly**| The southerly buster — the wind change that decides South Australian fire days            | Long, and it names one phenomenon rather than the whole |
-
-**A:**
+| **Anvil** ✓  | The cumulonimbus top; the shape a fire makes when it builds its own weather. Solid, hammered on. Unmistakably not "the Hub" | Does not say *weather* to a non-meteorologist |
+| Beaufort     | A wind scale, so it says weather immediately — and Anvil's job is scales and bands       | Sounds like a person; three syllables        |
+| Stevenson    | The louvred screen every Bureau observation is taken inside. Exactly on-domain            | Also sounds like a person                   |
+| Southerly    | The southerly buster — the wind change that decides South Australian fire days            | Long, and it names one phenomenon rather than the whole |
 
 ---
 
@@ -627,17 +585,28 @@ Anvil stays internal-only. PropertyWatch is the trigger to revisit.
 |-------|-------------------|-------|----------|----------------|---------------|
 | 1     | 15 September 2026 | 10    | 10       | W-001 – W-014  | 3             |
 | 2     | 15 September 2026 | —     | —        | W-015 – W-024  | 5             |
+| 3     | 15 September 2026 | 10    | 10       | W-025 – W-034  | **2**         |
 
-**Round 2** was not asked, it was told. The lift-and-shift is off ([W-015](#w-015)): Anvil is a
-greenfield Python service in Docker, built to a product definition — now plus seventy-two hours, four
-blocks, at a point — with a pluggable model beneath it and five endpoints on top. Curing comes off
-satellites rather than a keyboard ([W-023](#w-023)), the model is meant to grow ([W-024](#w-024)), and
-the thing finally has a name that does not collide with the Hub's ([W-016](#w-016)).
+**Round 1** split the thing off. **Round 2** was not asked, it was told: the lift-and-shift is dead,
+Anvil is a greenfield Python service built to a product definition, with a pluggable model and five
+endpoints. **Round 3** answered the architecture that shape entailed.
 
-Round 1's three blockers all found homes: labelling became [A2](#a2) and got harder, the band tables
-became [C4](#c4) and got easier, and the curing write path became [D5](#d5) and got smaller.
+Round 3's substance, in one place. Sources do not blend — but an observation correcting a model is
+not two models averaging, so the resolver is built for a correction step it will not use until Bureau
+stations arrive ([W-025](#w-025)). Provenance goes all the way down to the variable
+([W-026](#w-026)), which is the decision that makes that step reachable and the one that created
+[A6](#a6). A manifest bounds the API and a caller narrows by block, not by field
+([W-027](#w-027)). Nine sources in the first cut, satellite curing among them and MET Norway and the
+stations not ([W-028](#w-028)) — with a day spent first on whether a published curing product exists
+at all ([W-029](#w-029)), which is the least verified idea in the plan and still the best one. The
+anchor survives the rewrite ([W-031](#w-031)); `xclim` carries the drought maths and our own code
+carries the fire indices, pinned to the paper the fixtures are cut against ([W-032](#w-032)); the
+incident path goes asynchronous so Anvil can never slow a raise ([W-033](#w-033)); and the fixtures
+are written before the arithmetic, not after it ([W-034](#w-034)).
 
-Five new blockers, and they are architecture rather than approval: whether sources blend or one wins
-([A1](#a1)), what provenance looks like when they do ([A2](#a2)), whether the caller picks fields
-([A3](#a3)), which sources are in the first cut ([A4](#a4)), and whether a licensed curing product
-actually exists ([A5](#a5)).
+**Two left, both about the wire.** How deep per-variable provenance goes across a 72-hour series
+([A6](#a6)), and whether a corrected value carries the raw one beside it ([A7](#a7)). Both are cheap
+now and unfixable once something reads them.
+
+**Not a question, an action:** [W-029](#w-029)'s day of investigation. Nothing about curing can be
+designed until it comes back.
