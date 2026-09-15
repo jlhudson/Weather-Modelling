@@ -19,8 +19,11 @@ A small Python service. Given a latitude and a longitude, it answers:
 A cache inside the application answers anything close enough in **time**, **distance** and
 **height**; anything else is a call to Google.
 
-**Not in it:** drought integration, flood, rivers, Open-Meteo, MET Norway, the Bureau, satellites,
-historical archives, forecast verification, a management page. Later, or never.
+**Not in it:** flood, rivers, MET Norway, the Bureau, satellites, forecast verification, a management
+page. Later, or never.
+
+**In it, narrowly:** Open-Meteo's archive, for the rainfall history the drought factor needs — and
+nothing else. The weather itself stays a pure Google pass-through.
 
 ---
 
@@ -44,7 +47,7 @@ same shape.
 
 ---
 
-## The one real problem
+## The drought factor, and where it comes from
 
 McArthur Mk5, in the published form:
 
@@ -52,32 +55,62 @@ McArthur Mk5, in the published form:
 FFDI = 2.0 × exp( −0.450 + 0.987 ln(DF) − 0.0345 RH + 0.0338 T + 0.0234 V )
 ```
 
-`T`, `RH` and `V` all come straight off Google. **`DF` — the drought factor, 0 to 10 — does not.**
+`T`, `RH` and `V` all come straight off Google. **`DF` — the drought factor, 0 to 10 — does not**, and
+Google cannot supply it at any price: its history endpoint offers twenty-four hours.
 
-It is not a reading of anything. It is a function of how much rain has fallen recently and how dry
-the soil already was, which takes a rainfall history: about twenty days for the drought factor
-itself, and roughly a year underneath it for the soil moisture deficit. Google's history endpoint
-offers twenty-four hours.
+**Two windows, not one.**
 
-So there is no way to compute a real drought factor from Google alone. **Q1 is what to do about
-that**, and everything else on this page is detail by comparison.
+| Window       | For                                                                                               |
+|--------------|-----------------------------------------------------------------------------------------------------|
+| **20 days**  | The drought factor itself — the largest rain event in the window and how long since it (Griffiths 1999, corrected by Finkele et al. 2006) |
+| **~365 days**| The soil moisture deficit **underneath** it. KBDI is a running integration from an assumed start, and the assumption only washes out if a wet season falls inside the window |
+
+The year also yields **mean annual rainfall**, which the KBDI equation needs as a parameter — it
+stands in for vegetation density, so a wetter climate dries *faster* per day than an arid one at the
+same temperature. Reading that term the intuitive way inverts the index everywhere it is used.
+
+**The entire input list is two daily variables:** rainfall total and maximum temperature.
+
+**Open-Meteo has both, free and without a key.**
+
+| Need                       | Source                                                                                   |
+|----------------------------|--------------------------------------------------------------------------------------------|
+| The long tail              | `archive-api.open-meteo.com/v1/archive` — ERA5 reanalysis, `daily=precipitation_sum,temperature_2m_max` |
+| The last few days          | `api.open-meteo.com/v1/forecast?past_days=N` — the archive lags about five days. Join by date so the deliberate overlap corrects rather than doubles |
+| Ground height              | `api.open-meteo.com/v1/elevation` — Copernicus 90 m DEM. **Unverified from here**, see [Q4](#q4)  |
+| KBDI or the drought factor | **Nothing. Nobody publishes it.** Which is why it has to be integrated                      |
+
+**Not a substitute:** Open-Meteo's model soil moisture is a different quantity. KBDI is the specific
+empirical index McArthur calibrated FFDI against, and swapping in soil moisture yields a number that
+is not FFDI.
+
+**And it stays cheap.** The spin-up is one archive call plus one recent call **per cell per day**, on a
+much coarser cache than the weather — drought is smooth, so cells can be tens of kilometres wide where
+weather anchors are not. After the first spin-up for a cell, yesterday's deficit persists and steps
+forward one day. The 365-day fetch happens once per location, not once per request.
+
+**One caveat:** Open-Meteo's free tier is CC BY 4.0 and **non-commercial**. Fine now; it matters the
+day something paid reads this.
 
 ---
 
 ## Questions
 
-**Q1. Where does the drought factor come from?**
+**Q1. How is the drought factor computed?** *Settled in principle — it is computed, from Open-Meteo's
+archive. What is open is the spin-up length and the cell size.*
 
-|   | Option                                                                     | Costs                                                                              |
-|---|--------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
-| 1 | **A configured constant**, returned as an input with its own provenance    | One line. The index is real arithmetic on an assumed input, and it says so           |
-| 2 | **A number per month**, from a small table                                 | Slightly better, still assumed, and now there is a table to argue about              |
-| 3 | **A number somebody maintains** — set on an endpoint, like a fuel figure   | Honest and current when kept up; silently wrong when forgotten                       |
-| 4 | **Compute it** from a rainfall history                                     | The only true answer, and it needs a source that is not Google. This is the thing just cut |
+|                  | Recommended | Why                                                                                                  |
+|------------------|-------------|--------------------------------------------------------------------------------------------------------|
+| Spin-up          | **365 days**| Long enough that the assumed starting deficit washes out — *given a wet season*. In a rainless year it does not, so the answer must report its own depth and whether it completed |
+| Drought cell     | **50 km**   | Far coarser than the weather cache, because the quantity is far smoother. One cell, one day           |
+| Starting deficit | **Field capacity** (0 mm deficit, 203.2 mm at the dry end) | There is nothing else to start from, which is exactly why the spin-up has to be long |
+| When incomplete  | **Say so**  | An `estimated` flag and the depth actually achieved. Never silently substitute a number               |
 
-*Recommended:* **option 1, built so option 4 can replace it without changing the answer's shape.**
-`droughtFactor` appears in the response as a named input with `source: "configured"`, so the day it
-starts being computed nothing downstream changes but the value and that one word.
+Two details a from-memory implementation gets wrong, both worth checking against
+[xclim](https://xclim.readthedocs.io): rain is intercepted **per event, not per day** — the first
+5.1 mm of a rain event never reaches the soil and a dry day restores the allowance, so 24 mm over
+three days soaks in where the same 24 mm over eight separate days does not — and the drought factor's
+numerator is `41x² + x`, **not** `41x² + 1`, which is about a whole unit in mid-range.
 
 **A:**
 
@@ -99,10 +132,16 @@ because a few hundred metres of elevation is a real temperature and wind differe
 
 ---
 
-**Q4. Where does the height come from?** The height threshold needs an elevation per point, and
-Google's weather response does not carry the ground height. *Recommended:* **the Google Elevation
-API**, on the Maps key that already exists, cached permanently per point — terrain does not change.
-Alternative: skip height in the first version and compare on distance and time only.
+<a id="q4"></a>**Q4. Where does the height come from?** The height threshold needs a ground elevation
+per point, and Google's weather response does not carry one. *Recommended:* **Open-Meteo's elevation
+endpoint** — free, no key, the same provider the rain history already comes from — cached permanently
+per point, because terrain does not change. Google's Elevation API on the existing Maps key is the
+fallback if it does not work out; I could not reach `api.open-meteo.com` from the sandbox to confirm
+it, so treat this one as unverified.
+
+**One trap:** the `elevation` field returned *inside* a weather response is the model grid cell's
+smoothed height, which can sit hundreds of metres from the actual ground. For a cache threshold you
+want real terrain, not the model's idea of it.
 **A:**
 
 ---
