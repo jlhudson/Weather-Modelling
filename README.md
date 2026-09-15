@@ -1,12 +1,22 @@
-# Weather Modelling
+# Anvil
 
-**Proposed.** A dedicated weather and fire-weather service, split out of
-[The Hub Database](https://github.com/jlhudson/The-Hub-Database), where weather currently lives as
-`hub-core/weather`, `hub-services/weather`, `hub-managers/weather`, `hub-layers/weather` and two
-console screens.
+**The weather service.** One point, one answer: **now and the next seventy-two hours** — weather, the
+drought factor, flood and rain, and the fire indices — split out of
+[The Hub Database](https://github.com/jlhudson/The-Hub-Database) and rebuilt in Python.
 
-**Nothing is decided and no code has moved.** The scope change was put on 15 September 2026 and is
-being argued before it is built.
+The name exists to end an ambiguity. The Hub's `WeatherManager` decides *when* an incident is worth
+asking about; **Anvil** answers. So "the weather manager" is always the Hub's, and "Anvil" is always
+the service — and nothing is called "the weather model" again.
 
-**Start here → [docs/QUESTIONS.md](docs/QUESTIONS.md).** Fifty-two questions, eight of them blocking.
-Answer in place on the `**A:**` lines; answers get applied and logged.
+An anvil is the flat top of a cumulonimbus: the visible sign that the atmosphere has turned
+dangerous, and the shape a fire makes once it grows big enough to build its own weather.
+
+---
+
+**Nothing is built yet.** The scope change was put on 15 September 2026 and two rounds of questions
+have been answered against it. What is decided so far — a greenfield Python service in Docker, a
+pluggable model, five endpoints behind a Cloudflare tunnel, and curing derived from satellite
+greenness rather than typed in — is recorded as `W-001` to `W-024`.
+
+**Start here → [docs/QUESTIONS.md](docs/QUESTIONS.md).** Fifty-two questions, five of them blocking
+the architecture. Answer in place on the `**A:**` lines; answers get applied and logged.
