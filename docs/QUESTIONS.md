@@ -1,17 +1,15 @@
 # Weather as its own service — the questions that decide it
 
 Companion to the scope change put on **15 September 2026**: move the weather capability out of
-[The Hub Database](https://github.com/jlhudson/The-Hub-Database) and onto its own server, so that the
-Hub becomes a consumer of it.
+[The Hub Database](https://github.com/jlhudson/The-Hub-Database) and onto its own server.
 
-**Nothing here is decided.** Every entry carries a default so that silence still moves, but a default
-is a starting position, not an answer. **Section A is eight questions long and it blocks approval** —
-each one is a way the plan fails quietly if it is wrong, and none of them can be answered by writing
-code first.
+**Round 1 is answered.** Ten questions, fourteen decisions, and the shape of the thing has changed
+twice in the answering. Section A is down from eight blocking questions to **three**, and all three
+are consequences of the answers rather than survivors of them.
 
-The house convention is the Hub's, deliberately: this document should read like
-[the Hub's own question rounds](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/QUESTIONS.md),
-because the decisions it takes will end up cited from the same decision table.
+The house convention is the Hub's, deliberately: this reads like
+[the Hub's own question rounds](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/QUESTIONS.md)
+because the decisions it takes get cited from the same tables.
 
 ---
 
@@ -24,21 +22,73 @@ because the decisions it takes will end up cited from the same decision table.
 | `?`       | Expand the recommendation before deciding                              |
 | `unsure`  | Park it, keep the default, but it stays open                           |
 
-Answers get applied to this document and logged at the bottom; nothing lives only in chat.
+Answers get applied here and logged at the bottom; nothing lives only in chat.
 
 ---
 
-## The proposal, as put
+## What round 1 decided
 
-| Claim                        | As stated                                                                                             |
-|------------------------------|-------------------------------------------------------------------------------------------------------|
-| **Size**                     | ~6,200 lines, the largest single component in the Hub                                                 |
-| **Scope**                    | Four external providers, drought integration, the fire and flood indices                              |
-| **What is coming**           | Live Bureau station data, a long-term historical archive, forecast verification and tuning            |
-| **The Hub afterwards**       | A simple consumer: asks about a location, caches the answer for as long as the service says to        |
-| **Consumers afterwards**     | Unchanged — same endpoint, same fields                                                                |
-| **The benefits**             | Independent pace, a weather fault degrades to a labelled old reading, a real modelling platform       |
-| **The ask**                  | One low-cost server (small VPS or a Pi) and the development time to separate cleanly                  |
+James, 15 September 2026. Cited hereafter as `W-nnn`.
+
+| #                              | Decision                                                                                                                                                                          |
+|--------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| <a id="w-001"></a>**W-001**    | **The justification of record is the development context budget, not production risk.** *"A little friction, but primarily it chews through context length… easily the best module we can pull out with little to no repercussions."* Success is therefore measured in **lines that leave the Hub**, and a design that isolates weather without removing it does not qualify |
+| <a id="w-002"></a>**W-002**    | **Version one is a lift-and-shift.** *"Pull out what works into its own project, and have it start offering API data."* No new provider, no new source, no new capability in the first cut |
+| <a id="w-003"></a>**W-003**    | **The Hub keeps one weather door.** `WeatherManager` stays, as an HTTP client with a cache. Every other Hub manager, service, layer and console screen asks it — none of them calls the weather API, and none of them holds weather state |
+| <a id="w-004"></a>**W-004**    | **The weather service sets the cache expiry; the Hub obeys it.** The Hub never invents a TTL of its own                                                                             |
+| <a id="w-005"></a>**W-005**    | **Service, maths and types all leave.** Providers, cache, governor, drought, flood, FFDI and `WeatherJson` go; the Hub keeps `WeatherManager`, its cache, and a slim answer type holding only the fields it reads. ~5,000 of 6,580 lines |
+| <a id="w-006"></a>**W-006**    | **The grassland index moves to the weather service.** [D-187](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/16-decisions.md) is reversed: GFDI is computed beside FFDI, not in `MetricsManager` |
+| <a id="w-007"></a>**W-007**    | **Its three non-weather inputs follow it.** `FuelTypeService` and the CFS fuel-type layers, `FuelLoadEntity`, `GrassCuringEntity` and `MetricsRegisters` all move. The weather service owns fire weather end to end, and any caller can get a grassland index |
+| <a id="w-008"></a>**W-008**    | **The weather service owns its own Postgres.** `weather_anchor`, `drought_cell`, `river_cell` and `weather_call` migrate across rather than starting cold, and are dropped from the Hub's schema |
+| <a id="w-009"></a>**W-009**    | **Degradation is three rungs and no extrapolation.** *"Either cache, nearest to cache, or no data."* A cache hit; failing that the nearest cached reading, labelled; failing that no weather at all. **No time ceiling** and no interpolation, ever |
+| <a id="w-010"></a>**W-010**    | **Switch and delete — no shadow week, no feature flag** — *gated on this document settling the responsibility split first*: *"I am happy to delete and switch now, but we are still building exactly what the weather service and the hub are both responsible for"* |
+| <a id="w-011"></a>**W-011**    | **Written Bureau permission exists.** Station data and the FTP products are nonetheless **not in version one**; they arrive once the cheap thing runs                              |
+| <a id="w-012"></a>**W-012**    | **MET Norway, the historical archive, forecast verification and tuning are all post-v1.** So is the licence question that MET Norway answers, on the condition the service stays internal-only until a commercial consumer exists |
+| <a id="w-013"></a>**W-013**    | **`/api/weather` stays a Hub endpoint**, served through `WeatherManager`'s cache. Consumers see no change and get no second host or key                                             |
+| <a id="w-014"></a>**W-014**    | **The databases are disposable at James's discretion and by nobody else.** *"We can pretty much delete the databases at any time. You are not allowed to do this, but I can."* This lowers the cost of getting the migration wrong; it does not licence anyone else to skip it |
+
+### What the answers changed about the plan
+
+**The seam got simpler than any option offered.** The proposal implied one arrow and the code had five
+call sites; the answer collapses them to one — `WeatherManager` is the Hub's single weather door, and
+`MetricsManager`, `IncidentWatchStatistics` and the console all go through it rather than over the
+wire. That is a better shape than the "two seams" on offer, and it makes **F1 a non-issue**.
+
+**The scope got smaller and the move got bigger, at the same time.** Version one adds nothing
+([W-002](#w-002)) — but GFDI, its registers and the CFS fuel layers now move too
+([W-006](#w-006), [W-007](#w-007)), which takes roughly **a thousand lines more** out of the Hub than
+the original proposal contemplated and turns the weather service into the owner of fire weather
+rather than of weather.
+
+**And it acquires a write path.** An operator enters curing on `/console/metrics`. Once the register
+lives on the other machine, that screen writes across the wire — so the weather service is **not a
+read-only service**, which is new, and is [A10](#a10) below.
+
+---
+
+## The split, as decided so far
+
+*The thing James said is still being built. This is where round 1 leaves it.*
+
+| The weather service owns                                                        | The Hub owns                                                            |
+|----------------------------------------------------------------------------------|---------------------------------------------------------------------------|
+| Every upstream call, and the only API keys that make them                       | Nothing upstream. It calls one host: the weather service                 |
+| The anchor cache, its reach, its TTL and the governor                           | A cache whose expiry the weather service dictates ([W-004](#w-004))      |
+| `weather_anchor` · `drought_cell` · `river_cell` · `weather_call`                | None of them                                                             |
+| The drought integration and the KBDI spin-up                                    | —                                                                         |
+| FFDI, **GFDI**, rate and direction of spread                                    | —                                                                         |
+| The flood block: antecedent rain, forecast rain, saturation, river discharge    | —                                                                         |
+| Fuel class off the CFS layers; the fuel-load and curing registers               | The **console screen** that fills the curing register, writing over the API |
+| Terrain heights for its own three-dimensional reach                             | Terrain for everything else it already uses it for                       |
+| The allowance ledger, the budget and the spend figures                          | `/console/usage`, reading those figures over the wire                    |
+| — | `WeatherManager`: the one door, the cache, the refresh stagger, the sweep |
+| — | Deciding **when** an incident is worth asking about                      |
+| — | The `weather`, `forecast` and `metrics` components on an incident        |
+| — | `/api/weather`, `/api/weather/coverage.geojson` and every consumer contract |
+| — | `fire_danger_day` — the published CFS ratings, which are a ledger, not weather |
+| — | Incident data. **None of it crosses** in version one                     |
+
+**Three rows in the right-hand column are still arguable** and are [Section B](#section-b--where-the-line-falls).
 
 ---
 
@@ -46,547 +96,418 @@ Answers get applied to this document and logged at the bottom; nothing lives onl
 
 Measured on `main` at `b8ef6dd`, 15 September 2026.
 
-| Where                                          | Main  | Tests |
-|------------------------------------------------|-------|-------|
-| `hub-core/…/weather` + `core/fuel/GrassFireDanger` | 1,852 | 911   |
-| `hub-services/…/weather`                       | 3,639 | 504   |
-| `hub-managers/…/weather`                       | 315   | —     |
-| `hub-layers/…/weather`                         | 553   | —     |
-| `hub-app/…/console/Weather*`                   | 221   | 96    |
-| **Total**                                      | **6,580** | **1,511** |
+| Where                                              | Main      | Tests     | Under W-005/6/7 |
+|----------------------------------------------------|-----------|-----------|-----------------|
+| `hub-core/…/weather` + `core/fuel`                 | 1,920     | 911       | leaves          |
+| `hub-services/…/weather`                           | 3,639     | 504       | leaves          |
+| `hub-services/…/fuel/FuelTypeService`              | 226       | —         | leaves          |
+| `hub-managers/…/metrics` (registers, entities)     | 643       | —         | mostly leaves   |
+| `hub-managers/…/weather`                           | 315       | —         | **stays**, rewritten as a client |
+| `hub-layers/…/weather`                             | 553       | —         | **stays**       |
+| `hub-app/…/console/Weather*` · `MetricsController` | 318       | 96        | **stays**       |
+| **Total**                                          | **7,614** | **1,511** | **~6,400 leaves** |
 
-Four tables — `weather_anchor`, `drought_cell`, `river_cell`, `weather_call` — and one configuration
-tree, `hub.weather`, with fifty-four defaulted keys across `cache`, `governor`, `refresh`, `fire`, `drought`
-and `flood`.
+Four tables, and one configuration tree — `hub.weather`, fifty-four defaulted keys across `cache`,
+`governor`, `refresh`, `fire`, `drought` and `flood` — nearly all of which goes with the service.
 
-### Five findings, before any question is asked
+### Five findings, and what round 1 did to each
 
-**F1 · Weather is not consumed in one place. It is consumed in five, and only one of them is an
-endpoint.**
-
-| Consumer                                  | How it consumes                                                      |
-|-------------------------------------------|------------------------------------------------------------------------|
-| `WeatherManager`                          | `weather.at()`, attaches the `weather` and `forecast` components       |
-| `MetricsManager`                          | `weather.at()` in-process, on `WeatherEvent`, to compute GFDI          |
-| `IncidentWatchStatistics`                 | `weather.at()` at each agency centroid, inside a statistics build      |
-| `WeatherLayerController`                  | `GET /api/weather`, `GET /api/weather/coverage.geojson`                |
-| `MapController` · `MetricsController` · `WeatherController` | the console screens, on the session rather than a key |
-
-Plus `UsageService`, which imports `WeatherBudget` to report spend, and `Vocabulary`, which publishes
-`FireDanger.BANDS`, `Kbdi.BANDS` and `WeatherBands` to consumers as enum tables so that
-[nothing downstream computes them](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/23-phase-z-the-consumer-computes-nothing.md).
-
-*"The Hub becomes a simple consumer" is the proposal's load-bearing sentence, and today the Hub is
-five consumers, two of which are on the incident path.*
-
-**F2 · MET Norway is documented but not built.** [09 §9.1](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/09-weather-and-metrics.md)
-lists four providers. The code has two classes — `OpenMeteoProvider` and `GoogleWeatherProvider` —
-with `OpenMeteoBomProvider` a nineteen-line subclass pointing at `/v1/bom`. The default order is
-`{open-meteo, google}`. **The only free provider whose licence permits commercial use does not
-exist.** That matters to Section F more than it matters to the split.
-
-**F3 · Two of the grassland index's three non-weather inputs are Hub registers.** Fuel class comes
-from the CFS fuel-type layers; fuel load and curing come from `MetricsRegisters`, which an operator
-fills in on `/console/metrics` because no open API publishes curing for South Australia. GFDI is
-therefore a computation that straddles whatever line gets drawn.
-
-**F4 · The mechanism the proposal names for caching already exists and is already ignored.**
-`WeatherReport.expiresAt` is documented as a provider-supplied ceiling; `WeatherCache.store` writes
-it, and `find` filters on age alone
-([20 · Build log](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/20-build-log.md)).
-"Caches the answer for as long as the service tells it to" is a new behaviour, not a preserved one.
-
-**F5 · The cache is three-dimensional and proximity-keyed, not point-keyed.** An anchor serves every
-request within a combined horizontal-and-vertical reach for a TTL, which is why twenty appliances on
-one fire ground cost one upstream call. A Hub-side cache keyed on the point it asked about is a
-different object with a different hit rate, and the reach parameters mean nothing to it.
+| #  | Finding                                                                                                                                      | Now                                                                            |
+|----|----------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
+| F1 | **Weather is consumed in five places in-process, not one** — `WeatherManager`, `MetricsManager`, `IncidentWatchStatistics`, the layer controller, three console controllers | **Resolved by [W-003](#w-003).** One door; the other four ask it                |
+| F2 | **MET Norway is documented and not built.** Two provider classes exist; the order is `{open-meteo, google}`                                   | **Deferred by [W-012](#w-012)**, with the internal-only condition attached      |
+| F3 | **Two of GFDI's three non-weather inputs are Hub registers**                                                                                 | **Resolved by [W-007](#w-007)** — they move too                                 |
+| F4 | **`WeatherReport.expiresAt` is written and never read**                                                                                      | **Becomes work.** [W-004](#w-004) makes service-dictated expiry the contract, so the field has to start being honoured on both sides |
+| F5 | **The cache is proximity-keyed in three dimensions**; a point-keyed cache is a different object                                              | **Becomes work.** [W-009](#w-009)'s "nearest to cache" rung means the Hub's cache needs a nearest-match too, not just a lookup — see [A5](#a5) |
 
 ---
 
 ## Status
 
-| Section                                   | Questions | Blocking |
-|-------------------------------------------|-----------|----------|
-| **A — Blocking**                          | **8**     | **8**    |
-| B — Where the line falls                  | 7         | —        |
-| C — The contract between the two          | 6         | —        |
-| D — Failure and degradation               | 5         | —        |
-| E — The capabilities that justify it      | 6         | —        |
-| F — Licence, allowance and cost           | 5         | —        |
-| G — The server itself                     | 6         | —        |
-| H — Migration, sequencing and rollback    | 5         | —        |
-| I — The counter-case                      | 4         | —        |
-| **Total**                                 | **52**    | **8**    |
+| Section                                   | Open  | Answered | Total | Blocking |
+|-------------------------------------------|-------|----------|-------|----------|
+| **A — Blocking**                          | **3** | 7        | 10    | **3**    |
+| B — Where the line falls                  | 4     | 5        | 9     | —        |
+| C — The contract between the two          | 4     | 2        | 6     | —        |
+| D — Failure and degradation               | 3     | 3        | 6     | —        |
+| E — The capabilities that justify it      | 0     | 6        | 6     | —        |
+| F — Licence, allowance and cost           | 2     | 4        | 6     | —        |
+| G — The server itself                     | 5     | 1        | 6     | —        |
+| H — Migration, sequencing and rollback    | 3     | 3        | 6     | —        |
+| I — The counter-case                      | 2     | 2        | 4     | —        |
+| **Total**                                 | **26**| **33**   | **59**| **3**    |
+
+Fifty-nine: the original fifty-two, plus the seven the answers created — [A9](#a9), [A10](#a10),
+[B8](#b8), [B9](#b9), [D6](#d6), [F6](#f6) and [H6](#h6). Section E is answered in one stroke by
+[W-002](#w-002) and [W-012](#w-012) — *later* is an answer.
 
 ---
 
 # Section A — Blocking
 
-*Eight. Each one can invalidate the plan rather than adjust it.*
+*Three. All three are consequences of round 1, not survivors of it.*
 
 ---
 
-**A1. Where exactly does the line fall, given five in-process call sites and not one?**
+<a id="a5"></a>**A5. Two caches, two clocks — and now no ceiling. What stops an old reading looking
+like a current one?**
 
-The proposal's picture is one arrow: Hub asks, service answers. The code has `MetricsManager` and
-`IncidentWatchStatistics` calling `WeatherService.at()` directly, on threads that are doing something
-else, and the console reading `WeatherCache` internals to draw the coverage rings.
+[W-009](#w-009) is the right call and it removes the one safeguard I had proposed. *"Either cache,
+nearest to cache, or no data"* means **an arbitrarily old reading can be served**, and the six-hour
+ceiling that would have caught it is gone. There is nothing wrong with that — a labelled old reading
+genuinely beats nothing — but it makes the label the *only* thing standing between a consumer and a
+day-old wind direction rendered as current.
 
-Three shapes are available:
+There are now two ages where there was one, and neither is derivable from the other:
 
-|   | Shape                                                                                            | Costs                                                                        |
-|---|---------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
-| 1 | **One seam.** `WeatherService` becomes an HTTP client behind the same Java interface; all five call sites are unchanged | The Hub keeps the interface, the types and the console. Smallest diff, smallest benefit |
-| 2 | **Two seams.** The manager and the components move to HTTP; metrics and statistics keep an in-process facade over the cached answer | Honest about who needs freshness. Two code paths to reason about |
-| 3 | **Everything out.** Weather including GFDI, the console screen and the coverage layer all live on the other server | The largest benefit and the largest consumer-visible change. Contradicts "nothing consumers see would change" |
-
-*Why it matters:* it decides the size of the job by roughly an order of magnitude, and it decides
-whether the claimed benefit — the Hub stops carrying weather's complexity — is actually delivered.
-Shape 1 moves the *upstream calls* off the Hub and leaves ~1,900 lines of types, JSON shaping and a
-console screen behind, which is a real but much smaller win than the proposal describes.
-
-*Default:* **shape 2.** The incident path goes over the wire; the read-only console and statistics
-reads go through a thin cached facade so a statistics build never blocks on a remote call.
-
-**A:**
-
----
-
-**A2. Does the grassland index move, when two of its three non-weather inputs are Hub registers?**
-
-GFDI needs temperature, humidity and wind — weather — plus fuel class off the CFS layers, a fuel-load
-register and a per-district curing figure an operator types in. It lives in `MetricsManager` today by
-decision ([D-187](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/16-decisions.md)),
-precisely because *the three inputs that are not weather are not weather*.
-
-| If GFDI stays in the Hub                          | If GFDI moves to the weather service                        |
-|---------------------------------------------------|--------------------------------------------------------------|
-| The Hub still needs the hourly series, not just a summary — a larger payload on every refresh | The weather service needs curing, fuel load and a fuel-class lookup pushed to it, or it needs the CFS layers too |
-| D-187 survives untouched                          | D-187 is reopened, and the operator's curing screen now feeds a second system |
-
-*Why it matters:* it is the one place where the domain genuinely does not divide, and whichever way
-it goes, something crosses the wire that the proposal does not mention.
-
-*Default:* **GFDI stays in the Hub.** The weather service serves the hourly series; the Hub keeps the
-registers and the arithmetic. The contract in Section C must therefore carry hourly temperature,
-humidity and wind, not a summary.
-
-**A:**
-
----
-
-**A3. Is live Bureau of Meteorology station data actually available to us?**
-
-This is the first of the three capabilities the proposal is *for*, and
-[09 §9.1](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/09-weather-and-metrics.md) is
-explicit: `api.weather.bom.gov.au` **exists, works, and its terms forbid third-party use without
-written permission.** That is why ACCESS-G is reached through Open-Meteo instead. Separately, fifteen
-FTP products on `ftp.bom.gov.au` — including `IDS60920.xml`, the South Australian observations — were
-removed by [D-141](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/16-decisions.md), as a
-*transport* decision rather than a licence one.
-
-So which is being proposed?
-
-| Route                              | Status                                                                     |
-|------------------------------------|------------------------------------------------------------------------------|
-| `api.weather.bom.gov.au`           | Forbidden by its own terms without written permission. Do we have any?      |
-| `ftp.bom.gov.au` observation products | Available. Deleted deliberately as a transport in D-141, not as a licence   |
-| A written permission request       | Possible. Unknown timeline, and the answer may be no                        |
-| Open-Meteo's station-adjacent data | Model output, not observations. Does not satisfy the verification use       |
-
-*Why it matters:* the headline new capability may be legally unavailable, and the fallback — the FTP
-products — is a decision the Hub already took the other way. **If the answer is "the FTP products
-come back", that is a reversal of D-141 that should be argued on its merits and does not need a new
-server to happen.**
-
-*Default:* **the FTP observation products**, reinstated on the weather service only, with a written
-permission request to the Bureau raised in parallel and the API left alone until it answers.
-
-**A:**
-
----
-
-**A4. What is a forecast scored against, and does the scoring need Hub data flowing backwards?**
-
-"Measure our forecasts against what actually happened" needs a definition of *what actually
-happened*. Three candidates, and they are not equivalent:
-
-| Truth                             | Gives                                                    | Needs                                            |
-|-----------------------------------|-----------------------------------------------------------|--------------------------------------------------|
-| Station observations              | Temperature, humidity, wind error at a station            | A3 to be answered yes                            |
-| The reanalysis archive            | A gridded after-the-fact estimate at any point            | Nothing new. But it is a model scoring a model   |
-| Incident outcomes                 | Whether a high-index day produced fires                   | `incident_archive` — **Hub data, flowing to the weather service** |
-
-The third is the only one that scores the thing we actually care about, and it inverts the
-proposal's direction of travel: the Hub is no longer a pure consumer, it is also a supplier.
-
-*Why it matters:* a bidirectional link is a different system from a one-way one — it changes the
-privacy surface (incident locations and times leaving the Hub), the coupling, and the failure
-analysis. And if the answer is "reanalysis only", the honest description of the capability is *model
-skill scoring*, not *tuned for our own conditions*.
-
-*Default:* **stations and reanalysis for input verification; incident outcomes stay in the Hub** and
-are joined there, offline, on request. No incident data crosses to the weather server in the first
-version.
-
-**A:**
-
----
-
-**A5. Two caches, two clocks — what does a consumer see, and can it still tell stale from current?**
-
-Today one line of English carries the whole provenance: *"cache: anchor 15.0 km away, 4 min old"*.
-After the split there are two ages: how old the reading was when the weather service served it, and
-how long the Hub has been holding that answer.
+| Age              | Means                                                                |
+|------------------|------------------------------------------------------------------------|
+| `observedAge`    | How old the reading was when the weather service served it — anchor age, exactly as today |
+| `heldFor`        | How long the Hub's own cache has been holding that answer since        |
+| `offsetMetres`   | Already exists. Under the nearest-to-cache rung it can now be **large**, and it is the difference between "your suburb" and "the other side of the range" |
 
 [13 · Concerns](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/13-concerns.md) names
-this as the failure the system cares about most — *stale looks identical to current unless something
-says otherwise* — and the proposal adds a second place for it to hide.
+this as the failure the system cares about most: *stale looks identical to current unless something
+says otherwise.*
 
-*Why it matters:* it is the one guarantee the weather feature was designed around, and it degrades by
-default rather than by mistake. A field added later is a field consumers have already learnt to
-ignore.
+*Why it blocks:* it is cheap now and unfixable later — a field added in six months is a field every
+consumer has already learnt to ignore, and the consumer contracts in
+[23](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/23-phase-z-the-consumer-computes-nothing.md)
+and [24](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/24-firebuddy-consumer-contract.md)
+are being written against this shape right now.
 
-*Default:* the answer carries **both** ages explicitly — `observedAge` from the service and `heldFor`
-from the Hub — and the `decision` sentence names both: *"cache: anchor 15.0 km away, 4 min old, held
-here 3 min"*. Neither is derivable from the other and neither may be dropped.
-
-**A:**
-
----
-
-**A6. What does an incident's weather do when the weather service is unreachable?**
-
-The proposal says a weather-side problem "degrades to a clearly-labelled older reading rather than
-disrupting incident processing", which is the right instinct and not yet a specification. Today the
-degradation ladder is internal: providers in order, then a stale anchor up to `max-stale` of three
-hours, labelled. After the split there is a new rung — the network between two machines — and the
-Hub's own ceiling on it is undefined.
-
-|                                  | Question                                                                    |
-|----------------------------------|-------------------------------------------------------------------------------|
-| A new incident, service down     | No `weather` component at all, or an empty one saying why?                  |
-| An open incident, service down   | Component frozen at its last value, or retracted?                           |
-| How old is too old               | Does the Hub have its own `max-stale`, and is it three hours or longer?     |
-| What FireBuddy sees              | A missing block, or a block with an age it can render?                      |
-| Recovery                         | Does the next successful call backfill the incidents that missed one?       |
-
-*Why it matters:* "degrades gracefully" is a claim that has to be true on the worst day, and the
-worst day is the one where the fire ground and the outage coincide. A frozen wind direction that does
-not say it is frozen is worse than no wind direction.
-
-*Default:* **freeze, never retract**; the component keeps its last value with `heldFor` growing and a
-`degraded: true` flag; the Hub's own ceiling is **six hours**, after which the block is served empty
-with a reason rather than served old. Recovery backfills on the next sweep, not immediately.
+*Default:* all three travel on every block, and the `decision` sentence names them in English —
+*"cache: anchor 15.0 km away, 4 min old, held here 3 min"*, and on the second rung *"nearest cached
+reading: 47 km away, 2 h 10 min old, no live answer"*. A reading served on the nearest-to-cache rung
+carries `degraded: true` as well, because *nearest* and *near* are not the same claim.
 
 **A:**
 
 ---
 
-**A7. Does moving weather to a shared service change the Open-Meteo licence answer?**
+<a id="a9"></a>**A9. Where do the band tables come from once the types leave?**
 
-Open-Meteo's free tier is **CC BY 4.0 and non-commercial**. Today that is a property of one
-deployment calling an API for its own use. A dedicated weather server that answers questions for the
-Hub — and, plausibly, later for FireBuddy, IncidentWatch and PropertyWatch — starts to look like
-redistribution, and PropertyWatch is explicitly a *paid* report
-([25](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/25-propertywatch-consumer-contract.md)).
+[W-005](#w-005) sends `FireDanger.BANDS`, `GrassFireDanger.BANDS`, `Kbdi.BANDS` and `WeatherBands`
+out of the Hub with everything else. But the Hub publishes those tables to consumers through
+`Vocabulary`, and the whole point of
+[Phase Z](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/23-phase-z-the-consumer-computes-nothing.md)
+is that *the consumer computes nothing* — a consumer's colour axis and this system's rating cannot be
+allowed to disagree.
 
-Compounding it: per **F2**, MET Norway — the free provider that *does* permit commercial use, and the
-whole reason the provider order has a commercially-safe rung — is documented and not built. Turning
-Open-Meteo off today leaves only Google, which bills.
+|   | Option                                                                                     | Costs                                                                       |
+|---|--------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
+| 1 | The weather service serves its bands on an endpoint; the Hub fetches them at startup and republishes through `Vocabulary` | One more startup dependency, and a cache for when it is down. Single source of truth |
+| 2 | The Hub keeps a literal copy of the four band tables — a few dozen constants               | No dependency, and two places where Catastrophic-at-100 could drift apart      |
+| 3 | Consumers read bands from the weather service directly                                     | Cheapest, and it breaks [W-013](#w-013) — consumers would see a second host    |
 
-*Why it matters:* if a commercial consumer is coming, the split is the moment the licence question
-stops being theoretical, and the mitigation the design already chose does not exist in code.
+*Why it blocks:* it is the one place where [W-005](#w-005) collides with an existing commitment, and
+option 2 is the tempting one that quietly reintroduces the class of bug Phase Z exists to prevent.
 
-*Default:* **build MET Norway before the split, not after**, so the provider order has a real
-commercially-licensed rung; treat the weather service as internal-only until then; attribute CC BY
-4.0 on every answer that carries Open-Meteo data, through both hops.
+*Default:* **option 1.** Fetched at startup, cached to disk, and the Hub serves the last good copy
+with its age when the weather service is down — the same honesty rule as the readings themselves.
 
 **A:**
 
 ---
 
-**A8. Who owns the allowance ledger, the budget and the governor — and what happens during the
-transition when both sides can call?**
+<a id="a10"></a>**A10. The weather service is no longer read-only. Who may write to it, and what
+happens when the write fails?**
 
-`WeatherBudget` writes every upstream call to `weather_call` before counting it; `WeatherGovernor`
-moves the reuse windows off pressure against the day's allowance; `UsageService` reports the spend.
-The allowance is per API key, not per machine. If both the Hub and the weather service can call
-upstream during a cutover, **there are two ledgers and one allowance**, and the governor on each side
-is reading half the truth.
+[W-007](#w-007) moves the curing and fuel-load registers, and an operator fills the curing figure in
+by hand on `/console/metrics` from the CFS's weekly map — because no open API publishes curing for
+South Australia. The screen stays in the Hub ([W-003](#w-003)); the register does not. So the Hub now
+**writes** to the weather service.
 
-*Why it matters:* the governor's entire purpose is the day Open-Meteo is down and Google's guarded
-calls are carrying the load. That is exactly the day a split-brain budget overspends.
+That is a genuinely new property. The Hub's own API is read-only by
+[D-044](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/16-decisions.md), with narrow
+stored-write exceptions argued one at a time (D-207, D-228). The weather service starts life with
+one.
 
-*Default:* **one writer, always.** The weather service owns `weather_call`, the budget and the
-governor from the first day of the cutover; the Hub makes no upstream weather call at any point after
-the switch, and the transition is a switch rather than an overlap. `UsageService` reads the weather
-service's figures over the wire, or shows them as unavailable.
+|                         | Question                                                                        |
+|-------------------------|-----------------------------------------------------------------------------------|
+| Who may write           | One key for the Hub, or a key per operator, attributed?                          |
+| What is written         | Curing per district and fuel load per class. Anything else, ever?                |
+| On failure              | Does the console show an error and lose the entry, or queue it?                  |
+| Who is the record       | If the write succeeds and the Hub forgets, the figure only exists on one machine |
+| Audit                   | Curing carries an observer, a date and a source today. Do those survive the move? |
+
+*Why it blocks:* a district with no curing figure has no grassland index, and a curing entry that
+silently failed to land looks exactly like a district nobody has updated.
+
+*Default:* **one key, the Hub's, with the operator's name carried in the payload** so attribution
+survives; a failed write is an error on the screen and nothing is lost, because the operator is
+standing there; no queue, no retry, no shadow copy in the Hub. Observer, date and source move with
+the row.
 
 **A:**
+
+---
+
+## Answered in round 1
+
+**A1** — the seam. **Answered better than asked** ([W-003](#w-003)): one door, not two seams.
+`WeatherManager` is the only thing in the Hub that talks to the weather service.
+**A2** — does GFDI move. **Yes** ([W-006](#w-006)), and its inputs with it ([W-007](#w-007)).
+**A3** — Bureau station data. **Permission exists; not in v1** ([W-011](#w-011)).
+**A6** — degradation. **Cache, nearest cached, nothing. No ceiling, no extrapolation**
+([W-009](#w-009)).
+**A7** — the Open-Meteo licence. **Deferred with MET Norway** ([W-012](#w-012)), internal-only until
+a commercial consumer exists.
+**A4** — what a forecast is scored against. **Not blocking any more**: verification is post-v1
+([W-012](#w-012)), so it moves to [E3](#section-e--the-capabilities-that-justify-it). The question it
+raised does not go away — the only truth worth scoring against may be incident outcomes, and that
+would invert the direction of data flow.
+**A8** — who owns the allowance ledger. **Settled by [W-008](#w-008) and [W-010](#w-010)**: the
+weather service owns it, and a switch rather than an overlap means there is never a moment with two
+writers.
 
 ---
 
 # Section B — Where the line falls
 
-**B1. Which files move, file by file?** A split argued at the level of "weather" is a split nobody can
-cost. The inventory in *What the code says today* is the starting list; each of the five locations
-needs a verdict. *Default:* `hub-services/weather` moves whole; `hub-core/weather` is duplicated as a
-published contract (see B2); `hub-managers/weather` stays and becomes the client; `hub-layers/weather`
-stays; the console screen stays and reads over the wire.
+**B1. Which files move.** **Answered** — [W-005](#w-005), [W-006](#w-006), [W-007](#w-007); the
+inventory table above is the list.
+
+**B2. Where the shared types live.** **Answered** — they leave ([W-005](#w-005)). The consequence is
+[A9](#a9).
+
+**B3. Does terrain move?** `WeatherCache`, `DroughtService` and `FloodService` sample `ElevationService`
+for true ground height, which is what makes the reach three-dimensional; the height map is a
+file-backed source on the Hub's disk, and the Hub keeps using it for everything else. *Default:* the
+weather service gets **its own copy of the tiles** — static data, and a second copy is cheaper than a
+network hop on the lookup path.
 **A:**
 
-**B2. Where do the shared types live?** `WeatherAnswer`, `WeatherJson`, `Conditions`, `FireWeather`,
-`FloodWeather`, `DroughtIndex`, `Band`, `FireDanger.BANDS`, `Kbdi.BANDS`, `WeatherBands` are used on
-both sides and published to consumers through `Vocabulary`. Options: a published Maven artefact, a
-git submodule, or duplicate-and-contract-test. *Default:* **duplicate, with a golden-payload contract
-test on both sides.** A shared artefact re-couples the release cycles the split exists to separate.
-**A:**
+**B4. What shape is the Hub's cache?** **Answered in part** — expiry is the service's
+([W-004](#w-004)). What is open is whether it needs a nearest-match, and [W-009](#w-009) says it
+does. See [A5](#a5).
 
-**B3. Does terrain move?** `WeatherCache`, `DroughtService` and `FloodService` all call
-`ElevationService` to sample true ground height, which is what makes the reach three-dimensional. The
-height map is a file-backed source on the Hub's disk. *Default:* the weather service gets its own copy
-of the tiles — it is static data and a second copy is cheaper than a second network hop on the lookup
-path.
-**A:**
+**B5. Do the four tables move?** **Answered** — [W-008](#w-008).
 
-**B4. Does the Hub keep an anchor cache, or a plain one?** Per **F5** these are different objects.
-*Default:* **plain.** Point-keyed, short-TTL, honouring the service's stated expiry. The anchor cache
-is the weather service's job and duplicating it puts the same subtle bug in two places.
-**A:**
-
-**B5. Do the four tables move, and does the Hub's schema shrink?** *Default:* `weather_anchor`,
-`drought_cell`, `river_cell` and `weather_call` move to the weather service's own database and are
-dropped from the Hub's. The Hub keeps only what it caches, which may be nothing on disk at all.
-**A:**
-
-**B6. Does the console weather screen move?** `/console/weather`, `/console/map/weather.geojson` and
-the probe. *Default:* the screens stay in the Hub and read the weather service's status endpoint, so
-there is one console. The weather service gets no UI of its own.
-**A:**
+**B6. Does the console move?** **Answered** — it stays ([W-003](#w-003)), and now writes
+([A10](#a10)).
 
 **B7. What happens to `HostLimiter`?** Weather calls go through the Hub's shared per-host politeness
-budget today. *Default:* the weather service carries its own copy; the two never call the same host
-after the switch, so there is nothing to coordinate.
+budget today. *Default:* the weather service carries its own copy; after the switch the two never
+call the same host, so there is nothing to coordinate.
+**A:**
+
+<a id="b8"></a>**B8. What is left of `MetricsManager` and the `metrics` component?** *(new)* With GFDI, spread, the
+registers and the fuel layers gone, `MetricsManager` is a manager that consumes `WeatherEvent` and
+copies a block onto an incident. The `metrics` row in the enrichment matrix is a consumer-visible
+contract. *Default:* the component and its row stay exactly as they are — `WeatherManager` fills them
+from the answer, and `MetricsManager` is deleted rather than hollowed out.
+**A:**
+
+<a id="b9"></a>**B9. Does `IncidentWatchStatistics` keep asking per agency centroid?** *(new)* It calls for weather
+at each agency's centroid inside a statistics build. Through one door that is now a cache lookup per
+agency on a background thread. *Default:* unchanged behaviour, but it may only read the cache — a
+statistics build never triggers an upstream fetch.
 **A:**
 
 ---
 
 # Section C — The contract between the two
 
-**C1. Is the wire contract exactly today's `/api/weather` JSON?** *Default:* **yes, plus the two age
-fields from A5 and the hourly series from A2.** Starting from the shape consumers already read is the
-cheapest way to keep the proposal's "nothing changes downstream" promise honest.
+**C1. Is the wire contract today's `/api/weather` JSON?** Now more load-bearing: under
+[W-005](#w-005) the Hub has no rich types left, so the wire shape *is* the model. *Default:* **yes,
+plus** the ages from [A5](#a5), the hourly series, and the grass block from [W-006](#w-006). Starting
+from the shape consumers already read is the cheapest way to keep [W-013](#w-013) honest.
 **A:**
 
-**C2. Does the Hub proxy `/api/weather`, or do consumers get a new host?** The proposal says
-consumers keep reading the same endpoint, which means the Hub proxies — and stays on the critical
-path for weather regardless. *Default:* **the Hub proxies**, from its cache where it can. Pointing
-consumers at a second host is a consumer-visible change and a second API-key regime.
+**C2. Does the Hub proxy?** **Answered** — [W-013](#w-013).
+
+**C3. How do the two authenticate?** Now two directions, not one — reads, and the curing write from
+[A10](#a10). *Default:* the same API-key filter the Hub already runs for its own consumers, pointed
+the other way, over a private path.
 **A:**
 
-**C3. How does the Hub authenticate to the weather service?** *Default:* the same API-key filter the
-Hub already uses for consumers, in the other direction, over a private network path (see G3).
-**A:**
+**C4. How is cache duration communicated?** **Answered** — [W-004](#w-004). The mechanism is
+`cacheUntil` on every answer, and per **F4** it has to actually be read, which it is not today.
 
-**C4. How does the service tell the Hub how long to cache?** Per **F4** the field exists and is
-ignored. *Default:* an explicit `cacheUntil` instant on every answer, derived from the anchor's TTL
-and the provider's own expiry, whichever is sooner. The Hub honours it and never invents its own.
-**A:**
-
-**C5. Is the call synchronous on the incident path, and what is the timeout?** Weather attaches when
-an incident is raised. *Default:* asynchronous — the incident is created without weather and the
-component attaches when the answer arrives, with a **two-second** timeout on the call and no retry
-inside the request.
+**C5. Synchronous on the incident path?** Weather attaches when an incident is raised, and that path
+now crosses a network. *Default:* **asynchronous** — the incident is created without weather and the
+component attaches when the answer arrives; two-second timeout, no retry inside the request.
 **A:**
 
 **C6. How does a field get added without breaking the Hub?** *Default:* additive-only, unknown fields
-ignored on both sides, and the golden-payload test from B2 is the gate. No version negotiation.
+ignored both ways, and a golden-payload test on both sides is the gate. No version negotiation.
 **A:**
 
 ---
 
 # Section D — Failure and degradation
 
-**D1. What does "clearly-labelled" mean, field by field?** *Default:* `degraded`, `heldFor`,
-`observedAge`, and the `decision` sentence naming the reason in English. All four on every block,
-never only on the envelope.
-**A:**
+**D1. What "labelled" means, field by field.** **Folded into [A5](#a5)**, which is where it now
+matters most.
 
-**D2. Does the Hub have its own `max-stale`?** *Default:* six hours, per A6, configurable, and
-surfaced on the console rather than only in the payload.
-**A:**
+**D2. Does the Hub have its own max-stale?** **Answered — no** ([W-009](#w-009)). No ceiling. That is
+what makes [A5](#a5) blocking.
 
-**D3. Does a weather outage show up as an incident-processing problem?** *Default:* never. Weather
-failures log and raise on the weather panel; they do not fail an incident write, a merge or a
-statistics build.
-**A:**
+**D3. Can a weather failure break incident processing?** **Answered — never.** Implicit in
+[W-009](#w-009): the worst outcome is no weather, and no weather is acceptable.
 
-**D4. Does the Hub start when the weather service is down?** Startup today has a `REHYDRATE` step for
-anchors and the call ledger inside a gated phase sequence. *Default:* yes — the weather client's
-startup step is best-effort and never gates readiness.
+**D4. Does the Hub start when the weather service is down?** Startup has a `REHYDRATE` step for
+anchors and the ledger inside a gated phase sequence, and under [A9](#a9) it may also want the band
+tables. *Default:* yes — the weather client's startup steps are best-effort and never gate readiness.
 **A:**
 
 **D5. Who is told, and how quickly?** *Default:* the existing Pushover channel, once per outage
-rather than per failed call, with a recovery notice.
+rather than per failed call, with a recovery notice. The weather panel shows the live state.
+**A:**
+
+<a id="d6"></a>**D6. How does an operator see which rung an answer came from?** *(new)* Three rungs
+([W-009](#w-009)) and no ceiling means the console should show the distribution, not just the
+readings. *Default:* the weather panel counts answers by rung over the last hour, so "everything is
+coming off the nearest-cached rung" is visible before somebody notices the numbers look odd.
 **A:**
 
 ---
 
 # Section E — The capabilities that justify it
 
-**E1. Which Bureau product, exactly?** Follows A3. *Default:* `IDS60920.xml` and the interstate
-equivalents, ten-minutely, plus a written permission request for the API.
-**A:**
+**All six answered by [W-002](#w-002) and [W-012](#w-012): later.** Version one adds nothing. Kept
+here because they are the reason the server exists, and because two of them have a shape worth
+remembering when they arrive.
 
-**E2. What does the historical archive hold, and how big does it get?** Ten years at how many points,
-at what resolution, in what form — raw payloads, parsed series, or daily aggregates? *Default:*
-**parsed daily series plus hourly for the last two years**, at drought-cell resolution, which is
-tens of megabytes rather than tens of gigabytes and fits the hardware in G1.
-**A:**
-
-**E3. What is scored, at what horizon, and against what baseline?** A skill score is meaningless
-without a baseline — persistence and climatology are the usual two. *Default:* temperature, humidity,
-wind and rain at 6, 24 and 72 hours, scored against persistence, per provider.
-**A:**
-
-**E4. Does "tune for our own conditions" mean a bias correction on the inputs, or a change to the
-index?** *Default:* **bias correction on the inputs only.** FFDI is McArthur Mk5 in Noble, Bary and
-Gill's published form and is checked against a hand-worked value; changing the index means the number
-is no longer the one everybody else means by FFDI.
-**A:**
-
-**E5. Does a corrected number stay labelled as ours?** *Default:* yes — a corrected reading carries
-`corrected: true` and the correction's basis, and the raw model value travels beside it.
-**A:**
-
-**E6. Does any of this need to be on the incident path?** *Default:* no. Archive, scoring and tuning
-are offline jobs; the incident path reads only their outputs. This is the strongest argument in the
-proposal's favour and it should be stated that way.
-**A:**
+**E1. Which Bureau product.** Permission exists ([W-011](#w-011)); FTP and station ingest are post-v1.
+**E2. What the archive holds, and how big.** Post-v1. It is the load that decides
+[G1](#section-g--the-server-itself), so it should be sized before the hardware is bought, not after.
+**E3. What a forecast is scored against.** Post-v1 — and carrying [A4](#a4)'s unanswered core: station
+observations and reanalysis score the *inputs*; only incident outcomes score the thing we care about,
+and that would send Hub data the other way for the first time.
+**E4. Bias correction or a changed index.** Post-v1. *Standing recommendation:* **inputs only.** FFDI
+is McArthur Mk5 in Noble, Bary and Gill's published form and is checked against a hand-worked value;
+change the index and the number stops being the one everybody else means by FFDI.
+**E5. Does a corrected number stay labelled as ours.** Post-v1. Yes, when it comes.
+**E6. Does any of this touch the incident path?** **No** — archive, scoring and tuning are offline
+jobs. This is the strongest argument in the proposal's favour and deserves to be stated as one.
 
 ---
 
 # Section F — Licence, allowance and cost
 
-**F1. How is CC BY 4.0 attributed through two hops?** *Default:* the attribution travels in the
-answer and is rendered by every consumer that displays a reading, unchanged from today's disclaimer.
+**F1. How is CC BY 4.0 attributed through two hops?** *Default:* the attribution travels in the answer
+and is rendered by every consumer that displays a reading, unchanged from today's disclaimer.
 **A:**
 
-**F2. Does PropertyWatch's paid report change the analysis?** Follows A7. *Default:* a paid consumer
-may only be served from a commercially-licensed provider, enforced in the provider order rather than
-by policy.
-**A:**
+**F2. Does a paid consumer change it?** **Deferred** with [W-012](#w-012) — and the internal-only
+condition is the thing that expires. PropertyWatch is the trigger to revisit.
 
-**F3. Is MET Norway built before or after the split?** *Default:* **before**, per A7. It is a day's
-work and it removes the licence question from the critical path.
-**A:**
+**F3. MET Norway before or after?** **Answered — after** ([W-012](#w-012)).
 
-**F4. What does the transition cost in upstream calls?** A cold weather service re-spins every
-drought cell at six allowance units each. *Default:* migrate `drought_cell` and `weather_anchor`
-rather than re-spinning; a cold start is the fallback, not the plan.
-**A:**
+**F4. Transition cost in upstream calls.** **Answered — migrate, don't re-spin** ([W-008](#w-008)).
+[W-014](#w-014) makes getting this wrong survivable rather than expensive.
 
-**F5. Which side holds the Google key and the monitoring credentials?** *Default:* the weather
-service holds both; `/console/usage` reads its figures over the wire.
+**F5. Which side holds the keys?** **Answered** — the weather service holds `GOOGLE_WEATHER_KEY`, the
+monitoring credentials and the contact identity; `/console/usage` reads its figures over the wire.
+
+<a id="f6"></a>**F6. What does the Bureau permission actually allow?** *(new)* [W-011](#w-011) says permission
+exists. Before station data is built on it, its terms need recording somewhere durable — in
+particular whether it permits **redistribution** to this system's consumers, which is a different
+question from whether it permits use. *Default:* record the permission and its scope in this
+repository when station work starts; assume use-only until read.
 **A:**
 
 ---
 
 # Section G — The server itself
 
-**G1. Pi or VPS, and on what evidence?** A Pi is sufficient for the current workload — a few hundred
-calls a day and 500 anchors. The archive and the scoring in Section E are the load that decides it.
-*Default:* **a small VPS.** A Pi on a domestic connection is a single point of failure with no
-out-of-band access on the day it matters, and the price difference is a few dollars a month.
+**G1. Pi or VPS?** A Pi is ample for v1 — a few hundred calls a day and 500 anchors. The archive
+(E2) is what decides it, and the archive is post-v1. *Default:* **a small VPS.** A Pi on a domestic
+connection is a single point of failure with no out-of-band access on the day it matters, for a few
+dollars a month.
 **A:**
 
-**G2. Its own Postgres, or the Hub's?** *Default:* **its own.** Sharing the database keeps the
-coupling the split exists to remove, and the weather service's archive has a different growth profile
-and a different backup need.
+**G2. Its own Postgres?** **Answered — yes** ([W-008](#w-008)).
+
+**G3. The network path between them.** *Default:* the same Cloudflare tunnel pattern the Hub already
+uses, so neither machine accepts anything inbound.
 **A:**
 
-**G3. What is the network path between them?** *Default:* the same Cloudflare tunnel pattern the Hub
-already uses, so neither machine accepts anything inbound; the Hub reaches the weather service by
-hostname and key.
+**G4. What is backed up?** [W-014](#w-014) says the data is disposable, which mostly answers this.
+*Default:* nothing is backed up in v1 — anchors, cells and the ledger are all re-derivable, and the
+curing register is the only human-entered data on the box. **That one is not re-derivable and should
+be.**
 **A:**
 
-**G4. What is backed up, and what is merely re-derivable?** *Default:* the archive and the call ledger
-are backed up; anchors, drought cells and river cells are re-derivable and are not.
+**G5. What does a restart cost?** *Default:* nothing, if anchors and cells rehydrate the way they do
+today. Worth verifying rather than assuming, before the switch.
 **A:**
 
-**G5. What does a restart cost?** *Default:* nothing, if anchors and cells persist and rehydrate the
-way they do today. This should be verified, not assumed, before the switch.
-**A:**
-
-**G6. Does a second machine double the operational surface?** Honestly, yes. *Default:* accepted, on
-the condition that D3 and D4 hold — the Hub never fails because the weather service did.
+**G6. Does a second machine double the operational surface?** Honestly, yes. *Default:* accepted —
+[W-009](#w-009) and D3 mean the Hub never fails because the weather service did, which is the
+condition that makes it worth it.
 **A:**
 
 ---
 
 # Section H — Migration, sequencing and rollback
 
-**H1. Does this block Phase Z, FireBuddy or PropertyWatch?** *Default:* the split waits until
-FireBuddy's owed items are closed. Weather is the one part of the stack that currently works and is
-not on anybody's critical path — which is an argument for doing it now, and an argument for doing it
-last.
+**H1. Does this block Phase Z, FireBuddy or PropertyWatch?** [W-010](#w-010) gates the switch on the
+responsibility split, not on other work. *Default:* the split lands before FireBuddy's owed items,
+because [W-001](#w-001) means every week it waits is a week of context spent on weather the Hub no
+longer needs to carry.
 **A:**
 
-**H2. Cold start or data migration?** Follows F4. *Default:* migrate.
+**H2. Cold start or migration?** **Answered — migrate** ([W-008](#w-008)).
+
+**H3. What is the cutover?** **Answered — a switch, no shadow week** ([W-010](#w-010)), gated on this
+document.
+
+**H4. Rollback?** **Answered — none.** Delete and switch ([W-010](#w-010)); the safety net is
+[W-014](#w-014) and git.
+
+**H5. Which tests move, and what replaces the fused ones?** 1,511 lines. Provider, cache, governor,
+index and fuel tests move; `WeatherPanelTest` stays. *Default:* one golden-payload contract test runs
+on both sides in CI, and it is written **before** the switch, not after — under [W-010](#w-010) there
+is no flag to fall back to.
 **A:**
 
-**H3. What is the cutover?** *Default:* **shadow first.** The weather service runs alongside for a
-week answering the same questions with no consumer reading it, and the two answers are diffed. Then a
-switch, per A8 — no dual-calling period.
-**A:**
-
-**H4. What is the rollback, and for how long?** *Default:* the Hub's weather code stays in the tree
-behind a flag for one month after the switch, then is deleted. A rollback that needs a revert of a
-month-old deletion is not a rollback.
-**A:**
-
-**H5. Which tests move, and what replaces the fused ones?** 1,511 lines of weather tests. *Default:*
-provider, cache, governor and index tests move; `WeatherPanelTest` stays; the golden-payload contract
-test from B2 is new and runs on both sides in CI.
+<a id="h6"></a>**H6. In what order do the two repositories change?** *(new)* A switch with no flag means one
+sequence works and the others leave a broken tree. *Default:* the weather service is stood up and
+answering first; then the Hub's swap and deletion land as **one commit**.
 **A:**
 
 ---
 
 # Section I — The counter-case
 
-*Four questions whose honest answers might be "then do not do this".*
+**I1. Is the Hub measurably heavier because weather is in it?** **Answered** ([W-001](#w-001)): a
+little friction, and mainly context. Recorded plainly because it changes the test of success — this
+is justified by lines removed, so a design that leaves weather's vocabulary behind fails on its own
+terms even if it ships.
 
-**I1. Is the Hub measurably heavier or riskier because weather is in it?** The claim is that weather
-makes the incident system "heavier and riskier to change". The test is evidence: how many times has a
-weather change broken a non-weather test, delayed a non-weather release, or caused an incident-path
-defect? *Default:* if the answer is "none", the risk argument is theoretical and the capability
-argument in Section E has to carry the proposal on its own.
+**I2. Would a module boundary inside the Hub do?** **Answered by [W-001](#w-001) — no.** A module
+boundary isolates code without removing it, and code that is still in the tree is still read. The one
+argument against the split does not survive the reason for it.
+
+**I3. Does a second server make the whole system less reliable?** Two machines, a network between
+them, a new class of partial failure — against a fault-isolation benefit that only pays out when
+weather breaks. [W-009](#w-009) is the mitigation and it is a good one. *Default:* net positive,
+**conditional on [A5](#a5)** — an unlabelled old reading is worse than the outage it is covering for.
 **A:**
 
-**I2. Would a module boundary inside the Hub buy most of the benefit for none of the cost?** The Hub's
-module graph is already enforcement rather than convention, and weather already sits behind one
-interface. *Default:* it buys the isolation but not the independent deployment or the archive's
-storage profile — which means it is a real alternative only if E2 and E3 turn out small.
-**A:**
-
-**I3. Does a second server make the whole system less reliable, not more?** Two machines, a network
-between them, and a new class of partial failure, against a fault-isolation benefit that only pays
-out when weather breaks. *Default:* net positive **only if** D3 and D4 are built first and verified,
-not asserted.
-**A:**
-
-**I4. What would we regret in a year?** *Default:* the likeliest regret is a contract frozen too
-early around today's JSON, and the second likeliest is an archive that grew faster than the hardware.
-Both are cheap to guard against now and expensive to fix later.
+**I4. What would we regret in a year?** *Default:* the likeliest regret is now **[A9](#a9)** — bands
+that drifted apart between two systems and a consumer colouring Catastrophic wrong. Second is a
+curing figure that was entered, failed to write, and was believed ([A10](#a10)). Both are cheap
+today.
 **A:**
 
 ---
 
 ## Answer log
 
-*Empty. Nothing has been answered yet.*
+| Round | Date              | Asked | Answered | Decisions            | Left blocking |
+|-------|-------------------|-------|----------|----------------------|---------------|
+| 1     | 15 September 2026 | 10    | 10       | W-001 – W-014        | 3             |
 
-| Round | Date | Questions closed | Decisions taken |
-|-------|------|------------------|-----------------|
-| —     | —    | —                | —               |
+**Round 1**, James, in ten answers. The seam collapsed from five call sites to one door
+([W-003](#w-003)); the scope shrank to a lift-and-shift ([W-002](#w-002)) while the move itself grew
+by the grassland index and its registers ([W-006](#w-006), [W-007](#w-007)); the justification was
+put on the record as context budget rather than production risk ([W-001](#w-001)); and degradation
+was settled as three rungs with no ceiling and no extrapolation ([W-009](#w-009)) — which is what
+promoted labelling ([A5](#a5)) to the most important open question in the document.
+
+Seven questions were created by the answers: [A9](#a9), [A10](#a10), [B8](#b8), [B9](#b9),
+[D6](#d6), [F6](#f6) and [H6](#h6).
