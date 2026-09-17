@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html th:replace="~{layout :: page('Weather', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section>
+    <h1 class="h4">Weather · providers, allowance and the anchor cache</h1>
+    <p class="text-secondary">
+        Weather is fetched on demand for a point, never polled on a schedule. Every answer is served
+        from an anchor if one is within
+        <strong th:text="${tuning.anchorReachKm} + ' km'">15 km</strong> reach and no older than
+        <strong th:text="${fmt.human(tuning.ttl)}">30m</strong>; only a miss reaches an upstream, and the
+        upstreams are tried in the configured order until one is inside its free allowance.
+        <span th:if="${tuning.verticalWeight > 0}">
+            Reach is measured in three dimensions: at a vertical weight of
+            <strong th:text="${tuning.verticalWeight}">67</strong>, roughly
+            <strong th:text="${#numbers.formatInteger(tuning.anchorReachMetres / tuning.verticalWeight, 0)} + ' m'">224 m</strong>
+            of height difference costs as much as the whole reach, so the Hills are not served from the plains.
+        </span>
+        <span class="text-warning" th:unless="${tuning.verticalWeight > 0}">
+            The vertical term is off (<code>weather.cache.vertical-weight: 0</code>), so matching is
+            horizontal only and an anchor across an escarpment can still answer for the valley below it.
+        </span>
+    </p>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card bg-body-tertiary">
+                <div class="card-body py-2">
+                    <div class="text-secondary small">Cache hit rate</div>
+                    <div class="h4 mb-0" th:text="${hitRate} + '%'">0%</div>
+                    <div class="small text-secondary"><span th:text="${hits}">0</span> served, <span
+                            th:text="${misses}">0</span> fetched<span class="text-warning" th:if="${stale > 0}">, <span
+                            th:text="${stale}">0</span> stale (<span th:text="${staleRate}">0</span>%)</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-body-tertiary">
+                <div class="card-body py-2">
+                    <div class="text-secondary small">Live anchors</div>
+                    <div class="h4 mb-0"><span th:text="${#lists.size(anchors)}">0</span> <span
+                            class="text-secondary small">/ <span th:text="${config.cache.maxAnchors}">500</span></span>
+                    </div>
+                    <div class="small text-secondary">bounded by activity, not by area</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-body-tertiary">
+                <div class="card-body py-2">
+                    <div class="text-secondary small">Reach now</div>
+                    <div class="h4 mb-0">
+                        <span th:text="${tuning.anchorReachKm} + ' km'">15 km</span>
+                        <span class="text-secondary small"
+                              th:text="'· ttl ' + ${fmt.human(tuning.ttl)}">· ttl 30m</span>
+                    </div>
+                    <div class="small text-secondary" th:text="${tuning.reason}">configured defaults</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-secondary small">
+        The governor moves the reuse windows from how fast today's allowance is going, and it is
+        <strong>insurance rather than a daily tuner</strong>. Open-Meteo publishes ten thousand units a day
+        and a busy day spends a few hundred, so everything rests at its tightest setting essentially always.
+        It earns its keep on the day Open-Meteo is down and Google's three hundred guarded calls are carrying
+        the load, which is exactly the day nobody has time to edit a configuration file.
+    </p>
+
+    <h2 class="h6 text-secondary">Providers, in the order they are tried</h2>
+    <div class="table-responsive mb-4">
+        <table class="table table-sm align-middle">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Provider</th>
+                <th>State</th>
+                <th>Allowance spent</th>
+                <th>Last failure</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p, i : ${providers}">
+                <td class="text-secondary" th:text="${i.count}">1</td>
+                <td><strong th:text="${p.id}">open-meteo</strong>
+                    <div class="small text-secondary mono" th:text="${p.model}"></div>
+                </td>
+                <td>
+                    <span class="badge text-bg-success" th:if="${p.usable}">ready</span>
+                    <span class="badge text-bg-secondary" th:if="${!p.configured}">unconfigured</span>
+                    <span class="badge text-bg-warning" th:if="${p.configured and !p.withinBudget}">held</span>
+                    <div class="small text-secondary"
+                         th:text="${!p.configured} ? ${p.unavailableReason} : ${p.budgetReason}"></div>
+                </td>
+                <td class="small mono">
+                    <span th:text="${p.spent['day']}">0</span> today ·
+                    <span th:text="${p.spent['month']}">0</span> this month
+                    <div class="progress mt-1" style="height: 4px; width: 120px;" th:if="${p.monthFraction > 0}">
+                        <div class="progress-bar"
+                             th:classappend="${p.monthFraction > p.guardFraction} ? 'bg-danger' : 'bg-success'"
+                             th:style="'width: ' + ${p.monthFraction * 100} + '%'"></div>
+                    </div>
+                </td>
+                <td class="small text-secondary">
+                    <span th:if="${p.lastFailure != null}" th:text="${p.lastFailure}"></span>
+                    <div th:if="${p.lastFailureAt != null}" th:text="${fmt.ago(p.lastFailureAt)}"></div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="h6 text-secondary">Probe a point</h2>
+    <form class="row row-cols-lg-auto g-2 align-items-center mb-2" method="get" th:action="@{/console/weather}">
+        <div class="col"><input class="form-control form-control-sm" name="lat" placeholder="lat" th:value="${lat}">
+        </div>
+        <div class="col"><input class="form-control form-control-sm" name="lon" placeholder="lon" th:value="${lon}">
+        </div>
+        <div class="col">
+            <button class="btn btn-sm btn-outline-primary">Look up</button>
+        </div>
+        <div class="col">
+            <button class="btn btn-sm btn-outline-warning" name="force" value="true">Force a fresh call</button>
+        </div>
+    </form>
+    <p class="small text-secondary">A plain lookup goes through the cache and usually costs nothing. Forcing skips it
+                                    and spends allowance.</p>
+
+    <div class="alert alert-warning py-2 small" th:if="${probeFailed}">
+        Nothing answered: every provider is unconfigured, out of allowance or failing, and no cached anchor is near
+        enough.
+    </div>
+
+    <div class="card bg-body-tertiary mb-4" th:if="${answer != null}">
+        <div class="card-body py-2">
+            <div class="small text-secondary" th:text="${answer.decision}"></div>
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <th>Provider</th>
+                            <td th:text="${answer.provider} + ' · ' + ${answer.report.model}"></td>
+                        </tr>
+                        <tr>
+                            <th>Observed</th>
+                            <td th:text="${answer.report.current?.at}"></td>
+                        </tr>
+                        <tr>
+                            <th>Stretched</th>
+                            <td th:text="${answer.offsetMetres} + ' m on the ground, reach ' + ${answer.reachMetres} + ' m, ' + ${answer.age.toMinutes()} + ' min old'"></td>
+                        </tr>
+                        <tr>
+                            <th>Height</th>
+                            <td th:text="${answer.elevationDeltaMetres != null} ? ${answer.elevationDeltaMetres} + ' m above the anchor' : 'unknown; matched horizontally'"></td>
+                        </tr>
+                        <tr>
+                            <th>Temperature</th>
+                            <td th:text="${answer.report.current?.temperatureC} + ' C'"></td>
+                        </tr>
+                        <tr>
+                            <th>Humidity</th>
+                            <td th:text="${answer.report.current?.humidityPct} + ' %'"></td>
+                        </tr>
+                        <tr>
+                            <th>Wind</th>
+                            <td th:text="${answer.report.current?.windSpeedKmh} + ' km/h from ' + ${answer.report.current?.windDirectionDeg} + ' deg, gust ' + ${answer.report.current?.windGustKmh}"></td>
+                        </tr>
+                        <tr>
+                            <th>Conditions</th>
+                            <td th:text="${answer.report.current?.condition}"></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6" th:if="${answer.fire != null}">
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <th>FFDI now</th>
+                            <td><strong th:text="${answer.fire.ffdi}"></strong> <span
+                                    th:text="${answer.fire.ffdiRating}"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Peak in forecast</th>
+                            <td th:text="${answer.fire.peakFfdi()}"></td>
+                        </tr>
+                        <tr>
+                            <th>Drought factor</th>
+                            <td>
+                                <span th:text="${answer.fire.droughtFactor}"></span>
+                                <span class="badge text-bg-success"
+                                      th:unless="${answer.fire.estimated}">integrated</span>
+                                <span class="badge text-bg-warning" th:if="${answer.fire.estimated}">estimated</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>KBDI</th>
+                            <td><span th:text="${answer.fire.kbdiMm}"></span> mm <span class="text-secondary"
+                                                                                       th:text="${answer.fire.kbdiBand}"></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Mean annual rain</th>
+                            <td th:text="${answer.fire.meanAnnualRainfallMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Vapour pressure deficit</th>
+                            <td th:text="${answer.fire.vapourPressureDeficitKpa} + ' kPa'"></td>
+                        </tr>
+                        <tr>
+                            <th>Mixing height</th>
+                            <td th:text="${answer.fire.boundaryLayerHeightM} + ' m'"></td>
+                        </tr>
+                        <tr>
+                            <th>Wind at 80 m</th>
+                            <td th:text="${answer.fire.windSpeed80mKmh} + ' km/h from ' + ${answer.fire.windDirection80mDeg} + ' deg'"></td>
+                        </tr>
+                    </table>
+                    <p class="small text-secondary mt-2 mb-0" th:text="${answer.fire.basis}"></p>
+                </div>
+            </div>
+
+            <div class="row mt-3" th:if="${answer.fire != null and !#lists.isEmpty(answer.fire.outlook)}">
+                <div class="col-12">
+                    <h3 class="h6 text-secondary">Fire outlook</h3>
+                    <table class="table table-sm mb-0">
+                        <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>FFDI</th>
+                            <th>Rating</th>
+                            <th>KBDI</th>
+                            <th>DF</th>
+                            <th>Max temp</th>
+                            <th>Min RH</th>
+                            <th>Max wind</th>
+                            <th>Rain</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="d : ${answer.fire.outlook}">
+                            <td th:text="${d.date}"></td>
+                            <td><strong th:text="${d.ffdi}"></strong></td>
+                            <td th:text="${d.ffdiRating}"></td>
+                            <td th:text="${d.kbdiMm}"></td>
+                            <td th:text="${d.droughtFactor}"></td>
+                            <td th:text="${d.maxTemperatureC}"></td>
+                            <td th:text="${d.minHumidityPct}"></td>
+                            <td th:text="${d.maxWindKmh}"></td>
+                            <td th:text="${d.rainMm}"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="row mt-3" th:if="${answer.flood != null}">
+                <div class="col-md-6">
+                    <h3 class="h6 text-secondary">Flood · already fallen</h3>
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <th>Last 24 h</th>
+                            <td th:text="${answer.flood.rain1dMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Last 48 h</th>
+                            <td th:text="${answer.flood.rain2dMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Last 72 h</th>
+                            <td th:text="${answer.flood.rain3dMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Last 7 days</th>
+                            <td th:text="${answer.flood.rain7dMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Ground, surface</th>
+                            <td th:text="${answer.flood.soilMoistureSurface}"></td>
+                        </tr>
+                        <tr>
+                            <th>Ground, root zone</th>
+                            <td th:text="${answer.flood.soilMoistureRootZone}"></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h3 class="h6 text-secondary">Flood · still coming</h3>
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <th>Next 6 h</th>
+                            <td th:text="${answer.flood.forecastRain6hMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Next 24 h</th>
+                            <td th:text="${answer.flood.forecastRain24hMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Next 72 h</th>
+                            <td th:text="${answer.flood.forecastRain72hMm} + ' mm'"></td>
+                        </tr>
+                        <tr>
+                            <th>Three-day total</th>
+                            <td><strong th:text="${answer.flood.threeDayTotalMm()} + ' mm'"></strong></td>
+                        </tr>
+                        <tr>
+                            <th>River now</th>
+                            <td>
+                                <span th:text="${answer.flood.riverDischargeCumecs}"></span> m3/s
+                                <span class="badge text-bg-secondary" th:if="${answer.flood.riverTrend != null}"
+                                      th:text="${answer.flood.riverTrend}"></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Against its mean</th>
+                            <td th:text="${answer.flood.dischargeRatioToMean} + ' x'"></td>
+                        </tr>
+                    </table>
+                    <p class="small text-secondary mt-2 mb-0" th:text="${answer.flood.basis}"></p>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h3 class="h6 text-secondary">
+                        Hourly forecast
+                        <span class="small" th:if="${!#lists.isEmpty(answer.report.hourly)}">
+                            · <span th:text="${#lists.size(answer.report.hourly)}">72</span> steps held on this anchor
+                        </span>
+                    </h3>
+                    <p class="small text-secondary" th:if="${#lists.isEmpty(answer.report.hourly)}">
+                        This provider returned no hourly series.
+                    </p>
+                    <div class="table-responsive" style="max-height: 320px; overflow-y: auto"
+                         th:if="${!#lists.isEmpty(answer.report.hourly)}">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="sticky-top bg-body-tertiary">
+                            <tr>
+                                <th>Local time</th>
+                                <th>Temp</th>
+                                <th>Feels</th>
+                                <th>RH</th>
+                                <th>Dew</th>
+                                <th>Wind</th>
+                                <th>Gust</th>
+                                <th>Rain</th>
+                                <th>Chance</th>
+                                <th>Cloud</th>
+                                <th>Conditions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="h : ${answer.report.hourly}">
+                                <td class="mono small" th:text="${fmt.adelaide(h.at)}"></td>
+                                <td th:text="${h.temperatureC} + ' C'"></td>
+                                <td class="text-secondary" th:text="${h.apparentTemperatureC} + ' C'"></td>
+                                <td th:text="${h.humidityPct} + ' %'"></td>
+                                <td class="text-secondary" th:text="${h.dewPointC} + ' C'"></td>
+                                <td th:text="${h.windSpeedKmh} + ' km/h ' + ${h.windDirectionDeg} + ' deg'"></td>
+                                <td class="text-secondary" th:text="${h.windGustKmh}"></td>
+                                <td th:text="${h.precipitationMm} + ' mm'"></td>
+                                <td class="text-secondary" th:text="${h.precipitationProbabilityPct} + ' %'"></td>
+                                <td class="text-secondary" th:text="${h.cloudCoverPct} + ' %'"></td>
+                                <td class="small" th:text="${h.condition}"></td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-3" th:if="${!#lists.isEmpty(answer.report.daily)}">
+                <div class="col-12">
+                    <h3 class="h6 text-secondary">Daily outlook</h3>
+                    <table class="table table-sm mb-0">
+                        <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Min</th>
+                            <th>Max</th>
+                            <th>Feels max</th>
+                            <th>Min RH</th>
+                            <th>Max wind</th>
+                            <th>Max gust</th>
+                            <th>Rain</th>
+                            <th>Chance</th>
+                            <th>UV</th>
+                            <th>Conditions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="d : ${answer.report.daily}">
+                            <td th:text="${d.date}"></td>
+                            <td class="text-secondary" th:text="${d.minTemperatureC}"></td>
+                            <td><strong th:text="${d.maxTemperatureC}"></strong></td>
+                            <td class="text-secondary" th:text="${d.maxApparentTemperatureC}"></td>
+                            <td th:text="${d.minHumidityPct} + ' %'"></td>
+                            <td th:text="${d.maxWindKmh}"></td>
+                            <td class="text-secondary" th:text="${d.maxGustKmh}"></td>
+                            <td th:text="${d.precipitationMm} + ' mm'"></td>
+                            <td class="text-secondary" th:text="${d.precipitationProbabilityPct} + ' %'"></td>
+                            <td class="text-secondary" th:text="${d.uvIndexMax}"></td>
+                            <td class="small" th:text="${d.condition}"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="small text-secondary mt-2" th:text="${answer.report.attribution}"></div>
+        </div>
+    </div>
+
+    <h2 class="h6 text-secondary">Anchors</h2>
+    <p class="small text-secondary">
+        A table of coordinates cannot show whether
+        <strong th:text="${tuning.anchorReachKm} + ' km'">15 km</strong> is the right reach.
+        <code>GET /api/weather/coverage.geojson</code> draws the same anchors as four concentric
+        outlines over the ground they cover: overlapping circles mean the radius is larger than it needs
+        to be, gaps between them mean it is too small. The renderer for it is
+        <code>static/js/weather-map.js</code>, carried across whole and waiting for a map page.
+    </p>
+    <form class="mb-2" method="post" th:action="@{/console/weather/sweep}">
+        <button class="btn btn-sm btn-outline-secondary">Sweep expired anchors</button>
+    </form>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+            <tr>
+                <th>Point</th>
+                <th>Provider</th>
+                <th>Fetched</th>
+                <th>Expires</th>
+                <th>Reused</th>
+                <th>Temp</th>
+                <th>Wind</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="a : ${anchors}">
+                <td class="mono small"
+                    th:text="${#numbers.formatDecimal(a.lat, 1, 4)} + ', ' + ${#numbers.formatDecimal(a.lon, 1, 4)}"></td>
+                <td class="small" th:text="${a.report.provider}"></td>
+                <td class="small text-secondary" th:text="${fmt.ago(a.fetchedAt)}"></td>
+                <td class="small text-secondary" th:text="${fmt.ago(a.expiresAt)}"></td>
+                <td class="small"><span class="badge text-bg-secondary" th:text="${a.hits.get()}">0</span></td>
+                <td class="small" th:text="${a.report.current?.temperatureC}"></td>
+                <td class="small" th:text="${a.report.current?.windSpeedKmh}"></td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(anchors)}">
+                <td class="text-secondary" colspan="7">No anchors yet. One is created by the first lookup in an area.
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="h6 text-secondary">Drought cells</h2>
+    <p class="small text-secondary">
+        A soil moisture deficit integrated from
+        <strong th:text="${config.drought.spinUpDays}">365</strong> days of daily rain and maximum
+        temperature. One cell serves <strong th:text="${tuning.droughtCellRadiusKm} + ' km'">50 km</strong>
+        for a whole day, because the quantity moves that slowly and deriving one costs a year of data.
+    </p>
+    <div class="table-responsive mb-4">
+        <table class="table table-sm align-middle">
+            <thead>
+            <tr>
+                <th>Point</th>
+                <th>KBDI</th>
+                <th>Band</th>
+                <th>Drought factor</th>
+                <th>Mean annual rain</th>
+                <th>Window</th>
+                <th>For</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="c : ${droughtCells}">
+                <td class="mono small"
+                    th:text="${#numbers.formatDecimal(c.lat, 1, 3)} + ', ' + ${#numbers.formatDecimal(c.lon, 1, 3)}"></td>
+                <td th:text="${c.index.kbdiMm} + ' mm'"></td>
+                <td><span class="badge text-bg-secondary" th:text="${c.index.kbdiBand}"></span></td>
+                <td><strong th:text="${c.index.droughtFactor}"></strong>
+                    <span class="badge text-bg-success" th:if="${c.index.complete}">complete</span>
+                    <span class="badge text-bg-warning" th:unless="${c.index.complete}">shallow</span></td>
+                <td th:text="${c.index.meanAnnualRainfallMm} + ' mm'"></td>
+                <td class="small text-secondary"
+                    th:text="${c.index.spinUpDays} + ' days from ' + ${c.index.spunUpFrom}"></td>
+                <td class="small" th:text="${c.index.computedFor}"></td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(droughtCells)}">
+                <td class="text-secondary" colspan="7">No cells yet. One is spun up by the first fire-relevant lookup in
+                                                       an area.
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="h6 text-secondary">River cells</h2>
+    <p class="small text-secondary">
+        Modelled discharge of the largest river within about 5 km, from GloFAS. Cached only
+        <strong th:text="${tuning.riverCellRadiusKm} + ' km'">5 km</strong> because a river is not the
+        atmosphere: reuse it too widely and it reports a different watercourse.
+    </p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+            <tr>
+                <th>Point</th>
+                <th>River modelled</th>
+                <th>Days held</th>
+                <th>For</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="c : ${riverCells}">
+                <td class="mono small"
+                    th:text="${#numbers.formatDecimal(c.lat, 1, 3)} + ', ' + ${#numbers.formatDecimal(c.lon, 1, 3)}"></td>
+                <td><span class="badge text-bg-success" th:if="${c.hasRiver}">yes</span>
+                    <span class="badge text-bg-secondary" th:unless="${c.hasRiver}">none within 5 km</span></td>
+                <td class="small" th:text="${#lists.size(c.series)}"></td>
+                <td class="small" th:text="${c.computedFor}"></td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(riverCells)}">
+                <td class="text-secondary" colspan="4">No cells yet.</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+</body>
+</html>

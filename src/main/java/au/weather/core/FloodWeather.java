@@ -1,0 +1,65 @@
+package au.weather.core;
+
+import java.util.List;
+
+import static au.weather.core.Numbers.round1;
+
+/**
+ * Flood weather at a point: what has already fallen, what is still coming, how full the ground is,
+ * and what the river is doing.
+ * <p>
+ * <strong>Antecedent rain is the half people forget.</strong> Fifty millimetres onto dry ground is a
+ * wet afternoon; fifty onto ground that took eighty over the previous three days is a callout. The
+ * forecast alone cannot tell those apart, so the same daily history that feeds the drought index is
+ * read the other way round here — the drought index asks how long since it rained, this asks how much
+ * has fallen recently, and one spin-up answers both.
+ * <p>
+ * Soil moisture is a fraction of saturation from the model, not a measurement. Near 1.0 the ground has
+ * stopped absorbing and further rain becomes runoff, which is the transition that matters.
+ * <p>
+ * The antecedent totals are <strong>calendar days</strong>, not rolling hours: they come from the daily
+ * series the drought spin-up already fetched, so {@code rain1dMm} is today so far rather than the last
+ * twenty-four hours. Named accordingly, because the difference matters at nine in the morning.
+ *
+ * @param riverDischargeCumecs modelled discharge of the largest river within about 5 km, from GloFAS
+ * @param dischargeRatioToMean discharge against that river's own mean over the forecast period; the
+ *                             ratio travels because the raw figure is meaningless without the river
+ * @param basis                one line saying which parts were available and which were not
+ */
+public record FloodWeather(
+        Double rain1dMm,
+        Double rain2dMm,
+        Double rain3dMm,
+        Double rain7dMm,
+        Double forecastRain6hMm,
+        Double forecastRain12hMm,
+        Double forecastRain24hMm,
+        Double forecastRain48hMm,
+        Double forecastRain72hMm,
+        Integer maxRainProbabilityPct,
+        Double soilMoistureSurface,
+        Double soilMoistureRootZone,
+        Double riverDischargeCumecs,
+        Double riverDischargeMeanCumecs,
+        Double dischargeRatioToMean,
+        String riverTrend,
+        List<FloodOutlook> outlook,
+        String basis
+) {
+
+    public FloodWeather {
+        outlook = outlook == null ? List.of() : List.copyOf(outlook);
+    }
+
+    /**
+     * Rain already down plus rain still coming over the next three days, which is the planning figure.
+     */
+    public Double threeDayTotalMm() {
+        if (rain3dMm == null && forecastRain72hMm == null) {
+            return null;
+        }
+        double past = rain3dMm == null ? 0 : rain3dMm;
+        double coming = forecastRain72hMm == null ? 0 : forecastRain72hMm;
+        return round1(past + coming);
+    }
+}
