@@ -1,0 +1,7 @@
+.git
+.idea
+.claude
+**/target
+data
+.env
+.env.*

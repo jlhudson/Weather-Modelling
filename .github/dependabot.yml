@@ -1,0 +1,49 @@
+# Reports, never blocks. Version-update PRs are grouped and monthly to keep the noise low;
+# press "Check for updates" on the Dependabot page for an on-demand sweep between schedules.
+# Security alerts are separate, always on, and unaffected by the schedule below.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    labels: [ "dependencies" ]
+    commit-message:
+      prefix: "deps"
+    groups:
+      # One PR for the Boot platform rather than one per managed artifact.
+      spring-boot:
+        patterns:
+          - "org.springframework*"
+          - "org.hibernate*"
+      test-stack:
+        patterns:
+          - "org.junit*"
+          - "org.assertj*"
+      # Front-end assets ship as webjars and move independently of the Java stack.
+      webjars:
+        patterns:
+          - "org.webjars*"
+      minor-and-patch:
+        update-types: [ "minor", "patch" ]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: [ "dependencies" ]
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: [ "*" ]
+
+  # The build and runtime base images in the Dockerfile.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: [ "dependencies" ]
+    commit-message:
+      prefix: "docker"

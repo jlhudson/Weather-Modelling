@@ -1,0 +1,19 @@
+# Build
+target/
+*.class
+*.log
+
+# Secrets: D-101, never in code, never in git
+.env
+.env.*
+!.env.example
+
+# Local runtime state
+data/
+
+# IDE
+.idea/
+out/
+.vscode/
+.DS_Store
+Thumbs.db

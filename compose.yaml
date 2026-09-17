@@ -1,0 +1,72 @@
+# Weather, development compose (docs/14-platform.md, D-137, D-242).
+# PostGIS is not optional; TZ=UTC is explicit; the app healthcheck targets readiness, not liveness.
+#
+# One Postgres container per application here, because this file stands alone. In the deployment
+# docs/27 describes there is one Postgres instance with three databases - hub, operations, weather -
+# and this service points at it with SPRING_DATASOURCE_URL. Separate databases, not separate schemas,
+# so pulling this onto its own VPS later is a pg_dump and a connection string.
+services:
+  db:
+    image: postgis/postgis:18-3.6
+    container_name: weather-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-weather}
+      POSTGRES_USER: ${POSTGRES_USER:-weather}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5433:5432"
+    volumes:
+      # The PostgreSQL 18 image keeps its data directory under /var/lib/postgresql (not /var/lib/postgresql/data).
+      - weather-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-weather} -d ${POSTGRES_DB:-weather}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    image: weather-app:dev
+    container_name: weather-app
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-weather}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-weather}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost:8082/actuator/health/readiness" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # The edge (docs/14). The connector dials out to Cloudflare over QUIC and forwards to the app on
+  # this network, so no port is forwarded and the host still accepts nothing inbound. Which hostname
+  # reaches what is set in the Cloudflare dashboard, not here - point it at http://app:8082.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: weather-cloudflared
+    depends_on:
+      # Cloudflare should not see a 502 for the minute the app spends reaching readiness.
+      app:
+        condition: service_healthy
+    environment:
+      TZ: UTC
+      # In the environment, not the command, so the token stays out of `docker ps`.
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    # The image entrypoint is already `cloudflared --no-autoupdate`.
+    command: tunnel run
+    restart: unless-stopped
+
+volumes:
+  weather-pgdata:
