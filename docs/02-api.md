@@ -147,7 +147,9 @@ Every hexagon held, as a `FeatureCollection` of polygons, each carrying the valu
 `landUse`, `kind`, `active`, `stale`, `warm`, `ageMinutes`, `refreshedAt`, `expiresAt`, `warnings`,
 `windChangeAt`, ...) and `meta` with the counts. Pre-rendered once per change and fingerprinted, so a
 map polling every minute gets `304` until something changes. With `at=`, the values as they were —
-only hexagons that had an incident have a value then. Never fetches.
+only hexagons that had an incident have a value then. Never fetches. Served as `application/geo+json`;
+a client that accepts only `application/json` is answered as that rather than refused, and the same
+goes for the contract's `application/schema+json`.
 
 ```
 curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/hexagons.geojson" -D - -o /dev/null | grep -i etag
