@@ -39,12 +39,14 @@ docker compose up --build
 ```
 
 The console is at <http://localhost:8082/console/weather>, username `operator`, the 8-digit code from
-`.env`. The `cloudflared` service only starts with a `CLOUDFLARE_TUNNEL_TOKEN`; leave it out of the
-`up` if you are not publishing this.
+`.env`. The `cloudflared` service is behind the `edge` profile (`docker compose --profile edge up`, or
+`COMPOSE_PROFILES=edge` in `.env`) and needs a `CLOUDFLARE_TUNNEL_TOKEN`; a development stack leaves it
+off. IncidentWatch also takes 8082 on the host: set `WEATHER_PORT=8083` in `.env` to run both.
 
 In the deployment docs/27 describes, all three applications share one Postgres container with three
 databases and this service is a block in the Hub's `compose.yaml`. The `compose.yaml` here is the
-standalone one, and it maps its own database to host port 5433 so the two can run side by side.
+standalone one, and it maps its own database to host port 5435 (`WEATHER_DB_PORT`) so it runs beside the
+Hub stack's Postgres on 5432, IncidentWatch's on 5433 and Operations' on 5434.
 
 **From the IDE.** `au.weather.WeatherApplication`, with a PostGIS database reachable at
 `jdbc:postgresql://localhost:5432/weather`. Hibernate creates the four tables on the first boot; no

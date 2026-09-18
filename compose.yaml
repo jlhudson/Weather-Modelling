@@ -16,7 +16,8 @@ services:
       TZ: UTC
       PGTZ: UTC
     ports:
-      - "5433:5432"
+      # 5435 on the host: 5432 is the Hub stack's Postgres, 5433 IncidentWatch's, 5434 Operations', so all four can run at once.
+      - "${WEATHER_DB_PORT:-5435}:5432"
     volumes:
       # The PostgreSQL 18 image keeps its data directory under /var/lib/postgresql (not /var/lib/postgresql/data).
       - weather-pgdata:/var/lib/postgresql
@@ -41,7 +42,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-weather}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
-      - "8082:8082"
+      # IncidentWatch also takes 8082 on the host: set WEATHER_PORT=8083 in .env to run both on one machine.
+      - "${WEATHER_PORT:-8082}:8082"
     healthcheck:
       test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost:8082/actuator/health/readiness" ]
       interval: 15s
@@ -54,6 +56,9 @@ services:
   # this network, so no port is forwarded and the host still accepts nothing inbound. Which hostname
   # reaches what is set in the Cloudflare dashboard, not here - point it at http://app:8082.
   cloudflared:
+    # Only with `docker compose --profile edge up` (or COMPOSE_PROFILES=edge in .env): without a
+    # token the connector restarts forever, and a development stack has no token.
+    profiles: [ edge ]
     image: cloudflare/cloudflared:latest
     container_name: weather-cloudflared
     depends_on:

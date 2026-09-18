@@ -80,7 +80,7 @@ moves.
 
 **3. Compose.** The Hub's `compose.yaml` gains a `weather` service built from this checkout, on the
 same network and the same Postgres instance with its own database. The `compose.yaml` *here* is the
-standalone one — its own Postgres on host port 5433 — for running this service by itself.
+standalone one — its own Postgres on host port 5435 — for running this service by itself.
 
 ## 4.4 What the Hub keeps
 
