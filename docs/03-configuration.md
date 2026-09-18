@@ -28,8 +28,8 @@ would quietly break.
 | Key | Default | What it is |
 |---|---|---|
 | `weather.enabled` | `true` | Off, nothing is fetched and no sweep is scheduled. |
-| `weather.timeout` | `15s` | Per-upstream request timeout. |
-| `weather.contact` | `https://github.com/jlhudson/Weather-Modelling` | Identifies this deployment in the User-Agent. **MET Norway blocks callers who do not identify themselves**; everywhere else it is politeness. Reads `WEATHER_CONTACT`. |
+| `weather.timeout` | `15s` | **Read by nothing.** Declared on `WeatherProperties`, never consulted; the upstream timeouts in force are `spring.http.clients.connect-timeout` (10 s) and `read-timeout` (30 s) in the yml. Listed for deletion in [06](06-overhaul.md). |
+| `weather.contact` | `https://github.com/jlhudson/Weather-Modelling` | **Read by nothing.** `HttpFetcher` sends a fixed `User-Agent: Weather/0.1 (+https://github.com/jlhudson/Weather-Modelling)` on every request, so setting this — or `WEATHER_CONTACT` — changes no header. It existed for MET Norway's identify-yourself rule, and MET Norway is not a provider here. Either wire it into the User-Agent (the Bureau also wants a contact, see [06 §6.3.5](06-overhaul.md)) or delete it. |
 | `weather.zone` | `Australia/Adelaide` | The zone daily aggregates are cut on, for providers reporting no zone of their own. Open-Meteo resolves the real zone at the point, and that one wins. |
 | `weather.forecast-days` | `3` | How far the daily outlook runs. Short on purpose: Open-Meteo weights a call by variables × span, so a fortnight is several calls. |
 | `weather.forecast-hours` | `72` | How far the hourly series runs. 72 covers every forecast day, so each gets its own driest hour. |
@@ -44,7 +44,7 @@ would quietly break.
 | `reach-km` | `20` | Nominal reach. The governor moves it between its floor and ceiling; this is only where it starts. |
 | `vertical-weight` | `0` | Metres of horizontal cost per metre of height difference. At 67, 300 m of climb costs as much as 20 km of travel. **Ships at zero**, which reproduces the old horizontal-only rule exactly. |
 | `max-anchors` | `500` | Ceiling on live anchors, least-reused evicted first. |
-| `sweep-interval` | `15m` | (Declared; the sweep runs on `weather.refresh.tick-interval`.) |
+| `sweep-interval` | `15m` | **Read by nothing.** The sweep runs on `weather.refresh.tick-interval` (5 m) and this key is never consulted; a value set here does nothing. Listed for deletion in [06](06-overhaul.md). |
 | `retain-for` | `48h` | How long an expired anchor row is kept, so a restart sees recent history. |
 
 ### `weather.refresh`
@@ -73,6 +73,13 @@ that is still ours, so `weather.refresh.tick-interval` means here what
 | `steps` | `8` | Notches from floor to ceiling. One per recompute, so a full traverse takes eight hours. |
 | `interval` | `1h` | How often the governor may step. It runs off the sweep tick, so the real cadence is the coarser of the two. |
 | `headroom-holds` | `2` | Consecutive intervals of headroom required before stepping *toward* the floor. Asymmetric on purpose: relief should be immediate, spending more should be earned. |
+
+**The floor is where it ends up, not where it starts.** The governor's position (`applied`) lives in
+memory and is not persisted, so every boot begins at the nominals — `reach-km` 20, not the 15 km
+floor — and with pressure near zero it steps one eighth of the way toward the floor every second
+interval (`headroom-holds` resets after each step). A full traverse from nominal to floor takes about
+sixteen hours of headroom after every restart. The console's reason sentence says which point it has
+reached.
 
 ### `weather.fire`
 
@@ -143,7 +150,9 @@ filtered out if it is ever set.
 
 ## 3.5 Environment variables
 
-Everything in `.env.example`, and nothing else is read from the environment.
+The application reads nothing from the environment that is not in `.env.example`. `compose.yaml`
+reads three more — the port mappings and the profile — which are not in `.env.example` yet and are
+listed at the bottom of the table.
 
 | Variable | Used by | Required |
 |---|---|---|
@@ -151,15 +160,19 @@ Everything in `.env.example`, and nothing else is read from the environment.
 | `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | the datasource, overriding the above | no |
 | `WEATHER_CONSOLE_CODE` | the console login | yes in production |
 | `WEATHER_CORS_ORIGINS` | the API CORS allowlist. Comma-separated. **Never `*`.** | no |
-| `WEATHER_CONTACT` | the User-Agent MET Norway checks | yes if MET Norway is in `weather.order` |
+| `WEATHER_CONTACT` | `weather.contact`, which **nothing reads** (§3.1): the User-Agent is a constant in `HttpFetcher` | no |
 | `GOOGLE_WEATHER_KEY` | `GoogleWeatherProvider`. Empty is a supported state: the provider reports itself unconfigured and is skipped. | no |
 | `CARTO_API_KEY` | the console basemaps. Empty leaves CARTO off the basemap list. | no |
-| `CLOUDFLARE_TUNNEL_TOKEN` | the `cloudflared` service in `compose.yaml` | no |
+| `CLOUDFLARE_TUNNEL_TOKEN` | the `cloudflared` service in `compose.yaml`, which only starts under the `edge` profile | only with `edge` |
 | `TZ` | `UTC`, explicitly, everywhere | yes |
+| `WEATHER_PORT` | `compose.yaml` only: the host port mapped onto the container's 8082. Default `8082`; set `8083` to run beside IncidentWatch. Not read by the application. | no |
+| `WEATHER_DB_PORT` | `compose.yaml` only: the host port mapped onto the standalone Postgres. Default `5435`, beside the Hub's 5432, IncidentWatch's 5433 and Operations' 5434. | no |
+| `COMPOSE_PROFILES` | `compose.yaml` only: `edge` starts `cloudflared`. Empty is the development stack. (The Hub's own compose puts this service under its `split` profile; that is the Hub's `.env`, not this one.) | no |
 
 ## 3.6 Spring's own
 
-`server.port` is `8082`. `spring.jpa.hibernate.ddl-auto` is `update`: Hibernate owns table creation
+`server.port` is `8082`, and that is the port inside the container: `WEATHER_PORT` in §3.5 is the
+host side of compose's mapping and the application never sees it. `spring.jpa.hibernate.ddl-auto` is `update`: Hibernate owns table creation
 while the schema is still growing (D-091, D-115) and Flyway owns the alterations it cannot perform
 (D-206). **Never set `validate` until every table has a migration behind it** — see
 `src/main/resources/db/migration/README.md`. `spring.flyway.baseline-version` is `0` so a migration

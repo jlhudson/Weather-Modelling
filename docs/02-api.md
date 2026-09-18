@@ -14,9 +14,13 @@ contract; do not rename them.** The Hub's `HttpWeatherClient` deserialises these
   answer is `429 {"error":"quota exceeded"}`.
 - **Health.** `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` are
   public. Everything else under `/actuator/**` needs the console login.
-- **Conditional GETs.** Every `/api/**` GET carries an ETag and answers `304` to a matching
-  `If-None-Match`.
-- **Errors** are JSON `{"error": "..."}`. **Times** are ISO-8601 UTC strings. Every list body carries
+- **Conditional GETs — wired, and in practice inert.** `ApiCachingConfig` registers Spring's
+  `ShallowEtagHeaderFilter` on `/api/*`, so every successful GET carries a **strong** ETag hashed from
+  the serialised body and would answer `304` to a matching `If-None-Match`. But every body here
+  carries `generatedAt`, stamped at the moment of the request, so the hash changes on every call and
+  the `304` never fires. Do not build a poller on it. The Hub's `HttpWeatherClient` sends no
+  `If-None-Match` for the same reason. There is no `Cache-Control` and no compression.
+- **Errors** are JSON `{"error": "..."}`. **Times** are ISO-8601 UTC strings. Every body carries
   `generatedAt`.
 
 ```
@@ -78,8 +82,10 @@ on a date string.
  "disclaimer": "..."}
 ```
 
-The Hub treats `provenance == null` as "no reading" and writes the incident without a weather block.
-Fail open, quietly.
+The Hub treats `provenance == null` as "no reading" and writes the incident without a weather block —
+and, since D-252, keeps it **owed**: no fallback, no inline retry; the incident goes into
+`WeatherManager`'s owed set and is asked about again, oldest first, on every sweep until this service
+answers. Fail open, quietly, and come back for it.
 
 ---
 

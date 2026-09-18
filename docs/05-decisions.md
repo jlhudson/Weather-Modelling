@@ -2,12 +2,15 @@
 
 [← Docs index](README.md)
 
-Two decisions produced this repository. They were taken in the Hub, in the style of its
-`docs/16-decisions.md`, and are quoted here verbatim from `docs/27-the-split.md` §27.3 rather than
-paraphrased — a decision reworded is a decision nobody can check against the original.
+Three decisions produced this repository and its contract with the Hub. They were taken in the Hub,
+in the style of its `docs/16-decisions.md`, and are quoted here verbatim — the first two from
+`docs/27-the-split.md` §27.3, the third from `docs/16-decisions.md` itself, since it was taken after
+§27.3 was written — rather than paraphrased. A decision reworded is a decision nobody can check
+against the original.
 
 Below them, the three this service took for itself. `D-nnn` references throughout the code point at
-the Hub's decision log; `W-n` references point here.
+the Hub's decision log; `W-n` references point here. Which of all six [06-overhaul.md](06-overhaul.md)
+recommends discarding, and why now is the cheap time, is in its §6.1.
 
 ---
 
@@ -21,6 +24,20 @@ the Hub's decision log; `W-n` references point here.
 > *when* a point is worth asking about stays in the Hub. The anchor cache, the provider chain, the
 > budget governor and the drought accumulators go to Weather. The Hub calls every time and does not
 > cache — until it does (§27.10).
+
+> **D-252 · No fallback for either service. When Operations or Weather is not answering, or not
+> configured, the Hub keeps ingesting every source and holds the work that needs the service until it
+> answers: a channel is `PENDING` and asked again on the next read, a suggestion waits in an outbox
+> and is posted on a later pass, an incident is owed a reading and every sweep asks for the owed ones
+> first.** — James, 17 September 2026: *"The hub doesn't need fallback for weather nor operations. I
+> understand if either are offline. The hub should continue to grab source data, and just backlog the
+> parsing until data is available again."*
+
+What D-252 means on this side of the wire: nothing. This service answers what it can and says
+`provenance: null` when it cannot; the owing, the backlog and the re-ask are the Hub's
+(`WeatherManager.owed`, drained first on every sweep). What it *asks* of this side, and this side does
+not yet give, is an honest answer to "what was the weather when the incident was raised" once the
+backlog is drained hours later — see [06 §6.3.2](06-overhaul.md).
 
 ---
 
@@ -59,8 +76,8 @@ tile store did for a point outside coverage.
 
 ### W-2 · Open-Meteo only by default; the others stay in the repository, behind config
 
-**The decision.** `weather.order` ships as `open-meteo, google`. MET Norway and the Bureau's ACCESS-G
-through Open-Meteo are implemented, tested and out of the order.
+**The decision.** `weather.order` ships as `open-meteo, google`. The Bureau's ACCESS-G through
+Open-Meteo (`open-meteo-bom`, the same class at a second path) is implemented and out of the order.
 
 **Why.** Agreed in docs/27 §27.4: *"Ship with Open-Meteo only. `WeatherProvider` is already an
 interface with four implementations — keeping the other three in the repo behind config costs nothing
@@ -68,6 +85,12 @@ and means 'add MET Norway' is a config line, not a project."* Open-Meteo is free
 key. Google is last because it is the only one that bills, it is capped at ten thousand a month, and a
 call costs three allowance units rather than one — so it is a fallback that has to be *reached*, not a
 peer.
+
+**What the quote gets wrong, corrected here.** Three implementations came across, not four:
+`OpenMeteoProvider`, `OpenMeteoBomProvider` and `GoogleWeatherProvider`. **There is no MET Norway
+provider in this repository**, and "add MET Norway" is therefore a project, not a config line. The
+traces it left — the identify-yourself comments in `HttpFetcher` and `WeatherHostBudgets`, the
+`weather.contact` key that nothing reads — are on the delete list in [06](06-overhaul.md).
 
 `open-meteo-bom` is out for a reason of its own rather than for caution: the Bureau has open-data
 delivery suspended, and the provider rejects an all-null payload rather than serving one.

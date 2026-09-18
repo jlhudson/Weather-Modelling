@@ -42,10 +42,12 @@ fire ground with twenty appliances on it costs one call, not twenty.
   horizontal-only rule exactly — the reach numbers appear beside the distances they replace, and the
   weight is turned up once those numbers have been looked at.
 
-Heights come from Open-Meteo's elevation endpoint, memoised permanently per point rounded to four
-decimal places. The Hub resolved them from a slippy-tile store on a disk volume; that store exists to
-answer thousands of samples along a path for MeshCore, and this service wants one number per anchor
-at most five hundred times. See W-1 in [05-decisions.md](05-decisions.md).
+Heights come from Open-Meteo's elevation endpoint, memoised per point rounded to four decimal places
+for the life of the process — the memo is in memory, so a restart re-asks, a few anchors per sweep,
+while the height already written on each anchor row survives. The Hub resolved them from a slippy-tile
+store on a disk volume; that store exists to answer thousands of samples along a path for MeshCore, and
+this service wants one number per anchor at most five hundred times. See W-1 in
+[05-decisions.md](05-decisions.md).
 
 The cache is bounded **by activity, not by area**: a few dozen anchors on a normal day, a few hundred
 on a bad one, none at all over empty country. Past `maxAnchors` (500) the least-reused go first — an
@@ -56,17 +58,22 @@ cells. Rehydrating costs nothing; re-fetching would cost allowance.
 
 ## 1.2 The provider chain and the budget
 
-`WeatherProvider` is an interface with four implementations. Each carries its own `Spec`: endpoint,
-model, licence, published allowance, and what one call costs in allowance units. None of that is a
-deployment choice, so none of it is configuration. The one choice left is `weather.order` — which
-upstreams to use, and in what sequence.
+`WeatherProvider` is an interface with three beans behind it: `OpenMeteoProvider` (`/v1/forecast`,
+the blended best-available model), `OpenMeteoBomProvider` (the same class against `/v1/bom`, the
+Bureau's ACCESS-G) and `GoogleWeatherProvider`. Each carries its own `Spec`: endpoint, model, licence,
+published allowance, and what one call costs in allowance units. None of that is a deployment choice,
+so none of it is configuration. The one choice left is `weather.order` — which upstreams to use, and
+in what sequence.
 
 **It ships with Open-Meteo alone in front of Google.** Open-Meteo is free, generous
 (600/minute, 10,000/day, 300,000/month) and needs no key. Google sits last on purpose: it is the one
-that bills, it is capped at 10,000 a month, and a call costs three units rather than one. MET Norway
-and the Bureau's ACCESS-G through Open-Meteo are in the repository and out of the order — keeping
-them costs nothing and makes "add MET Norway" a config line rather than a project. `open-meteo-bom`
-is out for a reason of its own: the Bureau has open-data delivery suspended.
+that bills, it is capped at 10,000 a month, and a call costs three units rather than one. The Bureau's
+ACCESS-G through Open-Meteo is in the repository and out of the order: `open-meteo-bom` is out because
+the Bureau has open-data delivery suspended, and the provider rejects the all-null payload the endpoint
+answers with rather than caching it. **MET Norway is not in this repository.** The Hub's docs/27
+counted four implementations and three came across; what remains of the fourth is a mention in
+comments and the `weather.contact` key that existed for its User-Agent rule — which nothing reads
+([03 §3.1](03-configuration.md)).
 
 **The budget is a ledger, not a counter.** Every upstream call is written to `weather_call` before it
 is counted, so a restart does not forget a spend and "how much is left" is a fact rather than a hope.
@@ -169,3 +176,11 @@ Two more things stayed, for the same kind of reason:
 And one thing is not here because it never needed to be: **there is no Hub-side cache**. The Hub calls
 this service every time. That is the agreed shortcut of docs/27 §27.10 and it is a good one — the
 anchor cache is doing the real work, and it is on the right side of the boundary.
+
+Nor is there a Hub-side fallback (D-252, 17 September 2026). When this service does not answer — down,
+unconfigured, or out of allowance with nothing cached near enough — the incident is written without a
+weather block and is **owed** a reading: the Hub's `WeatherManager` keeps the owed set and drains it
+first on every sweep, oldest first, closed incidents included, until the reading arrives or the
+incident is older than its `max-incident-age`. The reading it eventually attaches is the one this
+service gives *then*, not the one it would have given at the time — which is the gap
+[06 §6.3.2](06-overhaul.md) proposes closing with history.
