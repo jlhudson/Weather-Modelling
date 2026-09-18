@@ -1,5 +1,8 @@
-// The map: the hexagon layer coloured by one value, the tessellation on request, the stations, a
-// time slider over the history, and a click that opens everything held for a hexagon.
+// The map: every hexagon held, coloured by what makes it active - a station in it, a forecast held
+// because an incident asked, the drought stepped for its area - or by one value; the weather it
+// knows drawn on it as a wind arrow and a temperature/humidity label; the tessellation on request;
+// the stations; a time slider over the history; and a click that opens everything held for a
+// hexagon. Deferred, so it runs after Leaflet and console.js.
 (function () {
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
@@ -12,12 +15,16 @@
     var hexLayer = L.geoJSON(null, {style: styleOf, onEachFeature: onHexagon}).addTo(map);
     var gridLayer = L.geoJSON(null, {style: {color: '#888', weight: .6, fill: false, opacity: .6}, interactive: false});
     var stationLayer = L.layerGroup().addTo(map);
-    var etag = null, value = 'ffdi', at = null, legendKeys = {};
+    var glyphLayer = L.layerGroup().addTo(map);
+    var etag = null, value = 'activity', at = null;
 
-    // ---- colouring: the published rating colours for the ratings, a ramp for a number
+    // ---- colouring: what makes a hexagon active, the published rating colours for the ratings, a ramp for a number
+    // Amber for a forecast held (an incident asked), blue for a station in it, a purple ring where the
+    // drought has been stepped; nothing yet is a faint outline.
+    var ACT = {forecast: '#f59e0b', station: '#3b82f6', drought: '#a855f7', none: '#9ca3af'};
     var RATING = {'LOW-MODERATE': '#9bc466', 'HIGH': '#f7e463', 'VERY HIGH': '#f0a04b', 'SEVERE': '#e35d3c', 'EXTREME': '#c1272d', 'CATASTROPHIC': '#6d2077',
         'No Rating': '#dddddd', 'Moderate': '#7fc47f', 'High': '#f7e463', 'Extreme': '#f0a04b', 'Catastrophic': '#c1272d'};
-    var KIND = {station: '#3b82f6', forecast: '#22c55e', both: '#a855f7', bare: '#9ca3af'};
+    var KIND = {station: '#3b82f6', forecast: '#f59e0b', both: '#a855f7', bare: '#9ca3af'};
     var LEADS = {forest: '#15803d', grass: '#ca8a04'};
     var RANGES = {temperatureC: [0, 45], humidityPct: [0, 100], windSpeedKmh: [0, 80], windGustKmh: [0, 110], ffdi: [0, 100], gfdi: [0, 150], fbi: [0, 100],
         droughtFactor: [0, 10], kbdiMm: [0, 203], curingPct: [0, 100], ageMinutes: [0, 180], elevationM: [0, 1500]};
@@ -46,13 +53,25 @@
         return ramp((v - r[0]) / (r[1] - r[0]));
     }
     function styleOf(f) {
-        var p = f.properties, c = colour(p);
+        var p = f.properties;
+        if (value === 'activity') {
+            var fill = p.hasForecast ? ACT.forecast : p.hasStation ? ACT.station : null;
+            return {color: p.hasDrought ? ACT.drought : '#777', weight: p.hasDrought ? 1.8 : .6, opacity: p.hasDrought ? .95 : .45,
+                dashArray: p.stale ? '4 3' : null, fillColor: fill || '#000', fillOpacity: fill ? (p.active ? .5 : .3) : .03};
+        }
+        var c = colour(p);
         return {color: p.warm ? '#111' : '#555', weight: p.active ? 1.2 : .7, dashArray: p.stale ? '4 3' : null,
             fillColor: c || '#000', fillOpacity: c ? (p.active ? .55 : .35) : .05};
     }
     function legend() {
         var el = $('legend'), html = '';
-        if (value === 'ffdi' || value === 'gfdi') ['LOW-MODERATE', 'HIGH', 'VERY HIGH', 'SEVERE', 'EXTREME', 'CATASTROPHIC'].forEach(function (k) { html += '<i style="background:' + RATING[k] + '" title="' + k + '"></i>'; });
+        if (value === 'activity') {
+            html = '<i style="background:' + ACT.forecast + '" title="incident · forecast held"></i><span class="muted me-2">incident · forecast held</span>'
+                + '<i style="background:' + ACT.station + '" title="station in it"></i><span class="muted me-2">station in it</span>'
+                + '<i style="background:transparent;border:2px solid ' + ACT.drought + '" title="drought stepped"></i><span class="muted me-2">drought stepped</span>'
+                + '<i style="background:transparent;border:1px solid #777" title="nothing yet"></i><span class="muted">nothing yet</span>';
+        }
+        else if (value === 'ffdi' || value === 'gfdi') ['LOW-MODERATE', 'HIGH', 'VERY HIGH', 'SEVERE', 'EXTREME', 'CATASTROPHIC'].forEach(function (k) { html += '<i style="background:' + RATING[k] + '" title="' + k + '"></i>'; });
         else if (value === 'fbi' || value === 'officialRating') ['No Rating', 'Moderate', 'High', 'Extreme', 'Catastrophic'].forEach(function (k) { html += '<i style="background:' + RATING[k] + '" title="' + k + '"></i>'; });
         else if (value === 'kind') Object.keys(KIND).forEach(function (k) { html += '<i style="background:' + KIND[k] + '" title="' + k + '"></i><span class="muted me-1">' + k + '</span>'; });
         else if (value === 'leads') Object.keys(LEADS).forEach(function (k) { html += '<i style="background:' + LEADS[k] + '" title="' + k + '"></i><span class="muted me-1">' + k + '</span>'; });
@@ -71,16 +90,58 @@
             if (!fc) return;
             hexLayer.clearLayers();
             hexLayer.addData(fc);
+            glyphs();
             var m = fc.meta || {};
-            $('status').textContent = (m.hexagons || 0) + ' hexagons' + (at ? ' at ' + when(at) : '') + (m.active != null ? ' · ' + m.active + ' active · ' + m.withStation + ' with a station · ' + m.withForecast + ' with a forecast' : '');
+            $('status').textContent = (m.hexagons || 0) + ' hexagons' + (at ? ' at ' + when(at) : '')
+                + (m.active != null ? ' · ' + m.withForecast + ' with a forecast (' + m.active + ' asked about) · ' + m.withStation + ' with a station'
+                    + (m.withDrought == null ? '' : ' · ' + m.withDrought + ' with the drought stepped') : '');
         }).catch(function (e) { $('status').textContent = 'layer failed: ' + e; });
     }
     function onHexagon(f, layer) {
         var p = f.properties;
         layer.bindTooltip(function () {
-            return '<b>' + esc(p.id) + '</b> ' + esc(p.kind) + '<br>' + esc(value) + ': ' + esc(fmt(p[value], 1)) + (p.at ? '<br>' + when(p.at) + ' (' + esc(p.from) + ')' : '');
+            var what = [];
+            if (p.hasForecast) what.push('forecast held');
+            if (p.hasStation) what.push('station ' + p.stationId);
+            if (p.hasDrought) what.push('drought stepped');
+            var s = '<b>' + esc(p.id) + '</b> <span class="muted">' + esc(what.join(' · ') || 'nothing yet') + '</span>';
+            if (p.temperatureC != null || p.windSpeedKmh != null) {
+                s += '<br>' + esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + esc(fmt(p.windSpeedKmh)) + ' km/h'
+                    + (p.windDirectionDeg != null ? ' from ' + p.windDirectionDeg + '°' : '') + (p.windGustKmh != null ? ' gust ' + p.windGustKmh : '');
+            }
+            if (p.ffdi != null) s += '<br>FFDI ' + esc(p.ffdi) + ' ' + esc(p.ffdiRating || '') + (p.fbi != null ? ' · FBI ' + esc(p.fbi) + ' ' + esc(p.afdrsRating || '') : '') + (p.droughtFactor != null ? ' · DF ' + esc(p.droughtFactor) : '');
+            if (value !== 'activity' && p[value] != null && ['temperatureC', 'humidityPct', 'windSpeedKmh', 'ffdi', 'fbi'].indexOf(value) < 0) s += '<br>' + esc(value) + ': ' + esc(fmt(p[value], 1));
+            if (p.at) s += '<br><span class="muted">' + when(p.at) + ' (' + esc(p.from) + ')' + (p.fireBanDistrict ? ' · ' + esc(p.fireBanDistrict) : '') + '</span>';
+            return s;
         }, {sticky: true});
         layer.on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); });
+    }
+
+    // ---- the weather each hexagon knows, drawn on it: an arrow the way the wind blows, its length by
+    // the speed, from zoom 7 where a hexagon is about fifteen pixels; the temperature, humidity and
+    // speed as a label from zoom 9 where there is room. Never interactive: the hexagon under it is.
+    function arrow(fromDeg, speed) {
+        if (speed < 1) return '<svg class="hx-arrow" width="24" height="24" viewBox="-12 -12 24 24"><circle r="2"/></svg>';
+        var len = 7 + Math.min(1, speed / 60) * 13, to = (fromDeg + 180) % 360, h = len / 2;
+        return '<svg class="hx-arrow" width="24" height="24" viewBox="-12 -12 24 24" style="transform:rotate(' + to + 'deg)">'
+            + '<line x1="0" y1="' + h + '" x2="0" y2="' + (-h) + '"/><polyline points="-3.5,' + (-h + 4) + ' 0,' + (-h) + ' 3.5,' + (-h + 4) + '"/></svg>';
+    }
+    function glyphs() {
+        glyphLayer.clearLayers();
+        var z = map.getZoom();
+        if (!$('weather').checked || z < 7) return;
+        hexLayer.eachLayer(function (layer) {
+            var p = layer.feature.properties;
+            if (p.lat == null) return;
+            var html = '';
+            if (p.windDirectionDeg != null && p.windSpeedKmh != null) html += arrow(p.windDirectionDeg, p.windSpeedKmh);
+            if (z >= 9 && (p.temperatureC != null || p.humidityPct != null)) {
+                html += '<span class="hx-label">' + (p.temperatureC != null ? Math.round(p.temperatureC) + '°' : '') + (p.humidityPct != null ? ' ' + p.humidityPct + '%' : '')
+                    + (p.windSpeedKmh != null ? ' ' + Math.round(p.windSpeedKmh) : '') + '</span>';
+            }
+            if (!html) return;
+            L.marker([p.lat, p.lon], {icon: L.divIcon({className: 'hx-glyph', html: html, iconSize: [24, 24], iconAnchor: [12, 12]}), interactive: false, keyboard: false}).addTo(glyphLayer);
+        });
     }
 
     // ---- the tessellation
@@ -184,8 +245,10 @@
     $('value').addEventListener('change', function () { value = $('value').value; legend(); hexLayer.setStyle(styleOf); });
     $('grid').addEventListener('change', grid);
     $('stations').addEventListener('change', stations);
+    $('weather').addEventListener('change', glyphs);
     $('time').addEventListener('change', slid);
     $('now').addEventListener('click', function () { $('time').value = 0; slid(); });
+    map.on('zoomend', glyphs);
     map.on('moveend', function () { if ($('grid').checked) grid(); });
     map.on('click', function (e) {
         var b = confirm('Probe ' + e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4) + '? This asks for the hexagon and spends allowance.');

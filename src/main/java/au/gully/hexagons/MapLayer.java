@@ -65,7 +65,7 @@ public class MapLayer {
         Instant now = Instant.now();
         Map<String, History.Snapshot> snapshots = at == null ? Map.of() : history.allAt(at);
         List<Map<String, Object>> features = new ArrayList<>();
-        int active = 0, withStation = 0, withForecast = 0;
+        int active = 0, withStation = 0, withForecast = 0, withDrought = 0;
         for (Hexagon h : store.all()) {
             if (at != null && !snapshots.containsKey(h.id())) {
                 continue;
@@ -73,6 +73,7 @@ public class MapLayer {
             if (h.active()) active++;
             if (h.hasStation()) withStation++;
             if (h.hasForecast()) withForecast++;
+            if (h.drought() != null) withDrought++;
             features.add(feature(h, at == null ? null : snapshots.get(h.id()), now));
         }
         Map<String, Object> fc = new LinkedHashMap<>();
@@ -84,6 +85,7 @@ public class MapLayer {
         meta.put("active", active);
         meta.put("withStation", withStation);
         meta.put("withForecast", withForecast);
+        meta.put("withDrought", withDrought);
         meta.put("cellKm", store.grid().cellKm());
         meta.put("sides", store.grid().sides());
         meta.put("version", version);
@@ -116,6 +118,13 @@ public class MapLayer {
         p.put("id", h.id());
         p.put("kind", h.kind());
         p.put("active", h.active());
+        // What makes the hexagon active, each on its own: a station in it, a forecast held because
+        // someone asked, the drought stepped for its area. A map draws these before any value.
+        p.put("hasStation", h.hasStation());
+        p.put("hasForecast", h.hasForecast());
+        p.put("hasDrought", h.drought() != null);
+        p.put("lat", round(h.cell().lat()));
+        p.put("lon", round(h.cell().lon()));
         p.put("stationId", h.stationId());
         p.put("nearestStationId", h.nearestStationId());
         p.put("fireBanDistrict", h.fireBanDistrict());
@@ -171,6 +180,11 @@ public class MapLayer {
         p.put("id", h.id());
         p.put("kind", h.kind());
         p.put("active", true);
+        p.put("hasStation", h.hasStation());
+        p.put("hasForecast", true);
+        p.put("hasDrought", s.fire() != null && s.fire().droughtFactor() != null);
+        p.put("lat", round(h.cell().lat()));
+        p.put("lon", round(h.cell().lon()));
         p.put("stationId", h.stationId());
         p.put("fireBanDistrict", h.fireBanDistrict());
         p.put("elevationM", h.elevationM());

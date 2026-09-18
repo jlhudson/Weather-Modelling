@@ -166,7 +166,19 @@ deleted from the table by the service; a nightly export goes to the backups volu
 a past time returns the snapshot nearest that time, with its own time, or says there is none. The
 Hub sends the incident's start time when it asks late.
 
-## 1.10 What is deliberately not here
+## 1.10 The console map
+
+The map draws every hexagon held, and by default what makes each one active: amber where a forecast
+is held because an incident asked, blue where a Bureau station sits in it, a purple ring where the
+drought has been stepped for its area, a faint outline where there is nothing yet. On every hexagon
+that knows its weather, an arrow the way the wind blows, its length by the speed (from zoom 7), and
+the temperature, humidity and speed as a label (from zoom 9). A tooltip carries the values and the
+fire indices; a click opens everything held. The same select colours by any one value — the indices
+in their rating colours, the rest on a ramp — and the time slider shows the layer as it was, from the
+snapshots. The map never fetches; the probe on a point asks, and says so. The page is locked to the
+device: the bar collapses on a phone, and only the map zooms.
+
+## 1.11 What is deliberately not here
 
 The decision about *when* to ask stays in The Hub (its D-249): the stagger across open incidents, the
 re-ask on an upgrade or a move, the per-tick ceiling. This service has no incidents and no way to

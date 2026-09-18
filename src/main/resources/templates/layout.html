@@ -2,7 +2,8 @@
 <html lang="en" th:fragment="page(title, content)" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="utf-8">
-    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <!-- Locked to the device: the page itself never zooms or scrolls; the map zooms, and a long page scrolls inside main. -->
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" name="viewport">
     <title th:text="${title} + ' · Gully'">Gully</title>
     <!-- Before the stylesheet, so the page is never painted in the wrong theme first. -->
     <script>
@@ -18,34 +19,45 @@
     <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.5/dist/css/bootstrap.min.css}">
     <link rel="stylesheet" th:href="@{/webjars/leaflet/1.9.4/dist/leaflet.css}">
     <link rel="stylesheet" th:href="@{/css/console.css}">
+    <!-- Deferred, in this order, so a page's own deferred script (map.js) runs after Leaflet and console.js. -->
+    <script defer th:src="@{/webjars/bootstrap/5.3.5/dist/js/bootstrap.bundle.min.js}"></script>
+    <script defer th:src="@{/webjars/leaflet/1.9.4/dist/leaflet.js}"></script>
+    <script defer th:src="@{/js/console.js}"></script>
     <meta name="_csrf" th:content="${_csrf != null} ? ${_csrf.token} : ''">
     <meta name="_csrf_header" th:content="${_csrf != null} ? ${_csrf.headerName} : 'X-CSRF-TOKEN'">
     <meta name="carto-key" th:content="${cartoKey != null} ? ${cartoKey} : ''">
 </head>
 <body>
-<nav class="g-nav">
-    <a class="brand" th:href="@{/console/map}">Gully</a>
-    <a class="nav-link" th:classappend="${title == 'Map'} ? 'active'" th:href="@{/console/map}">Map</a>
-    <a class="nav-link" th:classappend="${title == 'Hexagons'} ? 'active'" th:href="@{/console/hexagons}">Hexagons</a>
-    <a class="nav-link" th:classappend="${title == 'Upstreams'} ? 'active'" th:href="@{/console/upstreams}">Upstreams</a>
-    <a class="nav-link" th:classappend="${title == 'Curing'} ? 'active'" th:href="@{/console/curing}">Curing</a>
-    <a class="nav-link" th:classappend="${title == 'Diagnostics'} ? 'active'" th:href="@{/console/diagnostics}">Diagnostics</a>
-    <a class="nav-link" th:classappend="${title == 'API keys'} ? 'active'" th:href="@{/console/api-keys}">API keys</a>
-    <div class="right">
-        <span th:text="${operator}">operator</span>
-        <select class="form-select form-select-sm w-auto" id="theme" title="Theme">
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="auto">System</option>
-        </select>
-        <form class="d-inline" method="post" th:action="@{/logout}">
-            <button class="btn btn-sm btn-outline-secondary py-0">Log out</button>
-        </form>
+<!-- One line on anything wider than a phone; a toggler and a drop-down below that. -->
+<nav class="navbar navbar-expand-md g-nav">
+    <div class="container-fluid px-2">
+        <a class="navbar-brand" th:href="@{/console/map}">Gully</a>
+        <button aria-controls="gNav" aria-expanded="false" aria-label="Menu" class="navbar-toggler" data-bs-target="#gNav" data-bs-toggle="collapse" type="button">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="gNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Map'} ? 'active'" th:href="@{/console/map}">Map</a></li>
+                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Hexagons'} ? 'active'" th:href="@{/console/hexagons}">Hexagons</a></li>
+                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Upstreams'} ? 'active'" th:href="@{/console/upstreams}">Upstreams</a></li>
+                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Curing'} ? 'active'" th:href="@{/console/curing}">Curing</a></li>
+                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Diagnostics'} ? 'active'" th:href="@{/console/diagnostics}">Diagnostics</a></li>
+                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'API keys'} ? 'active'" th:href="@{/console/api-keys}">API keys</a></li>
+            </ul>
+            <div class="d-flex align-items-center gap-2 right">
+                <span th:text="${operator}">operator</span>
+                <select class="form-select form-select-sm w-auto" id="theme" title="Theme">
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                    <option value="auto">System</option>
+                </select>
+                <form class="d-inline m-0" method="post" th:action="@{/logout}">
+                    <button class="btn btn-sm btn-outline-secondary py-0">Log out</button>
+                </form>
+            </div>
+        </div>
     </div>
 </nav>
 <main th:insert="${content}"></main>
-<script th:src="@{/webjars/bootstrap/5.3.5/dist/js/bootstrap.bundle.min.js}"></script>
-<script th:src="@{/webjars/leaflet/1.9.4/dist/leaflet.js}"></script>
-<script th:src="@{/js/console.js}"></script>
 </body>
 </html>

@@ -3,16 +3,23 @@
 
 :root { --g-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 html { font-size: 13px; }
-body { min-height: 100vh; }
 
-/* The chrome: one thin bar, the pages as plain links, the operator and the theme on the right. */
-.g-nav { border-bottom: 1px solid var(--bs-border-color); padding: .35rem .75rem; display: flex; gap: .25rem; align-items: center; }
-.g-nav .brand { font-weight: 600; margin-right: .5rem; text-decoration: none; color: inherit; }
-.g-nav a.nav-link { padding: .2rem .5rem; border-radius: .25rem; color: var(--bs-secondary-color); }
-.g-nav a.nav-link.active { color: var(--bs-body-color); background: var(--bs-tertiary-bg); }
-.g-nav .right { margin-left: auto; display: flex; gap: .5rem; align-items: center; color: var(--bs-secondary-color); }
+/* Locked to the device: the body is exactly the viewport and never scrolls or zooms; the bar sits on
+   top, and main takes the rest - a long page scrolls inside it, the map fills it. */
+html, body { height: 100%; overflow: hidden; }
+body { height: 100dvh; width: 100%; display: flex; flex-direction: column; overscroll-behavior: none; }
+main { flex: 1 1 auto; min-height: 0; overflow: auto; padding: .6rem .75rem; -webkit-overflow-scrolling: touch; }
 
-main { padding: .75rem; }
+/* The chrome: one thin bar, the pages as plain links, the operator and the theme on the right; a
+   toggler on a phone. */
+.g-nav { flex: 0 0 auto; border-bottom: 1px solid var(--bs-border-color); padding: .2rem 0; }
+.g-nav .navbar-brand { font-weight: 600; font-size: 1rem; padding: 0; margin-right: .75rem; }
+.g-nav .navbar-toggler { padding: .1rem .4rem; font-size: .9rem; }
+.g-nav .nav-link { padding: .2rem .5rem; border-radius: .25rem; color: var(--bs-secondary-color); }
+.g-nav .nav-link.active { color: var(--bs-body-color); background: var(--bs-tertiary-bg); }
+.g-nav .right { color: var(--bs-secondary-color); }
+@media (max-width: 767.98px) { .g-nav .right { padding: .35rem .5rem .2rem; } }
+
 h1 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .5rem; }
 h2 { font-size: .85rem; font-weight: 600; margin: 1rem 0 .35rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; }
 
@@ -47,10 +54,12 @@ h2 { font-size: .85rem; font-weight: 600; margin: 1rem 0 .35rem; color: var(--bs
 .wrap { white-space: pre-wrap; word-break: break-word; }
 details > summary { cursor: pointer; }
 
-/* The map takes the page; the detail panel sits over its right edge. */
-#map { height: calc(100vh - 92px); min-height: 480px; }
-.map-tools { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; margin-bottom: .4rem; }
-.map-tools label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; }
+/* The map takes what the bar and the tools leave; the detail panel sits over its right edge. */
+.map-page { display: flex; flex-direction: column; height: 100%; }
+.map-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
+#map { position: absolute; inset: 0; }
+.map-tools { display: flex; flex-wrap: wrap; gap: .3rem .8rem; align-items: center; margin-bottom: .35rem; flex: 0 0 auto; }
+.map-tools label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; white-space: nowrap; }
 .map-tools select, .map-tools input[type=range] { max-width: 14rem; }
 #detail { position: absolute; top: .5rem; right: .5rem; width: 30rem; max-width: calc(100% - 1rem); max-height: calc(100% - 1rem); overflow: auto; z-index: 1000;
   background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .3rem; padding: .5rem .6rem; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
@@ -58,12 +67,24 @@ details > summary { cursor: pointer; }
 #detail h3 { font-size: .95rem; margin: 0 0 .25rem; }
 #detail .table { font-size: .85rem; }
 .legend { display: inline-flex; gap: .15rem; align-items: center; }
-.legend i { display: inline-block; width: 1.1rem; height: .7rem; }
+.legend i { display: inline-block; width: 1.1rem; height: .7rem; box-sizing: border-box; }
+/* On a phone the swatches alone: the words are on their titles, and the map wants the rows back. */
+@media (max-width: 575.98px) { .legend span { display: none; } .legend i { margin-right: .35rem; } .map-tools { gap: .25rem .6rem; } }
+
+/* The weather a hexagon knows, drawn on it: the arrow the way the wind blows, the values under it. */
+.hx-glyph { pointer-events: none; background: none; border: 0; }
+.hx-arrow { display: block; overflow: visible; }
+.hx-arrow line, .hx-arrow polyline, .hx-arrow circle { stroke: var(--bs-body-color); stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 1.5px var(--bs-body-bg)) drop-shadow(0 0 1.5px var(--bs-body-bg)); }
+.hx-arrow circle { fill: var(--bs-body-color); }
+.hx-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font: 500 10px/1.15 var(--g-mono); white-space: nowrap;
+  color: var(--bs-body-color); background: color-mix(in srgb, var(--bs-body-bg) 75%, transparent); padding: 0 3px; border-radius: 2px; }
 
 /* Leaflet under the theme. */
 [data-bs-theme=dark] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.85); }
 [data-bs-theme=dark] .leaflet-container.no-invert .leaflet-tile-pane { filter: none; }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--bs-body-bg); color: var(--bs-body-color); }
 .leaflet-popup-content { font-size: .85rem; margin: .5rem .7rem; }
+.leaflet-tooltip { font-size: .8rem; }
 .leaflet-bar a { background: var(--bs-body-bg); color: var(--bs-body-color); border-bottom-color: var(--bs-border-color); }
 .leaflet-control-layers { background: var(--bs-body-bg); color: var(--bs-body-color); }
