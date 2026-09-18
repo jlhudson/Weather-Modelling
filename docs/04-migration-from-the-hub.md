@@ -78,9 +78,15 @@ hub:
 Going from one VPS to three is a change to that URL and a Cloudflare hostname. Nothing in the code
 moves.
 
-**3. Compose.** The Hub's `compose.yaml` gains a `weather` service built from this checkout, on the
-same network and the same Postgres instance with its own database. The `compose.yaml` *here* is the
-standalone one — its own Postgres on host port 5435 — for running this service by itself.
+**3. Compose.** The Hub's `compose.yaml` has a `weather` service under its **`split` profile**, built
+from the sibling checkout `../Weather-Modelling`, on the Hub's network and the Hub's Postgres with a
+`weather` database of its own (created by `docker/init-databases.sql` on the volume's first
+initialisation; an older volume needs `CREATE DATABASE weather TEMPLATE template_postgis` by hand).
+`COMPOSE_PROFILES=split,edge` in the Hub's `.env` is the deployment; with no profile the Hub runs
+alone and points `HUB_WEATHER_URL` at `http://host.docker.internal:8082` to reach a service started
+from *this* repository's compose. The `compose.yaml` here is that standalone one: its own Postgres on
+host port 5435 (`WEATHER_DB_PORT`), the app on `WEATHER_PORT` (8082 by default), and `cloudflared`
+only under its own `edge` profile.
 
 ## 4.4 What the Hub keeps
 
@@ -96,9 +102,15 @@ correctly find nothing:
   `MetricsManager`** — everything needing fuel load or curing (docs/09).
 - **`WeatherPanel`** — the Hub's incident-detail rendering of a weather component.
 
-And the Hub keeps **no cache of its own**. It calls every time; this service's anchor cache does the
-work (docs/27 §27.10). When this service is unreachable the Hub logs it once, writes the incident
-without a weather block, and re-asks on its next sweep. Fail open, quietly.
+And the Hub keeps **no cache of its own and no fallback** (docs/27 §27.10, D-252). It calls every
+time; this service's anchor cache does the work. When this service does not answer — unreachable,
+unconfigured, or with nothing to give — the Hub's `HttpWeatherClient` logs it once per sixty-second
+cool-down, the incident is written without a weather block, and it is **owed** one: `WeatherManager`
+keeps the owed set in memory and drains it first on every sweep, oldest first, closed incidents
+included, until this service answers or the incident passes `max-incident-age`; a restart re-finds
+the open ones on the first sweep. The backlog is on the Hub's `/console/services`. There is no
+in-process implementation and no second source of weather: `NoWeatherClient` was deleted with D-252,
+and `WeatherClientConfiguration` always builds the HTTP client, configured or not.
 
 ## 4.5 What changed in the move
 
@@ -113,10 +125,16 @@ The weather logic itself did not change. What changed around it:
 | Host budgets | `HostLimiter` merged the `@Source` annotations with the `HostBudgets` declarations | Declarations only; there is no source register |
 | Diagnostics | `sources`, `managers`, `notifications`, `jobs`, `load` blocks | A `weather` block; `log_event.source_id` is kept for shape and is always null |
 | Startup | `PhasedStartup` over six phases | Two `ApplicationRunner`s, writing the same `StartupHistory` |
-| The map layer | `WeatherLayer implements MapLayer`, in a discovered catalogue | `WeatherLayer` with `at` and `coverage`; `WeatherApiController` routes to them |
+| The map layer | `WeatherLayer implements MapLayer`, in a discovered catalogue, drawn by `weather-map.js` on the console map | `WeatherLayer` with `at` and `coverage`; `WeatherApiController` routes to them. **No map page**: `weather-map.js` came across but is loaded by nothing (below) |
 | API key prefix | `hub_` | `weather_` — a different issuer, and nothing it issues is valid in the Hub |
 | Scheduler bean | `hubTaskScheduler` | `weatherTaskScheduler` |
 | `@Table` names | `weather_anchor`, `weather_call`, `drought_cell`, `river_cell` | **unchanged**, which is what makes §4.2 a `pg_dump` |
 
 The console probe moved with its page: what was `POST /console/map/weather/probe` is
-`POST /console/weather/probe`, and `static/js/weather-map.js` names the new path.
+`POST /console/weather/probe`, and `static/js/weather-map.js` names the new path — **but that file is
+dormant**. `layout.html` loads `theme.js` and `map.js` only; `weather-map.js` is on no page, and its
+first line returns unless `window.hubLayers` exists, which is the Hub's layer engine and did not come
+across. The console's weather page is tables, not a map. The live renderer of this service's
+`coverage.geojson` is the Hub's own copy of `weather-map.js` on the Hub's console map, which reads the
+feed through the Hub's pass-through `WeatherLayer`. Making it live here, or deleting it, is
+[06 §6.3.8](06-overhaul.md).
