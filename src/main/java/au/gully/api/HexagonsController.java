@@ -48,7 +48,7 @@ public class HexagonsController {
      * The pre-built layer, with a strong ETag: a client sending it back gets {@code 304} until a
      * hexagon has changed.
      */
-    @GetMapping(value = "/hexagons.geojson", produces = "application/geo+json")
+    @GetMapping(value = "/hexagons.geojson", produces = {"application/geo+json", MediaType.APPLICATION_JSON_VALUE})
     @Operation(summary = "The hexagons as a GeoJSON layer",
             description = "One polygon per hexagon carrying the values a map colours by. Pre-rendered and fingerprinted; "
                     + "send the ETag back and get 304 until something changes. With `at`, the values as they were.")

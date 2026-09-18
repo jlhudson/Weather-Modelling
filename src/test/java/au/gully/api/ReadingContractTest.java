@@ -137,6 +137,7 @@ class ReadingContractTest {
         Path hub = Path.of("..", "The-Hub-Database", "hub-services", "src", "main", "resources", "contract", "reading.schema.json");
         Assumptions.assumeTrue(Files.isRegularFile(hub), "The-Hub-Database is not beside this repository");
         Path ours = Path.of("src", "main", "resources", "contract", "reading.schema.json");
-        assertThat(Files.readString(hub)).isEqualTo(Files.readString(ours));
+        // Line endings are the checkout's (the Hub checks out CRLF on Windows), not the contract's.
+        assertThat(Files.readString(hub).replace("\r\n", "\n")).isEqualTo(Files.readString(ours).replace("\r\n", "\n"));
     }
 }

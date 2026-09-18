@@ -24,7 +24,7 @@ public class ContractController {
 
     public static final String PATH = "contract/reading.schema.json";
 
-    @GetMapping(value = "/api/v1/contract/reading.schema.json", produces = "application/schema+json")
+    @GetMapping(value = "/api/v1/contract/reading.schema.json", produces = {"application/schema+json", MediaType.APPLICATION_JSON_VALUE})
     @Operation(summary = "The JSON Schema every reading matches")
     public ResponseEntity<byte[]> reading() {
         try {

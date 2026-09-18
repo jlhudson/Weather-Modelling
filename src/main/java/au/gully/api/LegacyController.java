@@ -134,7 +134,7 @@ public class LegacyController {
         return body;
     }
 
-    @GetMapping(value = "/coverage.geojson", produces = "application/geo+json")
+    @GetMapping(value = "/coverage.geojson", produces = {"application/geo+json", MediaType.APPLICATION_JSON_VALUE})
     public ResponseEntity<byte[]> coverage() {
         MapLayer.Rendered r = layer.current();
         return ResponseEntity.ok().eTag(r.etag()).contentType(MediaType.parseMediaType("application/geo+json")).body(r.bytes());
