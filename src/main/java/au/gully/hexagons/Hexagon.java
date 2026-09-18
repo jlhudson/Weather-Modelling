@@ -118,6 +118,12 @@ public record Hexagon(
                 lastAskedAt, now, asks, version);
     }
 
+    public Hexagon withDistrict(String fireBan) {
+        return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBan, bureauDistrict,
+                stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt, activatedAt,
+                lastAskedAt, lastSnapshotAt, asks, version + 1);
+    }
+
     public Hexagon withStations(String stationInside, String nearest, Double nearestKm, String district) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict,
                 district == null ? bureauDistrict : district, stationInside, nearest, nearestKm, forecast, drought,

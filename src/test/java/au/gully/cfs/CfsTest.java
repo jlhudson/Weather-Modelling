@@ -71,4 +71,28 @@ class CfsTest {
         assertThat(parsed.getFirst().shapes().getFirst().covers(new org.locationtech.jts.geom.GeometryFactory()
                 .createPoint(new org.locationtech.jts.geom.Coordinate(outside[1], outside[0])))).isFalse();
     }
+
+    /**
+     * The published file of 18 September 2026, all fifteen districts, against towns whose district
+     * is a matter of record: the lookup the hexagons are joined by.
+     */
+    @Test
+    void theLiveShapesPlaceKnownTownsInTheirDistricts() throws Exception {
+        byte[] json;
+        try (java.io.InputStream in = getClass().getResourceAsStream("/fixtures/cfs-districts.json")) {
+            json = in.readAllBytes();
+        }
+        Districts districts = new Districts(null);
+        districts.load(districts.parse(json));
+        assertThat(districts.names()).hasSize(15).contains("ADELAIDE METROPOLITAN", "YORKE PENINSULA", "KANGAROO ISLAND");
+        assertThat(districts.districtOf(-34.9285, 138.6007)).contains("ADELAIDE METROPOLITAN"); // Adelaide GPO
+        assertThat(districts.districtOf(-34.8734, 138.5738)).contains("ADELAIDE METROPOLITAN"); // hexagon 46_-279
+        assertThat(districts.districtOf(-33.9633, 137.7167)).contains("YORKE PENINSULA");       // Kadina
+        assertThat(districts.districtOf(-33.9676, 137.6663)).contains("YORKE PENINSULA");       // hexagon 40_-269
+        assertThat(districts.districtOf(-34.7263, 135.8747)).contains("LOWER EYRE PENINSULA");  // Port Lincoln
+        assertThat(districts.districtOf(-37.8284, 140.7804)).contains("LOWER SOUTH EAST");      // Mount Gambier
+        assertThat(districts.districtOf(-35.7226, 137.9370)).contains("KANGAROO ISLAND");       // Kingscote
+        assertThat(districts.districtOf(-37.5, 136.0)).isEmpty();                              // the Southern Ocean
+        assertThat(districts.districtOf(-37.8136, 144.9631)).isEmpty();                        // Melbourne
+    }
 }

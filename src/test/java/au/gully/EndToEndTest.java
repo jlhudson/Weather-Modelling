@@ -179,12 +179,14 @@ class EndToEndTest {
         }
         java.time.Instant now = java.time.Instant.now();
         // The fixture was read on 18 September 2026; a station is "now" only for an hour, so re-time it to now.
+        // The third station reports no temperature at all, as a rain-only station does: the ledger must take it.
         java.util.List<au.gully.bureau.StationFile.StationReading> fresh = new java.util.ArrayList<>();
         for (au.gully.bureau.StationFile.StationReading r : au.gully.bureau.StationFile.parse(xml, "sa")) {
             au.gully.bureau.Observation o = r.observation();
+            boolean rainOnly = fresh.size() == 2;
             fresh.add(new au.gully.bureau.StationFile.StationReading(r.station(), new au.gully.bureau.Observation(o.stationId(), now,
-                    o.temperatureC(), o.apparentTemperatureC(), o.dewPointC(), o.humidityPct(), o.windSpeedKmh(), o.windDirectionDeg(),
-                    o.windDirection(), o.windGustKmh(), o.pressureMslHpa(), o.rainSince9amMm(), o.rain24hMm(), o.maxTemperatureC(),
+                    rainOnly ? null : o.temperatureC(), o.apparentTemperatureC(), o.dewPointC(), o.humidityPct(), o.windSpeedKmh(), o.windDirectionDeg(),
+                    o.windDirection(), o.windGustKmh(), o.pressureMslHpa(), o.rainSince9amMm(), o.rain24hMm(), rainOnly ? null : o.maxTemperatureC(),
                     o.minTemperatureC(), o.visibilityKm(), o.cloud(), o.cloudOktas(), o.deltaTC())));
         }
         int added = stations.accept(fresh, now);
@@ -233,5 +235,57 @@ class EndToEndTest {
         ResponseEntity<Map> r = client().get().uri("/actuator/health/readiness").retrieve().toEntity(Map.class);
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(r.getBody()).containsEntry("status", "UP");
+    }
+
+    /**
+     * The console: the login with the code, then every page renders behind it with Bootstrap and the
+     * console script on the page, and the map feeds answer. The browser is the operator's; this is
+     * the same walk with a cookie jar.
+     */
+    @Test
+    void theConsoleLogsInAndEveryPageRenders() {
+        ResponseEntity<String> loginPage = client().get().uri("/login").retrieve().toEntity(String.class);
+        assertThat(loginPage.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(loginPage.getBody()).contains("name=\"code\"").contains("bootstrap.min.css");
+        String cookie = firstCookie(loginPage.getHeaders());
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"|value=\"([^\"]+)\"[^>]*name=\"_csrf\"").matcher(loginPage.getBody());
+        assertThat(m.find()).as("the login form carries a CSRF token").isTrue();
+        String csrf = m.group(1) != null ? m.group(1) : m.group(2);
+
+        ResponseEntity<Void> wrong = client().post().uri("/login").header(HttpHeaders.COOKIE, cookie)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body("username=operator&code=00000000&_csrf=" + csrf).retrieve().toEntity(Void.class);
+        assertThat(wrong.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(wrong.getHeaders().getLocation().toString()).endsWith("/login?error");
+
+        ResponseEntity<Void> login = client().post().uri("/login").header(HttpHeaders.COOKIE, cookie)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body("username=operator&code=12345678&_csrf=" + csrf).retrieve().toEntity(Void.class);
+        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(login.getHeaders().getLocation().toString()).endsWith("/console/map");
+        String session = login.getHeaders().containsHeader(HttpHeaders.SET_COOKIE) ? firstCookie(login.getHeaders()) : cookie;
+
+        for (String page : new String[]{"/console/map", "/console/hexagons", "/console/upstreams", "/console/curing",
+                "/console/diagnostics", "/console/api-keys"}) {
+            ResponseEntity<String> r = client().get().uri(page).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
+            assertThat(r.getStatusCode()).as(page).isEqualTo(HttpStatus.OK);
+            assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");
+        }
+        for (String feed : new String[]{"/console/map/layer.geojson", "/console/map/grid.geojson?south=-35.2&west=138.3&north=-34.7&east=138.9",
+                "/console/map/stations.geojson", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+            ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
+            assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
+        }
+        // Without the cookie, the console is the login page.
+        ResponseEntity<Void> anonymous = client().get().uri("/console/map").retrieve().toEntity(Void.class);
+        assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(anonymous.getHeaders().getLocation().toString()).endsWith("/login");
+    }
+
+    private static String firstCookie(HttpHeaders headers) {
+        java.util.List<String> set = headers.get(HttpHeaders.SET_COOKIE);
+        assertThat(set).as("a session cookie").isNotEmpty();
+        return set.getFirst().split(";", 2)[0];
     }
 }

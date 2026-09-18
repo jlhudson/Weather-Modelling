@@ -69,6 +69,10 @@ public class Ratings {
             }
             byDistrict.clear();
             byDistrict.putAll(fresh);
+            if (readAt == null) {
+                log.info("cfs ratings: {} districts, today {}", fresh.size(), fresh.values().stream()
+                        .map(d -> d.district() + " " + d.at(now).map(RatingDay::rating).orElse("-")).sorted().toList());
+            }
             readAt = now;
             failure = null;
             listeners.forEach(l -> l.accept(now));

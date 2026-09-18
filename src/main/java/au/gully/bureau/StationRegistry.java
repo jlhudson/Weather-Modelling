@@ -145,7 +145,7 @@ public class StationRegistry {
 
     private void ledger(Station s, Observation o) {
         DayMax max = dayMax.get(s.id());
-        Double dayMaximum = max == null ? o.maxTemperatureC() : max.maxC();
+        Double dayMaximum = max == null ? o.maxTemperatureC() : Double.valueOf(max.maxC());
         db.sql("""
                 insert into station_sample (station_id, at, temperature_c, max_temperature_c, min_temperature_c,
                   rain_since_9am_mm, rain_24h_mm, humidity_pct, wind_speed_kmh, wind_direction_deg, wind_gust_kmh, pressure_hpa)
@@ -272,7 +272,8 @@ public class StationRegistry {
                     }
                     Double max = (Double) row.get("max_temperature_c");
                     Double t = (Double) row.get("temperature_c");
-                    Double candidate = max != null ? (t == null ? max : Math.max(max, t)) : t;
+                    // Two nullable values: never a mixed ternary, which unboxes the null.
+                    Double candidate = max == null ? t : t == null ? max : Double.valueOf(Math.max(max, t));
                     if (candidate != null) {
                         maxByDay.computeIfAbsent(day, d -> new HashMap<>()).merge(id, candidate, Math::max);
                     }

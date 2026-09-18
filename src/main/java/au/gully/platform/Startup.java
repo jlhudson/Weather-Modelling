@@ -74,15 +74,17 @@ public class Startup implements ApplicationRunner {
         stationReader.onUpdate(at -> store.stationsChanged());
         warnings.onUpdate(at -> store.recomputeAll());
         ratings.onUpdate(at -> store.recomputeAll());
+        districts.onUpdate(at -> store.districtsChanged());
         curing.onUpdate(at -> store.recomputeAll());
 
-        if (properties.enabled() && properties.sources().bureau()) {
-            scheduler.scheduleWithFixedDelay(guarded("bureau stations", stationReader::poll), soon, StationReader.EVERY);
-            scheduler.scheduleWithFixedDelay(guarded("bureau warnings", warnings::poll), soon.plusSeconds(5), WarningsReader.EVERY);
-        }
+        // The district shapes first: the station poll creates a hexagon per station, and each wants its district.
         if (properties.enabled() && properties.sources().cfs()) {
-            scheduler.scheduleWithFixedDelay(guarded("cfs districts", districts::poll), soon.plusSeconds(3), Districts.EVERY);
+            scheduler.scheduleWithFixedDelay(guarded("cfs districts", districts::poll), soon, Districts.EVERY);
             scheduler.scheduleWithFixedDelay(guarded("cfs ratings", ratings::poll), soon.plusSeconds(8), Ratings.EVERY);
+        }
+        if (properties.enabled() && properties.sources().bureau()) {
+            scheduler.scheduleWithFixedDelay(guarded("bureau stations", stationReader::poll), soon.plusSeconds(3), StationReader.EVERY);
+            scheduler.scheduleWithFixedDelay(guarded("bureau warnings", warnings::poll), soon.plusSeconds(5), WarningsReader.EVERY);
         }
         // Once the stations are in, the pictures of every hexagon that had none.
         scheduler.schedule(guarded("first pictures", () -> {

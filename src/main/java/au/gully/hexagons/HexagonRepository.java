@@ -89,6 +89,10 @@ public class HexagonRepository {
                 .param("for", r == null ? null : r.computedFor()).update();
     }
 
+    public void saveDistrict(Hexagon h) {
+        db.sql("update hexagon set fire_ban_district = :d where id = :id").param("id", h.id()).param("d", h.fireBanDistrict()).update();
+    }
+
     public void saveStations(Hexagon h) {
         db.sql("update hexagon set station_id = :s, nearest_station_id = :n, nearest_station_km = :km, bureau_district = :bd where id = :id")
                 .param("id", h.id()).param("s", h.stationId()).param("n", h.nearestStationId())

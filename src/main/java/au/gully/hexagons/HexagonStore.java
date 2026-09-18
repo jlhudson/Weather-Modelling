@@ -273,6 +273,31 @@ public class HexagonStore {
         return changed;
     }
 
+    /**
+     * The district shapes were read: every hexagon whose centre now falls in a district it did not
+     * carry (or carried differently) is re-joined. Needed on a cold start, where the station poll
+     * creates the station hexagons before the shapes are read; harmless daily after that.
+     */
+    public int districtsChanged() {
+        int changed = 0;
+        for (String id : hexagons.keySet()) {
+            Hexagon h = hexagons.get(id);
+            if (h == null) {
+                continue;
+            }
+            String district = districts.districtOf(h.cell().lat(), h.cell().lon()).orElse(null);
+            if (!Objects.equals(district, h.fireBanDistrict())) {
+                repository.saveDistrict(replace(id, old -> old.withDistrict(district)));
+                changed++;
+            }
+        }
+        if (changed > 0) {
+            log.info("districts: {} hexagons joined to a district", changed);
+            recomputeAll();
+        }
+        return changed;
+    }
+
     // ---------------------------------------------------------------- drought and rivers
 
     private Hexagon ensureDrought(Hexagon h, Instant now) {

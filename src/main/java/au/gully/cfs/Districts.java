@@ -20,6 +20,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * The fifteen fire ban districts as shapes, from the CFS's published file, so a hexagon's district is
@@ -39,6 +40,7 @@ public class Districts {
 
     private final HttpFetcher http;
     private final JsonMapper mapper = JsonMapper.builder().build();
+    private final List<Consumer<Instant>> listeners = new ArrayList<>();
     private volatile List<District> districts = List.of();
     private volatile Instant readAt;
     private volatile String failure;
@@ -47,17 +49,18 @@ public class Districts {
         this.http = http;
     }
 
+    /**
+     * Called after every read of the file, so the hexagons created before the first read (the
+     * station poll runs first on a cold start) are joined to their district.
+     */
+    public void onUpdate(Consumer<Instant> listener) {
+        listeners.add(listener);
+    }
+
     public int poll() {
         try {
             Fetched f = http.get(URI.create(URL));
-            List<District> fresh = parse(f.body());
-            if (fresh.isEmpty()) {
-                throw new UpstreamException("the districts file carried no shapes");
-            }
-            districts = fresh;
-            readAt = Instant.now();
-            failure = null;
-            log.info("cfs districts: {} shapes read", fresh.size());
+            load(parse(f.body()));
         } catch (UpstreamException | RuntimeException e) {
             if (failure == null) {
                 log.warn("cfs districts: {}", e.getMessage());
@@ -65,6 +68,20 @@ public class Districts {
             failure = e.getMessage();
         }
         return districts.size();
+    }
+
+    /**
+     * Takes a parsed file as the shapes in force and tells the listeners.
+     */
+    void load(List<District> fresh) throws UpstreamException {
+        if (fresh.isEmpty()) {
+            throw new UpstreamException("the districts file carried no shapes");
+        }
+        districts = fresh;
+        readAt = Instant.now();
+        failure = null;
+        log.info("cfs districts: {} shapes read", fresh.size());
+        listeners.forEach(l -> l.accept(readAt));
     }
 
     List<District> parse(byte[] json) {
