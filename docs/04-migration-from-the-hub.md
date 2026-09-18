@@ -78,15 +78,15 @@ hub:
 Going from one VPS to three is a change to that URL and a Cloudflare hostname. Nothing in the code
 moves.
 
-**3. Compose.** The Hub's `compose.yaml` has a `weather` service under its **`split` profile**, built
-from the sibling checkout `../Weather-Modelling`, on the Hub's network and the Hub's Postgres with a
-`weather` database of its own (created by `docker/init-databases.sql` on the volume's first
-initialisation; an older volume needs `CREATE DATABASE weather TEMPLATE template_postgis` by hand).
-`COMPOSE_PROFILES=split,edge` in the Hub's `.env` is the deployment; with no profile the Hub runs
-alone and points `HUB_WEATHER_URL` at `http://host.docker.internal:8082` to reach a service started
-from *this* repository's compose. The `compose.yaml` here is that standalone one: its own Postgres on
-host port 5435 (`WEATHER_DB_PORT`), the app on `WEATHER_PORT` (8082 by default), and `cloudflared`
-only under its own `edge` profile.
+**3. Compose.** This repository's `compose.yaml` is the one deployment of this service (the Hub's
+D-255, its [28 · Deployment](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/28-deployment.md)):
+its own Postgres on host port 5435 (`WEATHER_DB_PORT`), the app on `WEATHER_PORT` (8082), `cloudflared`
+under its own `edge` profile with this stack's own tunnel, deployed by Portainer from `main` onto
+whichever machine. The Hub reaches it by `HUB_WEATHER_URL`: `http://host.docker.internal:8082` when the
+two stacks share a development machine, `https://weather.surefirehudson.com` otherwise. (The Hub's
+compose built this service from `../Weather-Modelling` under a `split` profile, on one Postgres with
+three databases, for one day — 17 to 18 September 2026 — and no longer does.) The dump in §4.2 was run
+on 18 September 2026: 745 anchors, 3,842 calls, 180 drought cells, 721 river cells.
 
 ## 4.4 What the Hub keeps
 

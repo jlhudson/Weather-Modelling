@@ -1,7 +1,14 @@
 .git
+.github
 .idea
 .claude
+.run
 **/target
 data
+docs
+*.md
+compose.yaml
 .env
 .env.*
+.dockerignore
+.gitignore

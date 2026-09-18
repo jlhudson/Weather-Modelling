@@ -45,25 +45,24 @@ Full shapes and curl examples: [docs/02-api.md](docs/02-api.md).
 `POSTGRES_PASSWORD`, then:
 
 ```
-docker compose up --build
+docker compose up -d        # builds the image from this checkout on every up
 ```
 
 The console is at <http://localhost:8082/console/weather>, username `operator`, the 8-digit code from
-`.env`. The `cloudflared` service is behind the `edge` profile (`docker compose --profile edge up`, or
-`COMPOSE_PROFILES=edge` in `.env`) and needs a `CLOUDFLARE_TUNNEL_TOKEN`; a development stack leaves it
-off. IncidentWatch also takes 8082 on the host: set `WEATHER_PORT=8083` in `.env` to run both.
-
-In the deployment docs/27 describes, all three applications share one Postgres container with three
-databases and this service is the `weather` block in the Hub's `compose.yaml`, built from the sibling
-checkout `../Weather-Modelling` under the Hub's `split` profile (`COMPOSE_PROFILES=split,edge` is the
-deployment; no profile is the Hub alone). The `compose.yaml` here is the standalone one, and it maps
-its own database to host port 5435 (`WEATHER_DB_PORT`) so it runs beside the Hub stack's Postgres on
-5432, IncidentWatch's on 5433 and Operations' on 5434.
+`.env`. That is the whole stack — Postgres with PostGIS, this service, and with `COMPOSE_PROFILES=edge`
+and a `CLOUDFLARE_TUNNEL_TOKEN` in `.env` the Cloudflare connector that publishes it at
+`weather.surefirehudson.com` — and it is the same file Portainer deploys onto a VPS from this
+repository's `main`, with the machine's values as the stack's environment variables (The Hub's
+[28 · Deployment](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/28-deployment.md) is
+the runbook for all four). Beside the Hub on one development machine it keeps its own Postgres, on
+host port 5435 (`WEATHER_DB_PORT`; the Hub's is 5432, IncidentWatch's 5433, Operations' 5434), and the
+Hub reaches it at `http://host.docker.internal:8082` (`HUB_WEATHER_URL` in the Hub's `.env`) with a key
+issued on `/console/api-keys` here. Ports are on loopback only; IncidentWatch, 8082 inside its own
+container, publishes on 8083.
 
 **From the IDE.** `au.weather.WeatherApplication`, with a PostGIS database reachable at
-`jdbc:postgresql://localhost:5432/weather` — the Hub stack's Postgres, which carries a `weather`
-database — or at `localhost:5435` through `SPRING_DATASOURCE_URL` when the database is this
-repository's own compose one. Hibernate creates the eight tables on the first boot: the four that
+`localhost:5435` through `SPRING_DATASOURCE_URL` — this repository's compose Postgres, started alone
+with `docker compose up -d db`. Hibernate creates the eight tables on the first boot: the four that
 came from the Hub (`weather_anchor`, `weather_call`, `drought_cell`, `river_cell`) and this
 service's own `api_key`, `api_access_log`, `console_user` and `log_event`. No migration is needed for
 an empty database. Set `GOOGLE_WEATHER_KEY` only if you want the billed fallback — the defaults use

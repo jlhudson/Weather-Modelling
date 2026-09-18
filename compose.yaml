@@ -1,14 +1,24 @@
-# Weather, development compose (docs/14-platform.md, D-137, D-242).
-# PostGIS is not optional; TZ=UTC is explicit; the app healthcheck targets readiness, not liveness.
+# Weather: one stack, one machine (The-Hub-Database/docs/28-deployment.md, D-255).
 #
-# One Postgres container per application here, because this file stands alone. In the deployment
-# docs/27 describes there is one Postgres instance with three databases - hub, operations, weather -
-# and this service points at it with SPRING_DATASOURCE_URL. Separate databases, not separate schemas,
-# so pulling this onto its own VPS later is a pg_dump and a connection string.
+# Three containers: Postgres with PostGIS (every weather table carries a geometry), the application,
+# and the Cloudflare connector that publishes it. Nothing here belongs to a particular machine: what
+# differs from one to the next is an environment variable, read from .env beside this file or from
+# the stack's variables in Portainer. The same file runs on a development machine
+# (`docker compose up -d`) and on a VPS as a Portainer stack deployed from this repository with
+# GitOps updates on `main`.
+#
+# No bind mounts of repository files (Portainer CE deploys a Git stack from a clone the engine cannot
+# see), and `pull_policy: build` so every `up` rebuilds the image from the checkout, cached layer by
+# layer. The edge is a profile: COMPOSE_PROFILES=edge starts the connector, which needs
+# CLOUDFLARE_TUNNEL_TOKEN; without it the service answers on localhost only.
+#
+# The Hub reaches this service by URL (HUB_WEATHER_URL in its .env): the public hostname on a VPS,
+# http://host.docker.internal:8082 when the two stacks share a development machine.
 services:
   db:
     image: postgis/postgis:18-3.6
     container_name: weather-db
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-weather}
       POSTGRES_USER: ${POSTGRES_USER:-weather}
@@ -16,8 +26,9 @@ services:
       TZ: UTC
       PGTZ: UTC
     ports:
-      # 5435 on the host: 5432 is the Hub stack's Postgres, 5433 IncidentWatch's, 5434 Operations', so all four can run at once.
-      - "${WEATHER_DB_PORT:-5435}:5432"
+      # Loopback only. 5435 on the host: 5432 is the Hub stack's Postgres, 5433 IncidentWatch's and
+      # 5434 Operations', so all four run on one machine.
+      - "127.0.0.1:${WEATHER_DB_PORT:-5435}:5432"
     volumes:
       # The PostgreSQL 18 image keeps its data directory under /var/lib/postgresql (not /var/lib/postgresql/data).
       - weather-pgdata:/var/lib/postgresql
@@ -26,24 +37,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    restart: unless-stopped
 
   app:
     build: .
-    image: weather-app:dev
+    image: weather-app
+    pull_policy: build
     container_name: weather-app
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
       TZ: UTC
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-weather}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-weather}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      WEATHER_CONSOLE_CODE: ${WEATHER_CONSOLE_CODE:-12345678}
+      WEATHER_CORS_ORIGINS: ${WEATHER_CORS_ORIGINS:-}
+      WEATHER_CONTACT: ${WEATHER_CONTACT:-https://github.com/jlhudson/Weather-Modelling}
+      GOOGLE_WEATHER_KEY: ${GOOGLE_WEATHER_KEY:-}
+      CARTO_API_KEY: ${CARTO_API_KEY:-}
     ports:
-      # IncidentWatch also takes 8082 on the host: set WEATHER_PORT=8083 in .env to run both on one machine.
-      - "${WEATHER_PORT:-8082}:8082"
+      # Loopback only: the tunnel carries the public traffic, and a VPS should accept nothing else.
+      # 8082 on the host; IncidentWatch, 8082 inside its container too, publishes on 8083.
+      - "127.0.0.1:${WEATHER_PORT:-8082}:8082"
+    # The JVM takes 75% of this for its heap (Dockerfile).
+    mem_limit: ${WEATHER_MEM_LIMIT:-1g}
     healthcheck:
       test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost:8082/actuator/health/readiness" ]
       interval: 15s
@@ -52,17 +72,17 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # The edge (docs/14). The connector dials out to Cloudflare over QUIC and forwards to the app on
-  # this network, so no port is forwarded and the host still accepts nothing inbound. Which hostname
-  # reaches what is set in the Cloudflare dashboard, not here - point it at http://app:8082.
+  # The edge: the connector dials out to Cloudflare over QUIC and forwards to the application on this
+  # network, so no port is forwarded and the machine accepts nothing inbound. Which hostname reaches it
+  # is set on the tunnel in the Cloudflare dashboard, not here: one published application route,
+  # type HTTP, URL app:8082, path empty (.env.example).
   cloudflared:
-    # Only with `docker compose --profile edge up` (or COMPOSE_PROFILES=edge in .env): without a
-    # token the connector restarts forever, and a development stack has no token.
     profiles: [ edge ]
     image: cloudflare/cloudflared:latest
     container_name: weather-cloudflared
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     depends_on:
-      # Cloudflare should not see a 502 for the minute the app spends reaching readiness.
+      # Cloudflare should not see a 502 for the minute the application spends reaching readiness.
       app:
         condition: service_healthy
     environment:

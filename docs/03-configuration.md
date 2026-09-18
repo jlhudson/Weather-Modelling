@@ -163,11 +163,12 @@ listed at the bottom of the table.
 | `WEATHER_CONTACT` | `weather.contact`, which **nothing reads** (§3.1): the User-Agent is a constant in `HttpFetcher` | no |
 | `GOOGLE_WEATHER_KEY` | `GoogleWeatherProvider`. Empty is a supported state: the provider reports itself unconfigured and is skipped. | no |
 | `CARTO_API_KEY` | the console basemaps. Empty leaves CARTO off the basemap list. | no |
-| `CLOUDFLARE_TUNNEL_TOKEN` | the `cloudflared` service in `compose.yaml`, which only starts under the `edge` profile | only with `edge` |
+| `CLOUDFLARE_TUNNEL_TOKEN` | the `cloudflared` service in `compose.yaml`, which only starts under the `edge` profile. This stack's own tunnel (the Hub's D-255): one published application route, `HTTP` at `app:8082`, path empty | only with `edge` |
 | `TZ` | `UTC`, explicitly, everywhere | yes |
-| `WEATHER_PORT` | `compose.yaml` only: the host port mapped onto the container's 8082. Default `8082`; set `8083` to run beside IncidentWatch. Not read by the application. | no |
+| `WEATHER_PORT` | `compose.yaml` only: the loopback host port mapped onto the container's 8082. Default `8082`; IncidentWatch's stack publishes on 8083, so the two coexist. Not read by the application. | no |
+| `WEATHER_MEM_LIMIT` | `compose.yaml` only: the container's memory ceiling, default `1g`; the JVM takes 75% of it for the heap. | no |
 | `WEATHER_DB_PORT` | `compose.yaml` only: the host port mapped onto the standalone Postgres. Default `5435`, beside the Hub's 5432, IncidentWatch's 5433 and Operations' 5434. | no |
-| `COMPOSE_PROFILES` | `compose.yaml` only: `edge` starts `cloudflared`. Empty is the development stack. (The Hub's own compose puts this service under its `split` profile; that is the Hub's `.env`, not this one.) | no |
+| `COMPOSE_PROFILES` | `compose.yaml` only: `edge` starts `cloudflared`. Empty is the development stack. | no |
 
 ## 3.6 Spring's own
 
