@@ -3,45 +3,28 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1" name="viewport">
-    <title>Log in · Weather</title>
-    <!-- The same choice the console uses. This page has no toggle of its own — logging in should not be
-         the one screen that ignores the theme — and it cannot load /js, which needs a session. -->
+    <title>Log in · Gully</title>
     <script>
         (function () {
-            var stored = null;
-            try {
-                stored = localStorage.getItem('weather.theme');
-            } catch (e) { /* storage blocked */
-            }
-            var choice = stored || 'auto';
-            var dark = choice === 'dark'
-                || (choice === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            var s = null;
+            try { s = localStorage.getItem('gully.theme'); } catch (e) {}
+            var c = s || 'dark';
+            var dark = c === 'dark' || (c === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
             document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
         })();
     </script>
-    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.8/dist/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.5/dist/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/css/console.css}">
 </head>
 <body class="d-flex align-items-center justify-content-center" style="min-height: 100vh;">
-<div class="card" style="width: 22rem;">
-    <div class="card-body">
-        <h1 class="h5 mb-3">Weather console</h1>
-        <div class="alert alert-danger py-2" th:if="${param.error}">Wrong code, or the account is locked after too many
-                                                                    attempts.
-        </div>
-        <div class="alert alert-secondary py-2" th:if="${param.out}">Logged out.</div>
-        <form method="post" th:action="@{/login}">
-            <input name="username" type="hidden" value="operator">
-            <div class="mb-3">
-                <label class="form-label" for="code">8-digit code</label>
-                <input autocomplete="one-time-code" autofocus class="form-control form-control-lg text-center" id="code"
-                       inputmode="numeric" maxlength="8"
-                       name="code" pattern="\d{8}" required type="password">
-            </div>
-            <button class="btn btn-primary w-100">Enter</button>
-        </form>
-        <p class="text-secondary small mt-3 mb-0">One user. Consecutive wrong codes lock the account for fifteen
-                                                  minutes.</p>
-    </div>
-</div>
+<form class="border rounded p-3" method="post" style="width: 18rem;" th:action="@{/login}">
+    <h1 class="mb-2">Gully</h1>
+    <div class="alert alert-danger py-1" th:if="${param.error}">Wrong code, or locked after too many attempts.</div>
+    <div class="alert alert-secondary py-1" th:if="${param.out}">Logged out.</div>
+    <input name="username" type="hidden" value="operator">
+    <input autocomplete="one-time-code" autofocus class="form-control text-center mono mb-2" inputmode="numeric" maxlength="8"
+           name="code" pattern="\d{8}" placeholder="8-digit code" required type="password">
+    <button class="btn btn-primary w-100 btn-sm">Enter</button>
+</form>
 </body>
 </html>

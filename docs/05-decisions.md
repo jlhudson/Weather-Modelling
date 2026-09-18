@@ -2,15 +2,10 @@
 
 [← Docs index](README.md)
 
-Three decisions produced this repository and its contract with the Hub. They were taken in the Hub,
-in the style of its `docs/16-decisions.md`, and are quoted here verbatim — the first two from
-`docs/27-the-split.md` §27.3, the third from `docs/16-decisions.md` itself, since it was taken after
-§27.3 was written — rather than paraphrased. A decision reworded is a decision nobody can check
-against the original.
-
-Below them, the three this service took for itself. `D-nnn` references throughout the code point at
-the Hub's decision log; `W-n` references point here. Which of all six [06-overhaul.md](06-overhaul.md)
-recommends discarding, and why now is the cheap time, is in its §6.1.
+Three decisions produced this repository and its contract with the Hub. They were taken in the Hub, in
+the style of its `docs/16-decisions.md`, and are quoted here verbatim rather than paraphrased. Below
+them, the decisions this service took for itself: the three from the split, which the overhaul
+superseded and which are kept for the record, and the ones the overhaul took.
 
 ---
 
@@ -29,95 +24,95 @@ recommends discarding, and why now is the cheap time, is in its §6.1.
 > configured, the Hub keeps ingesting every source and holds the work that needs the service until it
 > answers: a channel is `PENDING` and asked again on the next read, a suggestion waits in an outbox
 > and is posted on a later pass, an incident is owed a reading and every sweep asks for the owed ones
-> first.** — James, 17 September 2026: *"The hub doesn't need fallback for weather nor operations. I
-> understand if either are offline. The hub should continue to grab source data, and just backlog the
-> parsing until data is available again."*
+> first.** — James, 17 September 2026.
 
-What D-252 means on this side of the wire: nothing. This service answers what it can and says
-`provenance: null` when it cannot; the owing, the backlog and the re-ask are the Hub's
-(`WeatherManager.owed`, drained first on every sweep). What it *asks* of this side, and this side does
-not yet give, is an honest answer to "what was the weather when the incident was raised" once the
-backlog is drained hours later — see [06 §6.3.2](06-overhaul.md).
+What D-252 asked of this side and the split did not give — an honest answer to "what was the weather
+when the incident was raised" once the backlog is drained hours later — is W-6.
 
 ---
 
-## Taken here
+## Taken here, at the split (superseded)
 
-### W-1 · Terrain comes from Open-Meteo's elevation endpoint, not from a tile store
+**W-1 · Terrain from Open-Meteo's elevation endpoint, not a tile store** — superseded by W-8: a
+mounted terrain file, read once per hexagon. **W-2 · Open-Meteo only by default; the others behind
+config** — kept in spirit: `gully.upstreams.order` ships `open-meteo, google`, Google as the overflow.
+**W-3 · No incident half; the sweep governs and sweeps** — the governor went (W-5); D-249 stands.
 
-**The decision.** `au.weather.terrain.ElevationService` resolves a height by calling
-`https://api.open-meteo.com/v1/elevation` and memoising the answer permanently, keyed on the point
-rounded to four decimal places, capped at twenty thousand entries. The Hub's `services/terrain` — the
-slippy-tile downloader, the disk volume, the prefetch job, the sampler, the profiles, the horizons and
-the viewshed coverage — did not come across.
+## Taken here, in the overhaul (19 September 2026)
 
-**Why.** The tile store exists to answer a different question. MeshCore needs a *surface*: heights
-every few metres along a path, thousands of samples per question, which only a local tile answers
-affordably. The weather cache wants **one number per anchor**, at most five hundred anchors alive at
-once, each asked about once and then remembered for the life of the process. That is a memo over a
-free HTTP endpoint. Carrying three thousand lines across to serve it would have brought a disk mount,
-a prefetch UI and a licence attribution into a service with no map to draw them on.
+### W-4 · Hexagons, not anchors; nothing pre-warmed
 
-**What it costs.** A height costs a round trip the first time instead of a disk read, and heights the
-tile store would have had for free now arrive one at a time. That is why the two-method contract
-`WeatherCache` already had — `cached()` never calls out, `at()` may — was preserved exactly rather
-than collapsed: `cached()` is in the lookup path, and a round trip in front of every cache hit would
-be indefensible. It is also why the elevation host shares `api.open-meteo.com`'s existing budget
-rather than declaring a new one.
+**The decision.** Every reading belongs to a 15 km hexagon on the Australian Albers plane, worked out
+by arithmetic and never stored until asked about. A point is answered by its hexagon's reading; there
+is no search for a nearby reading, no radius, no time tier, and no grid of readings kept warm over
+the state.
 
-**What it does not cost.** Nothing in the answer. Open-Meteo serves Copernicus DEM GLO-90, and four
-decimal places is about eleven metres — finer than the 90 m posts underneath, so the rounding cannot
-lose a distinction the data ever held.
+**Why.** The free allowance spread over the country is about a hundred cells — far too coarse to be
+useful — and readings are only wanted where something is happening. A tessellation gives a fire ground
+a stable, shareable key for the whole of its life and lets a large fire be several hexagons, each
+fetched once. **What it costs.** A point near an edge is answered from its own hexagon's centre, up to
+8.7 km away, rather than from a nearer reading held for the hexagon next door. That is the same
+distance the old reach allowed, and it is honest about which reading it is.
 
-**Where it fails.** A 429 or a dropped connection is remembered for that call only, never in the memo:
-it is a fact about the minute, not about the point, and caching it would make one bad minute permanent.
-The anchor keeps a null height and is retried on the next backfill pass — which is exactly what the
-tile store did for a point outside coverage.
+### W-5 · A budget, a breaker and a pacer; no governor
 
-### W-2 · Open-Meteo only by default; the others stay in the repository, behind config
+**The decision.** Per upstream: a budget counted from the ledger table against the published
+allowance at a 90% guard, a breaker that opens after three consecutive failures or at once on a
+refusal that names its window, and a pacer at the per-minute limit. Google Weather is the overflow.
+The governor — six hundred lines that tied *how much we spend* to *how accurate we are* — is deleted.
 
-**The decision.** `weather.order` ships as `open-meteo, google`. The Bureau's ACCESS-G through
-Open-Meteo (`open-meteo-bom`, the same class at a second path) is implemented and out of the order.
+**Why.** Its own comments said it almost never moved, it forgot its position on restart, and the two
+dials it coupled are different dials. Spend is bounded by the budget; accuracy is a property of the
+hexagon and the upstream, not of the day's spend.
 
-**Why.** Agreed in docs/27 §27.4: *"Ship with Open-Meteo only. `WeatherProvider` is already an
-interface with four implementations — keeping the other three in the repo behind config costs nothing
-and means 'add MET Norway' is a config line, not a project."* Open-Meteo is free, generous and needs no
-key. Google is last because it is the only one that bills, it is capped at ten thousand a month, and a
-call costs three allowance units rather than one — so it is a fallback that has to be *reached*, not a
-peer.
+### W-6 · History is written by incidents, at most every three hours
 
-**What the quote gets wrong, corrected here.** Three implementations came across, not four:
-`OpenMeteoProvider`, `OpenMeteoBomProvider` and `GoogleWeatherProvider`. **There is no MET Norway
-provider in this repository**, and "add MET Norway" is therefore a project, not a config line. The
-traces it left — the identify-yourself comments in `HttpFetcher` and `WeatherHostBudgets`, the
-`weather.contact` key that nothing reads — are on the delete list in [06](06-overhaul.md).
+**The decision.** A snapshot of a hexagon's current conditions and fire picture — never the forecast —
+is written only when an ask says an incident is present, and not again for that hexagon inside three
+hours. Stations never write history. Nothing is ever deleted from the table by the service.
 
-`open-meteo-bom` is out for a reason of its own rather than for caution: the Bureau has open-data
-delivery suspended, and the provider rejects an all-null payload rather than serving one.
+**Why.** The question D-252 left open is "what was the weather at this time", and it is only ever asked
+about an incident. A station updating every ten minutes would write eight thousand rows a day for
+nothing anyone would read; a snapshot per incident-hexagon per three hours is a few hundred a season.
 
-**The obligation this creates.** A fallback to a billed provider that nobody notices until the invoice
-is not a fallback. Hence `/api/weather/status`, `/api/weather/spend`, `/api/weather/spend/daily` and
-the console page: what each provider has spent, against what it is allowed, where a person can read it.
+### W-7 · The upstream's own expiry, and a station's "now" beats a model's
 
-### W-3 · There is no incident half; the sweep governs and sweeps
+**The decision.** A reading is current until the upstream says otherwise — the end of the quarter-hour
+Open-Meteo's current block covers — and the series until an hour after it was fetched. Where a Bureau
+station sits in the hexagon, its values are the reading's "now" and the upstream is asked for the
+series only, when a forecast is wanted.
 
-**The decision.** `au.weather.startup.WeatherSweeper` rehydrates at boot, logs the governor's first
-tuning, and then on every `weather.refresh.tick-interval` calls `govern`, `sweep` and — through
-`WeatherCache.sweep` — the bounded terrain backfill. That is all it does. There is no incident walk,
-no event bus and no attachment.
+**Why.** Thirty fixed minutes was neither the model's cadence nor the station's. A station's values are
+values, not a reading of a different grade, and they are free every ten minutes.
 
-**Why.** It is D-249 made concrete. Everything else `WeatherManager` did was a judgement about
-*incidents* — the stagger across open ones, the re-ask on an upgrade or a move beyond positional
-uncertainty, the per-tick ceiling, the age at which an incident stops being refreshed — and this
-service has no incidents and no way to acquire any. Bringing that half would have meant bringing
-`IncidentView`, the enrichment matrix and the event bus, which is the Hub.
+### W-8 · Terrain and land use from mounted files, read once
 
-**What follows from it.** `WeatherProperties.Refresh` kept only `tickInterval`; its other six fields
-were read by nothing here. The Hub's six-phase `PhasedStartup` was not brought either — there are two
-ordered things in this service, so they are two `ApplicationRunner`s writing the same `StartupHistory`
-the diagnostics block reads.
+**The decision.** Elevation, slope and land use come from GeoTIFFs on the service's volume, read by a
+reader written here (classic and BigTIFF, stripped or tiled, four codecs, two coordinate systems) once
+when a hexagon is created. Without a file, the hexagon carries the upstream model's own elevation.
 
-**What is still true.** The tick governs *before* it sweeps, not after, so the tick's own work uses the
-numbers it just decided on. The governor no-ops unless its own interval has elapsed, so this costs a
-comparison eleven times an hour and saves a second timer, a second event type and a second exception to
-the wiring rules — which is the reason the Hub gave for putting the two together in the first place.
+**Why.** No upstream call, no expiry, works offline, and a finer file replaces either without changing
+anything else. A GIS library for one method — the value of one cell at a point — would have been forty
+megabytes of jar.
+
+### W-9 · The grassland maths lives here, with the curing
+
+**The decision.** The McArthur grassland meter moved here from the Hub, and the AFDRS grassland model
+(CSIRO grassland fire spread meter, Cruz curing function, the published intensity-to-FBI table) sits
+beside it, both on one set of formulas tested against worked examples. The curing figure is entered on
+this console per district; the official rating is fetched here. The Hub's metrics component carries
+the reading's fire block whole.
+
+**Why.** The service that holds the curing is the one that computes the grass index; two copies of the
+1980 maths in two repositories were one too many. The forest fire behaviour model of the AFDRS waits
+until the grassland one has been checked against a bad day's published number.
+
+### W-10 · Plain SQL and Flyway; no entity manager
+
+**The decision.** The schema is `V1__gully.sql`; the rows are records read through `JdbcClient`;
+there is no Hibernate. The four platform tables the old service's Hibernate built are declared
+`IF NOT EXISTS` so the deployed database migrates in place.
+
+**Why.** Start-up time (the service starts in about two seconds), one place the schema is written, and
+nothing that silently alters a table. The end-to-end test boots against the old schema to prove the
+migration.

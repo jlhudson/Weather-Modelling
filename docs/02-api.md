@@ -2,26 +2,30 @@
 
 [← Docs index](README.md)
 
-The wire contract, agreed 17 September 2026 with the Hub and Operations. **Field names are the
-contract; do not rename them.** The Hub's `HttpWeatherClient` deserialises these names.
+Version 1, 19 September 2026. **The reading's shape is the contract**, written down once as
+[contract/reading.schema.json](../src/main/resources/contract/reading.schema.json), kept identically
+in The Hub (`hub-services/src/main/resources/contract`), tested here against what is served and there
+against what is read, and served at `/api/v1/contract/reading.schema.json` so a consumer can compare
+its copy at start. The OpenAPI document generated from the typed responses is at `/api/v1/openapi.json`.
 
 ## 2.0 Common to every route
 
-- **Auth.** Every `/api/**` route needs an API key in `X-Api-Key` or `Authorization: Bearer`. Keys are
-  issued on this service's own `/console/api-keys`. A missing or invalid key is
-  `401 {"error":"missing or invalid API key"}`. `OPTIONS` is open; the CORS allowlist comes from
-  `weather.app.api.cors-origins` and is never `*`. The per-key quota is 600 a minute, over which the
-  answer is `429 {"error":"quota exceeded"}`.
-- **Health.** `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` are
-  public. Everything else under `/actuator/**` needs the console login.
-- **Conditional GETs — wired, and in practice inert.** `ApiCachingConfig` registers Spring's
-  `ShallowEtagHeaderFilter` on `/api/*`, so every successful GET carries a **strong** ETag hashed from
-  the serialised body and would answer `304` to a matching `If-None-Match`. But every body here
-  carries `generatedAt`, stamped at the moment of the request, so the hash changes on every call and
-  the `304` never fires. Do not build a poller on it. The Hub's `HttpWeatherClient` sends no
-  `If-None-Match` for the same reason. There is no `Cache-Control` and no compression.
-- **Errors** are JSON `{"error": "..."}`. **Times** are ISO-8601 UTC strings. Every body carries
-  `generatedAt`.
+- **Auth.** Every `/api/**` route needs an API key in `X-Api-Key` or `Authorization: Bearer`, issued on
+  `/console/api-keys` with a scope: `ALL`, `READINGS` (readings, fire-indices, status, spend),
+  `LAYER` (the hexagons), `DIAGNOSTICS`. A missing or invalid key is `401`, a key outside its scope
+  `403`. `OPTIONS` is open; the CORS allowlist comes from `WEATHER_CORS_ORIGINS` and is never `*`.
+- **Rate limits.** Per key, 600 a minute and 100,000 a day by default, answered in the standard
+  `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and `RateLimit-Policy` headers; over
+  either, `429` with `Retry-After`.
+- **Errors** are RFC 9457 problem details, `application/problem+json`:
+  `{"type":"about:blank","title":"Bad Request","status":400,"detail":"lat must be -90..90 ..."}`.
+  One format, including the filter's `401`, `403` and `429`.
+- **Caching.** Every successful GET carries a strong `ETag` hashed from the body, and a matching
+  `If-None-Match` is a `304`. No body carries a generated-at time, so the fingerprint only changes when
+  the reading does. A reading also carries `Cache-Control: private, max-age=<seconds to its expiry>`
+  and `Last-Modified` (when its "now" values were taken); the hexagon layer carries its own `ETag`
+  that changes only when a hexagon has. Bodies are gzip-compressed on request.
+- **Times** are ISO-8601 UTC. Dates are local calendar days at the point.
 
 ```
 export KEY=weather_...   # issued on /console/api-keys
@@ -30,187 +34,182 @@ export WX=http://localhost:8082
 
 ---
 
-## 2.1 `GET /api/weather?lat=&lon=&forecast=false&force=false`
+## 2.1 `GET /api/v1/readings?lat=&lon=&forecast=false&at=&incident=`
 
-The reading at a point, from the anchor cache where one is near enough and recent enough, else an
-upstream call. `forecast=true` adds the days and hours. `force=true` skips the cache — the operator
-button only, because it spends allowance on every press. `400` when lat/lon are off the Earth.
+The reading at a point, from the hexagon it falls in: fetched if the hexagon holds nothing or its
+reading has expired, served from memory otherwise, refreshed in the background when close to expiry.
+One point per request, always.
+
+- `forecast=true` adds the days and hours ahead.
+- `incident=<id>` says an incident is present, which activates the hexagon's history: a snapshot of the
+  conditions and the fire picture is written, at most once every three hours per hexagon.
+- `at=<instant>` answers from history: the snapshot nearest that time for the point's hexagon, with
+  its own time in `history.at`, or `available: false` when the hexagon has none.
+- `400` when lat/lon are off the Earth or outside Australia; `at` in the future is a `400` too.
 
 ```
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/weather?lat=-35.02&lon=138.73"
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/weather?lat=-35.02&lon=138.73&forecast=true"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&forecast=true&incident=INC0103"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&at=2026-09-18T02:00:00Z"
 ```
 
 ```json
 {
-  "generatedAt": "2026-09-17T02:10:00Z",
-  "query": {"lat": -35.02, "lon": 138.73},
-  "provenance": {"provider": "open-meteo", "model": "...", "attribution": "...", "observedAt": "...", "fetchedAt": "...",
-                 "ageMinutes": 12, "cached": true, "offsetMetres": 1200.0, "reachMetres": 15000.0,
-                 "elevationDeltaMetres": null, "anchor": "<uuid>", "anchorLat": -35.0, "anchorLon": 138.7,
-                 "elevationM": 210.0, "zone": "Australia/Adelaide", "decision": "cache: anchor 1.2 km away ..."},
-  "current": {"at": "...", "temperatureC": 18.4, "apparentTemperatureC": 17.1, "dewPointC": 9.2, "humidityPct": 55,
-              "windSpeedKmh": 22.0, "windDirectionDeg": 315, "windGustKmh": 38.0, "precipitationMm": 0.0,
-              "precipitationProbabilityPct": 5, "pressureMslHpa": 1014.2, "cloudCoverPct": 40, "visibilityM": 24000,
-              "uvIndex": 4.1, "daytime": true, "condition": "PARTLY_CLOUDY"},
-  "fire":    {"ffdi": 11.2, "ffdiRating": "LOW-MODERATE", "peakFfdi": 24.0, "droughtFactor": 7.4, "kbdiMm": 96.0,
-              "kbdiBand": "MODERATE", "meanAnnualRainfallMm": 612.0, "vapourPressureDeficitKpa": 0.9,
-              "soilMoistureSurface": 0.21, "soilMoistureRootZone": 0.28, "boundaryLayerHeightM": 900.0,
-              "windSpeed80mKmh": 31.0, "windDirection80mDeg": 312, "capeJkg": 40.0, "liftedIndex": 3.0,
-              "estimated": false, "basis": "..."},
-  "flood":   { ... },
-  "drought": { ... },
-  "forecast": {"days": [{"date": "...", "maxTemperatureC": 24.0, "...": "...",
-                         "fire": {"...": "..."}, "flood": {"...": "..."}}],
-               "hours": [{"...conditions, full...": "...",
-                          "fire": {"ffdi": 9.0, "ffdiRating": "LOW-MODERATE", "droughtFactor": 7.4, "estimated": false}}],
-               "windChange": null},
-  "disclaimer": "Modelled weather from third-party forecast APIs, cached by proximity; ..."
+  "schema": "gully/reading/1",
+  "available": true,
+  "unavailable": null,
+  "point": {"lat": -35.02, "lon": 138.73},
+  "hexagon": {"id": "51_-263", "lat": -35.0141, "lon": 138.7492, "widthKm": 15.0, "sides": 6,
+              "elevationM": 482.0, "elevationFrom": "model", "slopeDeg": null, "zone": "Australia/Adelaide",
+              "fireBanDistrict": "MOUNT LOFTY RANGES", "bureauDistrict": "SA_PW001",
+              "landUse": null, "stationId": null, "kind": "forecast",
+              "activatedAt": "...", "refreshedAt": "...", "expiresAt": "..."},
+  "source": {"upstream": "open-meteo", "model": "best_match", "attribution": "Weather data by Open-Meteo.com, CC BY 4.0",
+             "fetchedAt": "...", "currentExpiresAt": "...", "forecastExpiresAt": "...", "stale": false},
+  "at": "2026-09-18T13:45:00Z",
+  "current": {"at": "...", "temperatureC": 10.7, "apparentTemperatureC": 8.1, "dewPointC": 7.5, "humidityPct": 81,
+              "windSpeedKmh": 9.4, "windDirectionDeg": 200, "windGustKmh": 18.0, "precipitationMm": 0.0, "...": "..."},
+  "currentFrom": "model",
+  "station": {"id": "023000", "name": "ADELAIDE (WEST TERRACE / NGAYIRDAPIRA)", "lat": -34.9257, "lon": 138.5832,
+              "heightM": 29.32, "distanceKm": 18.4, "insideHexagon": false, "at": "2026-09-18T13:50:00Z",
+              "temperatureC": 15.0, "humidityPct": 45, "windSpeedKmh": 11.0, "windDirectionDeg": 42, "windDirection": "NE",
+              "windGustKmh": 17.0, "pressureMslHpa": 1025.8, "rainSince9amMm": 0.0, "rain24hMm": 0.0,
+              "maxTemperatureC": 23.4, "minTemperatureC": null, "visibilityKm": 71.0, "cloud": "Clear", "...": "..."},
+  "fire": {"ffdi": 3.1, "ffdiRating": "LOW-MODERATE", "peakFfdi": 14.2, "droughtFactor": 6.8, "kbdiMm": 88.0, "kbdiBand": "DRYING",
+           "leads": null, "appliesToPct": null,
+           "grass": {"curingPct": 80, "curingEnteredOn": "2026-09-14", "fuelLoadTHa": 4.5, "condition": "grazed",
+                     "gfdi": 1.9, "gfdiRating": "LOW-MODERATE", "spreadKmh": 0.25, "moisturePct": 18.8,
+                     "rateOfSpreadKmh": 0.31, "intensityKwm": 720, "flameHeightM": 0.6, "fbi": 7, "afdrsRating": "No Rating"},
+           "official": {"district": "Mount Lofty Ranges", "rating": "No Rating", "fbi": 0, "totalFireBan": false,
+                        "date": "2026-05-01", "from": "...", "to": "...", "days": [ "..." ], "readAt": "..."},
+           "wind": {"speedKmh": 9.4, "directionDeg": 200, "gustKmh": 18.0, "band": "LIGHT",
+                    "change": {"at": "...", "fromDeg": 315, "toDeg": 225, "speedKmh": 32.0, "gustKmh": 55.0}},
+           "fireWeatherWarning": false,
+           "vapourPressureDeficitKpa": 0.25, "soilMoistureSurface": 0.21, "soilMoistureRootZone": 0.28,
+           "boundaryLayerHeightM": 900.0, "windSpeed80mKmh": 31.0, "windDirection80mDeg": 312, "capeJkg": 40.0, "liftedIndex": 3.0},
+  "flood": {"rain1dMm": 0.0, "rain2dMm": 0.0, "rain3dMm": 2.4, "rain7dMm": 11.2, "forecastRain6hMm": 0.0, "...": "...",
+            "riverDischargeCumecs": 12.0, "riverDischargeMeanCumecs": 20.0, "dischargeRatioToMean": 0.6, "riverTrend": "STEADY",
+            "outlook": [{"date": "2026-09-19", "rainMm": 2.4, "rainProbabilityPct": 60, "riverDischargeCumecs": 12.0, "dischargeRatioToMean": 0.6}]},
+  "drought": {"kbdiMm": 88.0, "kbdiBand": "DRYING", "droughtFactor": 6.8, "meanAnnualRainfallMm": 612.0,
+              "spunUpFrom": "2025-09-18", "computedFor": "2026-09-17", "days": 365, "recentRainMm": [ "20 numbers" ]},
+  "warnings": [{"id": "IDS21037", "title": "Severe Weather Warning", "phenomena": "for DAMAGING WINDS", "headline": "...",
+                "hazard": "SWW", "severity": "STD", "issuedAt": "...", "from": "...", "until": "...", "link": "..."}],
+  "forecast": {"days": [{"date": "2026-09-19", "maxTemperatureC": 19.0, "minTemperatureC": 9.2, "...": "...",
+                         "fire": {"ffdi": 8.0, "ffdiRating": "LOW-MODERATE", "gfdi": 7.5, "gfdiRating": "LOW-MODERATE",
+                                  "fbi": 6, "afdrsRating": "No Rating", "kbdiMm": 87.0, "droughtFactor": 6.6, "...": "..."},
+                         "flood": {"rainMm": 2.4, "rainProbabilityPct": 60, "riverDischargeCumecs": 12.0, "dischargeRatioToMean": 0.6}}],
+               "hours": [{"at": "...", "temperatureC": 10.2, "humidityPct": 83, "windSpeedKmh": 10.1, "windDirectionDeg": 205,
+                          "windGustKmh": 18.0, "precipitationMm": 0.1, "precipitationProbabilityPct": 20, "condition": "Overcast",
+                          "fire": {"ffdi": 3.1, "ffdiRating": "LOW-MODERATE", "gfdi": 2.0, "gfdiRating": "LOW-MODERATE", "fbi": 1, "afdrsRating": "No Rating", "droughtFactor": 6.8}}],
+               "windChange": {"at": "...", "fromDeg": 315, "toDeg": 225, "speedKmh": 32.0, "gustKmh": 55.0}},
+  "history": null,
+  "disclaimer": "..."
 }
 ```
 
-`forecast` is present only when asked for. A day arrives **whole** — its own weather, its own fire
-block and its own flood block on the one object — rather than as parallel arrays a reader has to join
-on a date string.
+What each block is:
 
-**When nothing can answer**, it is a `200`, not an error:
+- **`hexagon`** — what the point's hexagon is made of, and the state of what it holds. `kind` is
+  `station`, `forecast`, `both` or `bare`; `expiresAt` is when the "now" values go stale.
+- **`source`** — the upstream the forecast came from and how long it is good for; `stale` is true when
+  the upstream's own expiry has passed and nothing has answered since. Null on a station-only reading.
+- **`at`, `current`, `currentFrom`** — the conditions now and where they came from: `station` when a
+  Bureau station in the hexagon supplied them (its own fields; the model-only ones are null), `model`
+  otherwise. `at` is the time they describe.
+- **`station`** — the nearest station's latest values, inside the hexagon or not, with the distance.
+- **`fire`** — the fire picture (docs/01 §1.8). `grass` is null where the district has no curing figure;
+  `official` is null outside South Australia; `leads` is null without land use.
+- **`flood`**, **`drought`** — as before; `drought` is null until the area's state exists, and then so is
+  every index.
+- **`warnings`** — the Bureau warnings in force for the hexagon's district.
+- **`forecast`** — only with `forecast=true`. A day arrives whole with its own `fire` and `flood`; an
+  hour carries the eight fields anyone reads and its own indices.
+- **`history`** — only with `at=`: the snapshot's own time, when it was taken and the incident.
+
+**When nothing can answer**, it is a `200`, not an error, in the same shape:
 
 ```json
-{"generatedAt": "...", "query": {...}, "provenance": null, "current": null, "fire": null,
- "flood": null, "drought": null,
- "unavailable": "no provider answered and no cached reading is near enough or recent enough",
- "disclaimer": "..."}
+{"schema": "gully/reading/1", "available": false,
+ "unavailable": "no upstream answered and the hexagon holds no reading: every upstream is out of allowance, paused or failing",
+ "point": {"lat": -35.02, "lon": 138.73}, "hexagon": { "..." }, "source": null, "at": null, "current": null, "currentFrom": null,
+ "station": { "..." }, "fire": null, "flood": null, "drought": null, "warnings": [], "forecast": null, "history": null, "disclaimer": "..."}
 ```
 
-The Hub treats `provenance == null` as "no reading" and writes the incident without a weather block —
-and, since D-252, keeps it **owed**: no fallback, no inline retry; the incident goes into
-`WeatherManager`'s owed set and is asked about again, oldest first, on every sweep until this service
-answers. Fail open, quietly, and come back for it.
+The Hub treats `available == false` as "no reading" and keeps the incident owed.
 
 ---
 
-## 2.2 `GET /api/weather/status`
+## 2.2 `GET /api/v1/hexagons.geojson?at=`
 
-Everything needed to decide whether it is worth calling this service right now, and what it will cost.
-
-```
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/weather/status"
-```
-
-```json
-{ "generatedAt": "...", "enabled": true,
-  "providers": [ {"id":"open-meteo","host":"api.open-meteo.com","model":"...","configured":true,"unavailableReason":"",
-                  "withinBudget":true,"budgetReason":"...","commercialSafe":false,"callWeight":1.0,"guardFraction":0.9,
-                  "limits":{"perMinute":600,"perHour":5000,"perDay":10000,"perMonth":300000},
-                  "spent":{"minute":0.0,"hour":3.0,"day":120.0,"month":2400.0},
-                  "attribution":"...","lastFailure":null,"lastFailureAt":null,"coolingDownUntil":null} ],
-  "cache": {"anchors": 12, "hits": 100, "misses": 10, "stale": 2, "hitRate": 90.9, "staleRate": 1.8,
-            "reachKm": 15.0, "verticalWeight": 0, "ttl": "PT30M", "maxStale": "PT3H", "maxAnchors": 500},
-  "tuning": {"anchorReachKm":15.0,"droughtCellRadiusKm":25.0,"riverCellRadiusKm":5.0,"ttl":"PT30M","forecastDays":3,
-             "forecastHours":72,"verticalWeight":0.0,"pressure":0.1,"applied":0.0,"computedAt":"...","reason":"..."},
-  "drought": {"cells": 3}, "flood": {"cells": 3} }
-```
-
-`limits` keeps its nulls rather than dropping the keys: a provider that publishes no monthly limit and
-a provider whose monthly limit is unknown are the same statement here, and an absent key would say
-neither. `tuning.reason` is the governor's sentence — never blank, by construction.
-
----
-
-## 2.3 `GET /api/weather/spend?provider=&since=`
-
-Allowance units the ledger recorded for one provider since an instant.
+Every hexagon held, as a `FeatureCollection` of polygons, each carrying the values a map colours by
+(`temperatureC`, `humidityPct`, `windSpeedKmh`, `ffdi`, `ffdiRating`, `gfdi`, `fbi`, `afdrsRating`,
+`officialRating`, `totalFireBan`, `droughtFactor`, `kbdiMm`, `curingPct`, `elevationM`, `leads`,
+`landUse`, `kind`, `active`, `stale`, `warm`, `ageMinutes`, `refreshedAt`, `expiresAt`, `warnings`,
+`windChangeAt`, ...) and `meta` with the counts. Pre-rendered once per change and fingerprinted, so a
+map polling every minute gets `304` until something changes. With `at=`, the values as they were —
+only hexagons that had an incident have a value then. Never fetches.
 
 ```
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/weather/spend?provider=google&since=2026-09-01T00:00:00Z"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/hexagons.geojson" -D - -o /dev/null | grep -i etag
 ```
 
-```json
-{"generatedAt": "...", "provider": "google", "since": "2026-09-01T00:00:00Z", "spent": 12.0}
-```
+`GET /api/v1/hexagons` is the same as a list of rows; `GET /api/v1/hexagons/{id}` is everything held
+for one — its reading, its drought state, its river, its history.
 
-An unknown provider answers `spent: 0`, not `404`: the caller asked what a name has spent, and the
-honest answer for a name nobody has ever called is none. A `since` that is not an ISO-8601 instant is
-a `400`.
+## 2.3 `GET /api/v1/fire-indices?...`
 
----
-
-## 2.4 `GET /api/weather/spend/daily?provider=&from=&to=`
-
-The same ledger cut into UTC days, inclusive at both ends.
+The indices for given inputs, from the one set of formulas: McArthur's forest and grassland meters and
+the AFDRS grassland model with its rating. For a calculator, a what-if, or a check against a published
+worked example. `curingPct` is needed for any grassland figure; `fuelLoadTHa` defaults to 4.5;
+`condition` is `natural`, `grazed` or `eaten-out`.
 
 ```
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/weather/spend/daily?provider=google&from=2026-09-01&to=2026-09-17"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/fire-indices?temperatureC=30&humidityPct=20&windKmh=30&droughtFactor=10&curingPct=100&condition=natural"
 ```
 
 ```json
-{"generatedAt": "...", "provider": "google", "days": [{"date": "2026-09-01", "spent": 3.0}, "..."]}
+{"inputs": {"temperatureC": 30.0, "humidityPct": 20, "windKmh": 30.0, "droughtFactor": 10.0},
+ "forest": {"ffdi": 27.8, "ffdiRating": "VERY HIGH"},
+ "grass": {"curingPct": 100.0, "fuelLoadTHa": 4.5, "condition": "natural", "mcArthurMoisturePct": 7.3, "gfdi": 26.3, "gfdiRating": "VERY HIGH",
+           "spreadKmh": 3.42, "moisturePct": 6.2, "rateOfSpreadKmh": 7.21, "intensityKwm": 16770, "flameHeightM": 3.3, "fbi": 47, "afdrsRating": "High"}}
 ```
 
-At most **62 days**, and past that it is a `400` rather than a silent truncation — a chart quietly
-missing its left-hand half is worse than a chart that did not load. One day's spend is what was spent
-since its midnight minus what was spent since the next, so a window of N days costs N + 1 queries
-rather than N scans.
+## 2.4 `GET /api/v1/status` and the spend reads
 
----
-
-## 2.5 `GET /api/weather/coverage.geojson?hourly=false&hours=24`
-
-The cache as a FeatureCollection. Serves only what is already held, so a display can poll it without
-ever spending allowance.
+Everything needed to decide whether it is worth calling this service right now and what it will cost:
+each upstream with its allowance, its spend per window, its breaker and the reason it may not be
+called; the sources with when each last answered; and what is held.
 
 ```
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/weather/coverage.geojson" | head -c 400
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/status"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/upstreams/open-meteo/spend?since=2026-09-01T00:00:00Z"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/upstreams/open-meteo/spend/daily?from=2026-09-01&to=2026-09-18"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/upstreams/open-meteo/spend/hourly"
 ```
 
-Four concentric outlines over the same ground — weather, fire danger now, drought, flood — plus every
-anchor and cell as a point carrying its own detail, the radius it covers and the clock it is ageing
-on. The three weather bands (fresh, stale, expired) are one colour in three line patterns and are
-*differenced* rather than stacked, so they tile and the band a point falls in is the best reading
-available there. Fire, drought and flood are not differenced against them: they measure different
-things on different radii, and seeing all four rings at once is the point of drawing them together.
+`spend/daily` is at most 62 days and a `400` past that.
 
-`hourly=true` attaches the trimmed hourly series to every anchor — off by default, because seventy-two
-timesteps times five hundred anchors is a payload nobody asked for. `hours` caps the timesteps carried
-forward of now and is itself capped at 240.
+## 2.5 The contract and the document
 
----
+```
+curl -sS "$WX/api/v1/contract/reading.schema.json"     # public
+curl -sS "$WX/api/v1/openapi.json"                     # public
+```
 
 ## 2.6 Diagnostics
 
-The docs/26 shape, so one agent reads the Hub, Operations and this service without forking into three.
+Unchanged in shape from the split: `GET /api/diagnostics?window=`, `/logs?level=&window=&limit=`,
+`/logs/{id}`, `DELETE /logs?level=&before=`, `DELETE /logs/{id}`. The service block is now `gully`
+(the upstreams, the sources, what is held) in place of the old `weather` block. Needs the
+`DIAGNOSTICS` or `ALL` scope.
 
-```
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/diagnostics?window=PT6H"
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/diagnostics/logs?level=ERROR&window=P2D&limit=50"
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/diagnostics/logs/42"
-curl -sS -X DELETE -H "X-Api-Key: $KEY" "$WX/api/diagnostics/logs?level=WARN&before=2026-09-17T00:00:00Z"
-curl -sS -X DELETE -H "X-Api-Key: $KEY" "$WX/api/diagnostics/logs/42"
-```
+## 2.7 `GET /api/weather`
 
-```json
-{"generatedAt": "...", "window": "PT6H", "readMe": "...",
- "app": {"startedAt": "...", "readyAt": "...", "uptime": "PT4H12M"},
- "startup": {"phases": [{"phase": 1, "name": "console user", "millis": 14, "outcome": "OK"}], "failed": []},
- "logs": {"errors": 0, "warnings": 2, "held": 7,
-          "retention": {"errors": "PT168H", "warnings": "PT48H"},
-          "capture": {"waiting": 0, "captured": 91, "dropped": 0},
-          "top": [ { ...log row... } ]},
- "weather": {"enabled": true,
-             "providers": [{"id": "open-meteo", "usable": true, "reason": "...", "spent": {"...": 0.0}}],
-             "cache": { ...as status... }, "tuning": { ...as status... },
-             "droughtCells": 3, "riverCells": 3}}
-```
+The old route in its old shape — `provenance`, `current`, `fire`, `flood`, `drought`, `forecast`,
+`generatedAt`, `unavailable` — built from the new reading, for one release. `estimated` is always
+false. Gone with the next release.
 
-A log row is
-`{id, level, count, firstSeenAt, lastSeenAt, logger, thread, sourceId, pattern, message, exception, hasTrace}`;
-`/logs/{id}` adds `trace`. **`sourceId` is always null here** — the Hub fills it from its source
-register and this service has none. The key is carried anyway, because the row shape is shared and a
-key present and null says "no source" where an absent key would say nothing.
+## 2.8 The health probes
 
-`window` is an ISO-8601 duration, defaults to 24 hours and is capped at 30 days. There are no
-`sources`, `managers`, `jobs` or `load` blocks here, and no `/api/diagnostics/sources` route — the
-`weather` block stands in their place.
-
-A `DELETE` deletes, and is logged against the consumer name on the key. That is the point: the next
-morning's read holds only what has happened since.
+`/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` are public; readiness
+includes the database, so a dead database shows as a restarting container.

@@ -11,15 +11,15 @@
         <relativePath/>
     </parent>
 
-    <groupId>au.weather</groupId>
+    <groupId>au.gully</groupId>
     <artifactId>weather</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>Weather</name>
+    <name>Gully</name>
     <description>
-        One point in, the weather out. The anchor cache, the provider chain and its budget governor, the
-        drought accumulators and the flood cells, lifted out of The Hub Database (docs/27-the-split.md, D-242).
-        One Maven module: there is one application here and nothing to enforce a layer rule between.
+        Gully: the weather, and the fire danger, at a point, now or at a time. Australia in 15 km hexagons, each fetched
+        once where something is happening; the Bureau's stations and warnings; the CFS rating; one in-memory cache
+        rebuilt from Postgres at start. The overhaul of the Weather service (docs/06-overhaul.md).
     </description>
 
     <properties>
@@ -30,42 +30,36 @@
         <!-- Boot 4.1.1 manages Lombok 1.18.46; 1.18.48 adds JDK 26 so a newer local JDK still compiles. -->
         <lombok.version>1.18.48</lombok.version>
         <jts.version>1.20.0</jts.version>
-        <resilience4j.version>2.4.0</resilience4j.version>
-        <!-- D-136: Bootstrap 5.3. The templates name this version in their webjar paths; bump both together. -->
-        <webjar.bootstrap.version>5.3.8</webjar.bootstrap.version>
-        <!-- The glyph on every map pin and beside every layer switch (D-193). Bootstrap's own set, so it matches the chrome. -->
-        <webjar.bootstrap-icons.version>1.13.1</webjar.bootstrap-icons.version>
-        <webjar.htmx.version>2.0.10</webjar.htmx.version>
+        <springdoc.version>3.1.1</springdoc.version>
+        <json-schema-validator.version>3.0.7</json-schema-validator.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
         <webjar.leaflet.version>1.9.4</webjar.leaflet.version>
+        <!-- Bootstrap 5.3.5, the one front-end library; the templates name this version in their webjar paths. -->
+        <webjar.bootstrap.version>5.3.5</webjar.bootstrap.version>
     </properties>
 
     <dependencies>
-        <!-- The spatial maths. Anchors, drought cells and river cells are points; coverage is polygons. -->
+        <!-- Point-in-polygon for the fire ban districts and the hexagon outlines. In memory only: no geometry column. -->
         <dependency>
             <groupId>org.locationtech.jts</groupId>
             <artifactId>jts-core</artifactId>
             <version>${jts.version}</version>
         </dependency>
 
+        <!-- Plain SQL over JdbcClient. No entity manager: the schema is Flyway's and the rows are records. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jackson</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.hibernate.orm</groupId>
-            <artifactId>hibernate-spatial</artifactId>
-            <version>${hibernate.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
-        <!-- Flyway owns the changes ddl-auto cannot make, and nothing else (src/main/resources/db/migration/README.md). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-flyway</artifactId>
@@ -109,18 +103,20 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- The anchor index and the terrain memo. -->
+        <!-- The generated OpenAPI document for /api/v1 (docs/02-api.md). -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- The API key lookup memo. -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
-        <!-- Per-host politeness: one permit per interval, per upstream (HostLimiter). -->
-        <dependency>
-            <groupId>io.github.resilience4j</groupId>
-            <artifactId>resilience4j-ratelimiter</artifactId>
-            <version>${resilience4j.version}</version>
-        </dependency>
 
+        <!-- The console: Bootstrap for the chrome, Leaflet for the map, and a short stylesheet of our own. -->
         <dependency>
             <groupId>org.webjars.npm</groupId>
             <artifactId>bootstrap</artifactId>
@@ -128,21 +124,10 @@
         </dependency>
         <dependency>
             <groupId>org.webjars.npm</groupId>
-            <artifactId>bootstrap-icons</artifactId>
-            <version>${webjar.bootstrap-icons.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars.npm</groupId>
-            <artifactId>htmx.org</artifactId>
-            <version>${webjar.htmx.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars.npm</groupId>
             <artifactId>leaflet</artifactId>
             <version>${webjar.leaflet.version}</version>
         </dependency>
 
-        <!-- Lombok everywhere (D-140). Records are preferred for value types; @Slf4j and @RequiredArgsConstructor for services. -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -162,6 +147,31 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The contract test: what /api/v1/readings serves is checked against contract/reading.schema.json. -->
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>${json-schema-validator.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The one end-to-end test, against a throwaway Postgres. Skipped where Docker is not available. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -188,11 +198,9 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>au.weather.WeatherApplication</mainClass>
+                    <mainClass>au.gully.Application</mainClass>
                 </configuration>
                 <executions>
-                    <!-- The id the parent's pluginManagement uses, so this configures that execution
-                         rather than adding a second repackage of the same jar. -->
                     <execution>
                         <id>repackage</id>
                         <goals>

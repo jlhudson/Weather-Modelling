@@ -1,4 +1,5 @@
 # Build and test on main only. Feature work is verified locally with Claude Code and IntelliJ;
+# the end-to-end test starts a throwaway Postgres with Testcontainers, which the runner has Docker for.
 # this workflow exists to prove that what landed on main still builds on a clean machine.
 name: CI
 

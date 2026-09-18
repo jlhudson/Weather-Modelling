@@ -1,140 +1,77 @@
-# 04 · Migration from the Hub
+# 04 · Migration, from the Hub and from the old service
 
 [← Docs index](README.md)
 
-Phase 1 of `The-Hub-Database/docs/27-the-split.md`, steps 5 to 10. The code is here; this is the data
-and the wiring.
+Two migrations have happened here. Phase 1 of `The-Hub-Database/docs/27-the-split.md` moved the
+weather code and four tables out of the Hub on 17–18 September 2026; the overhaul of 19 September
+2026 replaced that code and its tables with Gully's. This file is what is left to know about both.
 
-## 4.1 The four tables
+## 4.1 The database
 
-Four tables leave the Hub, and they keep their names exactly so a `pg_dump` restores into this
-database without a rename:
+Gully's schema is Flyway's (`db/migration/V1__gully.sql`), and it runs over the old service's database
+without help: the four tables Hibernate built for the platform — `api_key`, `console_user`,
+`log_event`, `api_access_log` — are declared `IF NOT EXISTS` with the columns Hibernate gave them, so
+the rows survive, the key issued to The Hub among them. The end-to-end test boots against exactly that
+database, planted from the live schema of 18 September 2026.
 
-| Table | What it holds | If it is lost |
-|---|---|---|
-| `weather_anchor` | The cached readings, with their payload, point, terrain height and hit count | Rebuilt by the next few hours of traffic, at the cost of allowance |
-| `weather_call` | The upstream call ledger the budget counts from | The day's spend reads as zero and the guard is briefly blind |
-| `drought_cell` | **A year of integrated rainfall per cell**, as a KBDI and a Griffiths drought factor | **Rebuilt from nothing.** Do not lose this |
-| `river_cell` | GloFAS discharge per cell, with its recent series | Re-fetched a cell at a time, one call each |
+The four weather tables of the old service — `weather_anchor`, `weather_call`, `drought_cell`,
+`river_cell` — are not read any more and are not touched: retiring data is an operator's act. Once you
+have looked at them:
 
-> **The drought cells are the ones to be careful with** — a year of integrated rainfall per cell,
-> rebuilt from nothing if lost. **Dump and restore them; do not re-derive.**
-> — docs/27 §27.4
-
-Re-deriving them is not merely slow, it is a different answer: the spin-up would restart from the
-assumed starting deficit, and the index would lean on that assumption for months while it washed out.
-The rows already hold the washed-out result.
-
-## 4.2 Dump and restore
-
-Boot this service once against an empty `weather` database first, so Hibernate creates the four tables
-and their indexes from the entities. Then move the rows:
-
-```
-# One table at a time, data only, into the schema Hibernate just built.
-for t in weather_anchor weather_call drought_cell river_cell; do
-  pg_dump --data-only --table="$t" hub | psql weather
-done
+```sql
+drop table if exists weather_anchor, weather_call, drought_cell, river_cell;
 ```
 
-If you would rather move schema and data together, drop the tables this service created first and let
-the dump bring them:
+The drought cells were the ones the old docs said never to lose. They are not worth keeping now: the
+new drought state is per hexagon area and is rebuilt from the Bureau's station ledger and the archive
+on first ask, at about six allowance units per area, once.
 
-```
-psql weather -c 'drop table if exists weather_anchor, weather_call, drought_cell, river_cell'
-pg_dump -t weather_anchor -t weather_call -t drought_cell -t river_cell hub | psql weather
-```
+Gully's own tables: `hexagon`, `reading_snapshot`, `station`, `station_sample`, `upstream_call`,
+`grass_curing`, `river_discharge`. The one to be careful with is `reading_snapshot` — the history
+nothing else holds — which is why it gets a nightly export to the backups volume.
 
-Either way the `weather` database must have PostGIS: `CREATE EXTENSION IF NOT EXISTS postgis;`. All
-four tables carry a geometry column.
+## 4.2 The Hub's side
 
-Check it landed:
+Three things have to be true.
 
-```
-psql weather -c 'select count(*) from drought_cell'
-psql weather -c 'select count(*) from river_cell'
-```
+**1. A key, issued here.** On `/console/api-keys`, issue one to the consumer `hub` with the `ALL` scope
+(or `READINGS`; the Hub's map layer needs `LAYER` too). The plaintext is shown once and goes into the
+Hub's `.env` as `WEATHER_API_KEY`. A key issued by the old service keeps working.
 
-Then **drop the four tables from the Hub**, and only then. They are not read there any more, but a
-table that still exists is a table something can still be pointed at by mistake.
+**2. The Hub's property.** Unchanged: `hub.weather.base-url` and `hub.weather.api-key`. The Hub's
+`HttpWeatherClient` now calls `/api/v1/readings`, passes `incident=` and `at=` when it asks late, and
+reads the v1 shape; its copy of the contract is `hub-services/src/main/resources/contract/reading.schema.json`.
 
-## 4.3 The Hub's side
+**3. Compose.** This repository's `compose.yaml` is the one deployment. The service, container and
+volume names stayed `weather-*` so the deployed stack keeps its database and The Hub's
+`HUB_WEATHER_URL` keeps working.
 
-The Hub calls this service through `HttpWeatherClient`, which implements the `WeatherClient` interface
-introduced in phase 0. Three things have to be true.
+## 4.3 What the Hub changed in the overhaul
 
-**1. A key, issued here.** On this service's `/console/api-keys`, issue one to the consumer `hub`. The
-plaintext is shown once. It goes into the Hub's `.env` as `WEATHER_API_KEY`.
-
-**2. The Hub's property.** One line, and it is the whole of "where is weather" (docs/27 §27.2):
-
-```yaml
-hub:
-  weather:
-    base-url: ${HUB_WEATHER_URL:http://weather:8082}
-    api-key: ${WEATHER_API_KEY}
-```
-
-Going from one VPS to three is a change to that URL and a Cloudflare hostname. Nothing in the code
-moves.
-
-**3. Compose.** This repository's `compose.yaml` is the one deployment of this service (the Hub's
-D-255, its [28 · Deployment](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/28-deployment.md)):
-its own Postgres on host port 5435 (`WEATHER_DB_PORT`), the app on `WEATHER_PORT` (8082), `cloudflared`
-under its own `edge` profile with this stack's own tunnel, deployed by Portainer from `main` onto
-whichever machine. The Hub reaches it by `HUB_WEATHER_URL`: `http://host.docker.internal:8082` when the
-two stacks share a development machine, `https://weather.surefirehudson.com` otherwise. (The Hub's
-compose built this service from `../Weather-Modelling` under a `split` profile, on one Postgres with
-three databases, for one day — 17 to 18 September 2026 — and no longer does.) The dump in §4.2 was run
-on 18 September 2026: 745 anchors, 3,842 calls, 180 drought cells, 721 river cells.
+- **`WeatherReading`** reads the v1 shape: `available`, `source`, `at`, `current`, `station`, `fire`
+  (with `grass`, `official`, `wind`), `warnings`, `forecast`.
+- **`MetricsManager`** no longer computes the grassland index: the McArthur grass meter, the curing and
+  the fuel load moved here (docs/06 items 4 and 18), and the metrics component carries the reading's
+  fire block whole — forest, grass, AFDRS, official — plus the Hub's own spread direction. The Hub's
+  `GrassFireDanger`, its curing register and the curing page went; the fuel-type lookup stays for the
+  boundaries component.
+- **`WeatherManager`** passes the incident's id on every ask and its start time on a late one, so the
+  history here is written for incidents and answered for their start.
+- **The console map's weather layer** draws the hexagon layer.
 
 ## 4.4 What the Hub keeps
 
-Not everything weather-shaped left. These stayed, and a search for them in this repository will
-correctly find nothing:
+The decision about *when* to ask (D-249), `WeatherEvent`, `WeatherPanel`, the published-rating ledger
+`fire_danger_day` (its D-225, the record of what the public were told per district-day), the
+fuel-type lookup for the boundaries component. And no cache and no fallback (D-252).
 
-- **`WeatherManager`'s incident half** — when an incident is worth asking about: on raise, on upgrade,
-  on a move beyond its own positional uncertainty, otherwise on a hash-staggered interval, capped per
-  tick. That is a judgement about incidents (D-249). What came across is the fetching half, as
-  `au.weather.startup.WeatherSweeper`.
-- **`WeatherEvent`** — an incident event, not a weather value.
-- **`core/fuel/GrassFireDanger`, `FuelLoadEntity`, `GrassCuringEntity`, `FireDangerDayEntity`,
-  `MetricsManager`** — everything needing fuel load or curing (docs/09).
-- **`WeatherPanel`** — the Hub's incident-detail rendering of a weather component.
+## 4.5 What a second copy of this service would need
 
-And the Hub keeps **no cache of its own and no fallback** (docs/27 §27.10, D-252). It calls every
-time; this service's anchor cache does the work. When this service does not answer — unreachable,
-unconfigured, or with nothing to give — the Hub's `HttpWeatherClient` logs it once per sixty-second
-cool-down, the incident is written without a weather block, and it is **owed** one: `WeatherManager`
-keeps the owed set in memory and drains it first on every sweep, oldest first, closed incidents
-included, until this service answers or the incident passes `max-incident-age`; a restart re-finds
-the open ones on the first sweep. The backlog is on the Hub's `/console/services`. There is no
-in-process implementation and no second source of weather: `NoWeatherClient` was deleted with D-252,
-and `WeatherClientConfiguration` always builds the HTTP client, configured or not.
-
-## 4.5 What changed in the move
-
-The weather logic itself did not change. What changed around it:
-
-| | In the Hub | Here |
-|---|---|---|
-| Packages | `au.hub.core.weather`, `au.hub.services.weather`, `au.hub.layers.weather`, … | `au.weather.core`, `au.weather.service`, `au.weather.api`, … |
-| Property prefix | `hub.weather.*` | `weather.*` |
-| Console/API properties | `hub.console`, `hub.api` on `HubProperties` | `weather.app.console`, `weather.app.api` on `WeatherAppProperties` |
-| Terrain | `services/terrain` — a slippy-tile store, ~3,000 lines | `au.weather.terrain.ElevationService` — Open-Meteo's elevation endpoint, memoised (W-1) |
-| Host budgets | `HostLimiter` merged the `@Source` annotations with the `HostBudgets` declarations | Declarations only; there is no source register |
-| Diagnostics | `sources`, `managers`, `notifications`, `jobs`, `load` blocks | A `weather` block; `log_event.source_id` is kept for shape and is always null |
-| Startup | `PhasedStartup` over six phases | Two `ApplicationRunner`s, writing the same `StartupHistory` |
-| The map layer | `WeatherLayer implements MapLayer`, in a discovered catalogue, drawn by `weather-map.js` on the console map | `WeatherLayer` with `at` and `coverage`; `WeatherApiController` routes to them. **No map page**: `weather-map.js` came across but is loaded by nothing (below) |
-| API key prefix | `hub_` | `weather_` — a different issuer, and nothing it issues is valid in the Hub |
-| Scheduler bean | `hubTaskScheduler` | `weatherTaskScheduler` |
-| `@Table` names | `weather_anchor`, `weather_call`, `drought_cell`, `river_cell` | **unchanged**, which is what makes §4.2 a `pg_dump` |
-
-The console probe moved with its page: what was `POST /console/map/weather/probe` is
-`POST /console/weather/probe`, and `static/js/weather-map.js` names the new path — **but that file is
-dormant**. `layout.html` loads `theme.js` and `map.js` only; `weather-map.js` is on no page, and its
-first line returns unless `window.hubLayers` exists, which is the Hub's layer engine and did not come
-across. The console's weather page is tables, not a map. The live renderer of this service's
-`coverage.geojson` is the Hub's own copy of `weather-map.js` on the Hub's console map, which reads the
-feed through the Hub's pass-through `WeatherLayer`. Making it live here, or deleting it, is
-[06 §6.3.8](06-overhaul.md).
+Two instances behind one hostname would each hold their own in-memory cache and each poll the Bureau
+and the CFS. That works, wastefully, except for three things: the drought step must run exactly once
+per area per day (a `select ... for update skip locked` over `hexagon.drought_computed_for`, or one
+instance nominated to step); the history snapshot's three-hour window is per instance until it reads
+`last_snapshot_at` back from the row before writing (it does, so two instances write at most two);
+and a hexagon fetched on one instance is not in the other's memory until it reloads its row — a
+shared cache rebuild would want a `notify` on the `hexagon` table. None of it is built; one instance
+is the deployment.

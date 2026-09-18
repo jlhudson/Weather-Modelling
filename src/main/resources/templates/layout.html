@@ -3,235 +3,49 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1" name="viewport">
-    <title th:text="${title} + ' · Weather'">Weather</title>
-    <!-- Ahead of the stylesheet, so the page is never painted in the wrong theme first. "auto" follows
-         the operating system and keeps following it; light and dark are the operator overriding that. -->
+    <title th:text="${title} + ' · Gully'">Gully</title>
+    <!-- Before the stylesheet, so the page is never painted in the wrong theme first. -->
     <script>
         (function () {
-            var stored = null;
-            try {
-                stored = localStorage.getItem('weather.theme');
-            } catch (e) { /* storage blocked */
-            }
-            var choice = stored || 'auto';
-            var dark = choice === 'dark'
-                || (choice === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            var s = null;
+            try { s = localStorage.getItem('gully.theme'); } catch (e) {}
+            var c = s || 'dark';
+            var dark = c === 'dark' || (c === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
             document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-hub-theme', choice);
+            document.documentElement.setAttribute('data-theme-choice', c);
         })();
     </script>
-    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.8/dist/css/bootstrap.min.css}">
-    <link rel="stylesheet" th:href="@{/webjars/bootstrap-icons/1.13.1/font/bootstrap-icons.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.5/dist/css/bootstrap.min.css}">
     <link rel="stylesheet" th:href="@{/webjars/leaflet/1.9.4/dist/leaflet.css}">
+    <link rel="stylesheet" th:href="@{/css/console.css}">
     <meta name="_csrf" th:content="${_csrf != null} ? ${_csrf.token} : ''">
     <meta name="_csrf_header" th:content="${_csrf != null} ? ${_csrf.headerName} : 'X-CSRF-TOKEN'">
-    <!-- CARTO's basemap key, for map.js: the browser fetches the tiles. Empty means no CARTO basemap. -->
-    <meta name="hub-carto-key" th:content="${cartoKey != null} ? ${cartoKey} : ''">
-    <style>
-        body {
-            font-size: .9rem;
-        }
-
-        .mono {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: .8rem;
-        }
-
-        .state-OK {
-            color: #4ade80;
-        }
-
-        .state-DEGRADED {
-            color: #fbbf24;
-        }
-
-        .state-PAUSED {
-            color: #93c5fd;
-        }
-
-        .state-DISABLED {
-            color: #9ca3af;
-        }
-
-        .state-SEEDED {
-            color: #f472b6;
-        }
-
-        td, th {
-            vertical-align: middle;
-        }
-
-        .raw {
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        #map {
-            height: calc(100vh - 140px);
-            min-height: 480px;
-        }
-
-        /* The layer panel beside a map: one switch per discovered layer, sticky so it stays beside the map. */
-        .hub-layer-panel {
-            position: sticky;
-            top: .75rem;
-            max-height: calc(100vh - 100px);
-            overflow-y: auto;
-        }
-
-        .hub-layer {
-            padding: .3rem 0;
-            border-bottom: 1px solid var(--bs-border-color-translucent);
-        }
-
-        .hub-layer:last-child {
-            border-bottom: 0;
-        }
-
-        .hub-layer-on > div:first-child .form-check-label {
-            font-weight: 600;
-        }
-
-        .hub-swatch {
-            display: inline-block;
-            width: .7em;
-            height: .7em;
-            border-radius: 50%;
-            margin-right: .35em;
-            vertical-align: baseline;
-            border: 1px solid rgba(0, 0, 0, .3);
-        }
-
-        /* The same swatch as a length of line, for a legend entry the map tells apart by its pattern
-           rather than its colour. Border-style does the dashes, so the pattern is CSS's rather than a
-           gradient nobody can read at this size. */
-        .hub-swatch-line {
-            width: 1.7em;
-            height: 0;
-            border-radius: 0;
-            border-width: 2px 0 0 0;
-            vertical-align: middle;
-            background: none;
-        }
-
-        /* The layer's glyph beside its switch: the same Bootstrap Icons outline the pins on the map carry,
-           in the layer's colour, so the panel is the legend for the pins (D-193). */
-        .hub-layer-icon {
-            display: inline-block;
-            width: 1.2em;
-            text-align: center;
-            margin-right: .3em;
-        }
-
-        /* A pin: the glyph inside a ring of the feature's colour on the page's own ground, so the outline
-           reads on OpenStreetMap, on imagery and in either theme. Sized by the renderer, never by zoom;
-           the ring, not a fill, because the icons are outlines and a solid disc would make them into
-           something else. Leaflet's own div-icon chrome is replaced, not layered under. */
-
-        /* The state colours were picked against a dark ground; on white they wash out. */
-        [data-bs-theme="light"] .state-OK {
-            color: #15803d;
-        }
-
-        [data-bs-theme="light"] .state-DEGRADED {
-            color: #b45309;
-        }
-
-        [data-bs-theme="light"] .state-PAUSED {
-            color: #1d4ed8;
-        }
-
-        [data-bs-theme="light"] .state-DISABLED {
-            color: #6b7280;
-        }
-
-        [data-bs-theme="light"] .state-SEEDED {
-            color: #be185d;
-        }
-
-        /* The keyless basemap serves both themes: OpenStreetMap's own tiles, darkened here rather than
-           swapped for a second provider. Inverting and rotating the hue back leaves water blue and
-           parkland green instead of producing a photographic negative. (The two rules were lost to the
-           IntelliJ reformat of 13 September 2026 and put back the next day; the comments had survived.) */
-        [data-bs-theme="dark"] .leaflet-tile-pane {
-            filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.85);
-        }
-
-        /* Imagery, a topographic map's hypsometric tints and CARTO's own dark style are not to be
-           inverted: the first two would become negatives, the third is already dark. map.js sets
-           this class while such a base layer is showing. */
-        [data-bs-theme="dark"] .leaflet-container.hub-no-invert .leaflet-tile-pane {
-            filter: none;
-        }
-
-        /* Leaflet paints its own chrome white; let Bootstrap's theme own it instead. */
-        .leaflet-popup-content-wrapper a {
-            color: var(--bs-link-color);
-        }
-
-        .leaflet-popup-content table {
-            color: var(--bs-body-color);
-        }
-
-        .leaflet-popup-content .table > :not(caption) > * > * {
-            background-color: transparent;
-            color: inherit;
-        }
-
-        .leaflet-bar a {
-            border-bottom-color: var(--bs-border-color);
-        }
-    </style>
+    <meta name="carto-key" th:content="${cartoKey != null} ? ${cartoKey} : ''">
 </head>
-<body th:attr="hx-headers='{&quot;' + (${_csrf != null} ? ${_csrf.headerName} : 'X-CSRF-TOKEN') + '&quot;: &quot;' + (${_csrf != null} ? ${_csrf.token} : '') + '&quot;}'">
-<nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom mb-3">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-semibold" th:href="@{/console/weather}">Weather</a>
-        <button class="navbar-toggler" data-bs-target="#nav" data-bs-toggle="collapse" type="button"><span
-                class="navbar-toggler-icon"></span></button>
-        <div class="collapse navbar-collapse" id="nav">
-            <!-- Three pages, so three flat links. The Hub's five dropdowns existed because fifteen flat
-                 links could not be scanned; three can. -->
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Weather'} ? 'active'"
-                                        th:href="@{/console/weather}">Weather</a></li>
-                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Diagnostics'} ? 'active'"
-                                        th:href="@{/console/diagnostics}">Diagnostics</a></li>
-                <li class="nav-item"><a class="nav-link" th:classappend="${title == 'API keys'} ? 'active'"
-                                        th:href="@{/console/api-keys}">API keys</a></li>
-            </ul>
-            <span class="navbar-text me-3 text-secondary" th:text="${operator}">operator</span>
-            <div class="dropdown me-2">
-                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" title="Theme"
-                        type="button">
-                    <span data-hub-theme-label>Theme</span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li>
-                        <button class="dropdown-item" data-hub-set-theme="light" type="button">Light</button>
-                    </li>
-                    <li>
-                        <button class="dropdown-item" data-hub-set-theme="dark" type="button">Dark</button>
-                    </li>
-                    <li>
-                        <button class="dropdown-item" data-hub-set-theme="auto" type="button">System</button>
-                    </li>
-                </ul>
-            </div>
-            <form class="d-inline" method="post" th:action="@{/logout}">
-                <button class="btn btn-sm btn-outline-secondary">Log out</button>
-            </form>
-        </div>
+<body>
+<nav class="g-nav">
+    <a class="brand" th:href="@{/console/map}">Gully</a>
+    <a class="nav-link" th:classappend="${title == 'Map'} ? 'active'" th:href="@{/console/map}">Map</a>
+    <a class="nav-link" th:classappend="${title == 'Hexagons'} ? 'active'" th:href="@{/console/hexagons}">Hexagons</a>
+    <a class="nav-link" th:classappend="${title == 'Upstreams'} ? 'active'" th:href="@{/console/upstreams}">Upstreams</a>
+    <a class="nav-link" th:classappend="${title == 'Curing'} ? 'active'" th:href="@{/console/curing}">Curing</a>
+    <a class="nav-link" th:classappend="${title == 'Diagnostics'} ? 'active'" th:href="@{/console/diagnostics}">Diagnostics</a>
+    <a class="nav-link" th:classappend="${title == 'API keys'} ? 'active'" th:href="@{/console/api-keys}">API keys</a>
+    <div class="right">
+        <span th:text="${operator}">operator</span>
+        <select class="form-select form-select-sm w-auto" id="theme" title="Theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="auto">System</option>
+        </select>
+        <form class="d-inline" method="post" th:action="@{/logout}">
+            <button class="btn btn-sm btn-outline-secondary py-0">Log out</button>
+        </form>
     </div>
 </nav>
-<main class="container-fluid" th:insert="${content}"></main>
-<footer class="container-fluid text-secondary small mt-4 mb-3">Weather · development build · all times UTC
-                                                               unless marked ADL
-</footer>
-<script th:src="@{/webjars/bootstrap/5.3.8/dist/js/bootstrap.bundle.min.js}"></script>
-<script th:src="@{/webjars/htmx.org/2.0.10/dist/htmx.min.js}"></script>
+<main th:insert="${content}"></main>
+<script th:src="@{/webjars/bootstrap/5.3.5/dist/js/bootstrap.bundle.min.js}"></script>
 <script th:src="@{/webjars/leaflet/1.9.4/dist/leaflet.js}"></script>
-<script th:src="@{/js/theme.js}"></script>
-<script th:src="@{/js/map.js}"></script>
+<script th:src="@{/js/console.js}"></script>
 </body>
 </html>

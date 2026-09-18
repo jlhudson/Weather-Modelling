@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weather.surefirehudson.com/api/v1/contract/reading.schema.json",
+  "title": "Gully reading, version 1",
+  "description": "What GET /api/v1/readings answers. Kept identically in Weather-Modelling (src/main/resources/contract) and The-Hub-Database (hub-services/src/main/resources/contract); each build checks what it serves or reads against its copy and the two copies against each other.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "available", "unavailable", "point", "hexagon", "source", "at", "current", "currentFrom", "station", "fire", "flood", "drought", "warnings", "forecast", "history", "disclaimer"],
+  "properties": {
+    "schema": {"const": "gully/reading/1"},
+    "available": {"type": "boolean"},
+    "unavailable": {"type": ["string", "null"]},
+    "point": {"$ref": "#/$defs/point"},
+    "hexagon": {"oneOf": [{"$ref": "#/$defs/hexagon"}, {"type": "null"}]},
+    "source": {"oneOf": [{"$ref": "#/$defs/source"}, {"type": "null"}]},
+    "at": {"$ref": "#/$defs/instantOrNull"},
+    "current": {"oneOf": [{"$ref": "#/$defs/conditions"}, {"type": "null"}]},
+    "currentFrom": {"enum": ["station", "model", null]},
+    "station": {"oneOf": [{"$ref": "#/$defs/station"}, {"type": "null"}]},
+    "fire": {"oneOf": [{"$ref": "#/$defs/fire"}, {"type": "null"}]},
+    "flood": {"oneOf": [{"$ref": "#/$defs/flood"}, {"type": "null"}]},
+    "drought": {"oneOf": [{"$ref": "#/$defs/drought"}, {"type": "null"}]},
+    "warnings": {"type": "array", "items": {"$ref": "#/$defs/warning"}},
+    "forecast": {"oneOf": [{"$ref": "#/$defs/forecast"}, {"type": "null"}]},
+    "history": {"oneOf": [{"$ref": "#/$defs/history"}, {"type": "null"}]},
+    "disclaimer": {"type": "string"}
+  },
+  "$defs": {
+    "instant": {"type": "string", "format": "date-time"},
+    "instantOrNull": {"type": ["string", "null"], "format": "date-time"},
+    "date": {"type": "string", "format": "date"},
+    "dateOrNull": {"type": ["string", "null"], "format": "date"},
+    "num": {"type": ["number", "null"]},
+    "int": {"type": ["integer", "null"]},
+    "str": {"type": ["string", "null"]},
+    "point": {
+      "type": "object", "additionalProperties": false, "required": ["lat", "lon"],
+      "properties": {"lat": {"type": "number"}, "lon": {"type": "number"}}
+    },
+    "hexagon": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "lat", "lon", "widthKm", "sides", "elevationM", "elevationFrom", "slopeDeg", "zone", "fireBanDistrict", "bureauDistrict", "landUse", "stationId", "kind", "activatedAt", "refreshedAt", "expiresAt"],
+      "properties": {
+        "id": {"type": "string"}, "lat": {"type": "number"}, "lon": {"type": "number"},
+        "widthKm": {"type": "number"}, "sides": {"type": "integer"},
+        "elevationM": {"$ref": "#/$defs/num"}, "elevationFrom": {"enum": ["terrain", "model", "station", null]},
+        "slopeDeg": {"$ref": "#/$defs/num"}, "zone": {"$ref": "#/$defs/str"},
+        "fireBanDistrict": {"$ref": "#/$defs/str"}, "bureauDistrict": {"$ref": "#/$defs/str"},
+        "landUse": {"oneOf": [{"$ref": "#/$defs/landUse"}, {"type": "null"}]},
+        "stationId": {"$ref": "#/$defs/str"},
+        "kind": {"enum": ["station", "forecast", "both", "bare"]},
+        "activatedAt": {"$ref": "#/$defs/instantOrNull"}, "refreshedAt": {"$ref": "#/$defs/instantOrNull"}, "expiresAt": {"$ref": "#/$defs/instantOrNull"}
+      }
+    },
+    "landUse": {
+      "type": "object", "additionalProperties": false, "required": ["point", "percent", "leads", "burnablePct"],
+      "properties": {
+        "point": {"enum": ["forest", "grassland", "cropland", "scrub", "built_up", "water", "bare", "unknown", null]},
+        "percent": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "leads": {"enum": ["forest", "grass", null]},
+        "burnablePct": {"$ref": "#/$defs/int"}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["upstream", "model", "attribution", "fetchedAt", "currentExpiresAt", "forecastExpiresAt", "stale"],
+      "properties": {
+        "upstream": {"type": "string"}, "model": {"$ref": "#/$defs/str"}, "attribution": {"$ref": "#/$defs/str"},
+        "fetchedAt": {"$ref": "#/$defs/instant"}, "currentExpiresAt": {"$ref": "#/$defs/instantOrNull"},
+        "forecastExpiresAt": {"$ref": "#/$defs/instantOrNull"}, "stale": {"type": "boolean"}
+      }
+    },
+    "conditions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["at", "temperatureC", "apparentTemperatureC", "dewPointC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windGustKmh", "precipitationMm", "precipitationProbabilityPct", "pressureMslHpa", "cloudCoverPct", "visibilityM", "uvIndex", "daytime", "condition", "vapourPressureDeficitKpa", "evapotranspirationMm", "soilMoistureSurface", "soilMoistureShallow", "soilMoistureRootZone", "soilTemperatureC", "boundaryLayerHeightM", "capeJkg", "liftedIndex", "convectiveInhibitionJkg", "windSpeed80mKmh", "windDirection80mDeg", "shortwaveRadiationWm2", "showersMm", "snowfallCm"],
+      "properties": {
+        "at": {"$ref": "#/$defs/instantOrNull"},
+        "temperatureC": {"$ref": "#/$defs/num"}, "apparentTemperatureC": {"$ref": "#/$defs/num"}, "dewPointC": {"$ref": "#/$defs/num"},
+        "humidityPct": {"$ref": "#/$defs/int"}, "windSpeedKmh": {"$ref": "#/$defs/num"}, "windDirectionDeg": {"$ref": "#/$defs/int"},
+        "windGustKmh": {"$ref": "#/$defs/num"}, "precipitationMm": {"$ref": "#/$defs/num"}, "precipitationProbabilityPct": {"$ref": "#/$defs/int"},
+        "pressureMslHpa": {"$ref": "#/$defs/num"}, "cloudCoverPct": {"$ref": "#/$defs/int"}, "visibilityM": {"$ref": "#/$defs/num"},
+        "uvIndex": {"$ref": "#/$defs/num"}, "daytime": {"type": ["boolean", "null"]}, "condition": {"$ref": "#/$defs/str"},
+        "vapourPressureDeficitKpa": {"$ref": "#/$defs/num"}, "evapotranspirationMm": {"$ref": "#/$defs/num"},
+        "soilMoistureSurface": {"$ref": "#/$defs/num"}, "soilMoistureShallow": {"$ref": "#/$defs/num"}, "soilMoistureRootZone": {"$ref": "#/$defs/num"},
+        "soilTemperatureC": {"$ref": "#/$defs/num"}, "boundaryLayerHeightM": {"$ref": "#/$defs/num"}, "capeJkg": {"$ref": "#/$defs/num"},
+        "liftedIndex": {"$ref": "#/$defs/num"}, "convectiveInhibitionJkg": {"$ref": "#/$defs/num"}, "windSpeed80mKmh": {"$ref": "#/$defs/num"},
+        "windDirection80mDeg": {"$ref": "#/$defs/int"}, "shortwaveRadiationWm2": {"$ref": "#/$defs/num"}, "showersMm": {"$ref": "#/$defs/num"},
+        "snowfallCm": {"$ref": "#/$defs/num"}
+      }
+    },
+    "station": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "lat", "lon", "heightM", "distanceKm", "insideHexagon", "at", "temperatureC", "apparentTemperatureC", "dewPointC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windDirection", "windGustKmh", "pressureMslHpa", "rainSince9amMm", "rain24hMm", "maxTemperatureC", "minTemperatureC", "visibilityKm", "cloud"],
+      "properties": {
+        "id": {"type": "string"}, "name": {"type": "string"}, "lat": {"type": "number"}, "lon": {"type": "number"},
+        "heightM": {"$ref": "#/$defs/num"}, "distanceKm": {"$ref": "#/$defs/num"}, "insideHexagon": {"type": "boolean"},
+        "at": {"$ref": "#/$defs/instantOrNull"}, "temperatureC": {"$ref": "#/$defs/num"}, "apparentTemperatureC": {"$ref": "#/$defs/num"},
+        "dewPointC": {"$ref": "#/$defs/num"}, "humidityPct": {"$ref": "#/$defs/int"}, "windSpeedKmh": {"$ref": "#/$defs/num"},
+        "windDirectionDeg": {"$ref": "#/$defs/int"}, "windDirection": {"$ref": "#/$defs/str"}, "windGustKmh": {"$ref": "#/$defs/num"},
+        "pressureMslHpa": {"$ref": "#/$defs/num"}, "rainSince9amMm": {"$ref": "#/$defs/num"}, "rain24hMm": {"$ref": "#/$defs/num"},
+        "maxTemperatureC": {"$ref": "#/$defs/num"}, "minTemperatureC": {"$ref": "#/$defs/num"}, "visibilityKm": {"$ref": "#/$defs/num"},
+        "cloud": {"$ref": "#/$defs/str"}
+      }
+    },
+    "fire": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ffdi", "ffdiRating", "peakFfdi", "droughtFactor", "kbdiMm", "kbdiBand", "leads", "appliesToPct", "grass", "official", "wind", "fireWeatherWarning", "vapourPressureDeficitKpa", "soilMoistureSurface", "soilMoistureRootZone", "boundaryLayerHeightM", "windSpeed80mKmh", "windDirection80mDeg", "capeJkg", "liftedIndex"],
+      "properties": {
+        "ffdi": {"$ref": "#/$defs/num"},
+        "ffdiRating": {"enum": ["LOW-MODERATE", "HIGH", "VERY HIGH", "SEVERE", "EXTREME", "CATASTROPHIC", null]},
+        "peakFfdi": {"$ref": "#/$defs/num"}, "droughtFactor": {"$ref": "#/$defs/num"}, "kbdiMm": {"$ref": "#/$defs/num"},
+        "kbdiBand": {"enum": ["SATURATED", "MOIST", "DRYING", "DRY", "VERY DRY", "SEVERE", null]},
+        "leads": {"enum": ["forest", "grass", null]}, "appliesToPct": {"$ref": "#/$defs/int"},
+        "grass": {"oneOf": [{"$ref": "#/$defs/grass"}, {"type": "null"}]},
+        "official": {"oneOf": [{"$ref": "#/$defs/official"}, {"type": "null"}]},
+        "wind": {"oneOf": [{"$ref": "#/$defs/wind"}, {"type": "null"}]},
+        "fireWeatherWarning": {"type": "boolean"},
+        "vapourPressureDeficitKpa": {"$ref": "#/$defs/num"}, "soilMoistureSurface": {"$ref": "#/$defs/num"}, "soilMoistureRootZone": {"$ref": "#/$defs/num"},
+        "boundaryLayerHeightM": {"$ref": "#/$defs/num"}, "windSpeed80mKmh": {"$ref": "#/$defs/num"}, "windDirection80mDeg": {"$ref": "#/$defs/int"},
+        "capeJkg": {"$ref": "#/$defs/num"}, "liftedIndex": {"$ref": "#/$defs/num"}
+      }
+    },
+    "grass": {
+      "type": "object", "additionalProperties": false,
+      "required": ["curingPct", "curingEnteredOn", "fuelLoadTHa", "condition", "gfdi", "gfdiRating", "spreadKmh", "moisturePct", "rateOfSpreadKmh", "intensityKwm", "flameHeightM", "fbi", "afdrsRating"],
+      "properties": {
+        "curingPct": {"$ref": "#/$defs/int"}, "curingEnteredOn": {"$ref": "#/$defs/dateOrNull"}, "fuelLoadTHa": {"$ref": "#/$defs/num"},
+        "condition": {"enum": ["natural", "grazed", "eaten-out", null]},
+        "gfdi": {"$ref": "#/$defs/num"}, "gfdiRating": {"enum": ["LOW-MODERATE", "HIGH", "VERY HIGH", "SEVERE", "EXTREME", "CATASTROPHIC", null]},
+        "spreadKmh": {"$ref": "#/$defs/num"}, "moisturePct": {"$ref": "#/$defs/num"}, "rateOfSpreadKmh": {"$ref": "#/$defs/num"},
+        "intensityKwm": {"$ref": "#/$defs/int"}, "flameHeightM": {"$ref": "#/$defs/num"}, "fbi": {"$ref": "#/$defs/int"},
+        "afdrsRating": {"enum": ["No Rating", "Moderate", "High", "Extreme", "Catastrophic", null]}
+      }
+    },
+    "official": {
+      "type": "object", "additionalProperties": false,
+      "required": ["district", "rating", "fbi", "totalFireBan", "date", "from", "to", "days", "readAt"],
+      "properties": {
+        "district": {"$ref": "#/$defs/str"}, "rating": {"$ref": "#/$defs/str"}, "fbi": {"$ref": "#/$defs/int"},
+        "totalFireBan": {"type": "boolean"}, "date": {"$ref": "#/$defs/dateOrNull"},
+        "from": {"$ref": "#/$defs/instantOrNull"}, "to": {"$ref": "#/$defs/instantOrNull"},
+        "days": {"type": "array", "items": {"$ref": "#/$defs/officialDay"}}, "readAt": {"$ref": "#/$defs/instantOrNull"}
+      }
+    },
+    "officialDay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["day", "date", "rating", "fbi", "totalFireBan", "from", "to"],
+      "properties": {
+        "day": {"type": "integer"}, "date": {"$ref": "#/$defs/dateOrNull"}, "rating": {"$ref": "#/$defs/str"},
+        "fbi": {"$ref": "#/$defs/int"}, "totalFireBan": {"type": "boolean"},
+        "from": {"$ref": "#/$defs/instantOrNull"}, "to": {"$ref": "#/$defs/instantOrNull"}
+      }
+    },
+    "wind": {
+      "type": "object", "additionalProperties": false, "required": ["speedKmh", "directionDeg", "gustKmh", "band", "change"],
+      "properties": {
+        "speedKmh": {"$ref": "#/$defs/num"}, "directionDeg": {"$ref": "#/$defs/int"}, "gustKmh": {"$ref": "#/$defs/num"},
+        "band": {"enum": ["LIGHT", "MODERATE", "STRONG", "GALE", null]},
+        "change": {"oneOf": [{"$ref": "#/$defs/windChange"}, {"type": "null"}]}
+      }
+    },
+    "windChange": {
+      "type": "object", "additionalProperties": false, "required": ["at", "fromDeg", "toDeg", "speedKmh", "gustKmh"],
+      "properties": {
+        "at": {"$ref": "#/$defs/instant"}, "fromDeg": {"type": "integer"}, "toDeg": {"type": "integer"},
+        "speedKmh": {"type": "number"}, "gustKmh": {"$ref": "#/$defs/num"}
+      }
+    },
+    "flood": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rain1dMm", "rain2dMm", "rain3dMm", "rain7dMm", "forecastRain6hMm", "forecastRain12hMm", "forecastRain24hMm", "forecastRain48hMm", "forecastRain72hMm", "maxRainProbabilityPct", "soilMoistureSurface", "soilMoistureRootZone", "riverDischargeCumecs", "riverDischargeMeanCumecs", "dischargeRatioToMean", "riverTrend", "outlook"],
+      "properties": {
+        "rain1dMm": {"$ref": "#/$defs/num"}, "rain2dMm": {"$ref": "#/$defs/num"}, "rain3dMm": {"$ref": "#/$defs/num"}, "rain7dMm": {"$ref": "#/$defs/num"},
+        "forecastRain6hMm": {"$ref": "#/$defs/num"}, "forecastRain12hMm": {"$ref": "#/$defs/num"}, "forecastRain24hMm": {"$ref": "#/$defs/num"},
+        "forecastRain48hMm": {"$ref": "#/$defs/num"}, "forecastRain72hMm": {"$ref": "#/$defs/num"}, "maxRainProbabilityPct": {"$ref": "#/$defs/int"},
+        "soilMoistureSurface": {"$ref": "#/$defs/num"}, "soilMoistureRootZone": {"$ref": "#/$defs/num"},
+        "riverDischargeCumecs": {"$ref": "#/$defs/num"}, "riverDischargeMeanCumecs": {"$ref": "#/$defs/num"}, "dischargeRatioToMean": {"$ref": "#/$defs/num"},
+        "riverTrend": {"enum": ["RISING", "STEADY", "FALLING", null]},
+        "outlook": {"type": "array", "items": {"$ref": "#/$defs/floodDay"}}
+      }
+    },
+    "floodDay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["date", "rainMm", "rainProbabilityPct", "riverDischargeCumecs", "dischargeRatioToMean"],
+      "properties": {
+        "date": {"$ref": "#/$defs/dateOrNull"}, "rainMm": {"$ref": "#/$defs/num"}, "rainProbabilityPct": {"$ref": "#/$defs/int"},
+        "riverDischargeCumecs": {"$ref": "#/$defs/num"}, "dischargeRatioToMean": {"$ref": "#/$defs/num"}
+      }
+    },
+    "drought": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kbdiMm", "kbdiBand", "droughtFactor", "meanAnnualRainfallMm", "spunUpFrom", "computedFor", "days", "recentRainMm"],
+      "properties": {
+        "kbdiMm": {"type": "number"}, "kbdiBand": {"$ref": "#/$defs/str"}, "droughtFactor": {"type": "number"},
+        "meanAnnualRainfallMm": {"type": "number"}, "spunUpFrom": {"$ref": "#/$defs/dateOrNull"}, "computedFor": {"$ref": "#/$defs/dateOrNull"},
+        "days": {"type": "integer"}, "recentRainMm": {"type": "array", "items": {"$ref": "#/$defs/num"}}
+      }
+    },
+    "warning": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "phenomena", "headline", "hazard", "severity", "issuedAt", "from", "until", "link"],
+      "properties": {
+        "id": {"type": "string"}, "title": {"$ref": "#/$defs/str"}, "phenomena": {"$ref": "#/$defs/str"}, "headline": {"$ref": "#/$defs/str"},
+        "hazard": {"$ref": "#/$defs/str"}, "severity": {"$ref": "#/$defs/str"}, "issuedAt": {"$ref": "#/$defs/instantOrNull"},
+        "from": {"$ref": "#/$defs/instantOrNull"}, "until": {"$ref": "#/$defs/instantOrNull"}, "link": {"$ref": "#/$defs/str"}
+      }
+    },
+    "forecast": {
+      "type": "object", "additionalProperties": false, "required": ["days", "hours", "windChange"],
+      "properties": {
+        "days": {"type": "array", "items": {"$ref": "#/$defs/day"}},
+        "hours": {"type": "array", "items": {"$ref": "#/$defs/hour"}},
+        "windChange": {"oneOf": [{"$ref": "#/$defs/windChange"}, {"type": "null"}]}
+      }
+    },
+    "day": {
+      "type": "object", "additionalProperties": false,
+      "required": ["date", "maxTemperatureC", "minTemperatureC", "maxApparentTemperatureC", "minHumidityPct", "maxWindKmh", "maxGustKmh", "windDirectionDeg", "precipitationMm", "precipitationProbabilityPct", "uvIndexMax", "sunrise", "sunset", "condition", "fire", "flood"],
+      "properties": {
+        "date": {"$ref": "#/$defs/dateOrNull"}, "maxTemperatureC": {"$ref": "#/$defs/num"}, "minTemperatureC": {"$ref": "#/$defs/num"},
+        "maxApparentTemperatureC": {"$ref": "#/$defs/num"}, "minHumidityPct": {"$ref": "#/$defs/int"}, "maxWindKmh": {"$ref": "#/$defs/num"},
+        "maxGustKmh": {"$ref": "#/$defs/num"}, "windDirectionDeg": {"$ref": "#/$defs/int"}, "precipitationMm": {"$ref": "#/$defs/num"},
+        "precipitationProbabilityPct": {"$ref": "#/$defs/int"}, "uvIndexMax": {"$ref": "#/$defs/num"},
+        "sunrise": {"$ref": "#/$defs/instantOrNull"}, "sunset": {"$ref": "#/$defs/instantOrNull"}, "condition": {"$ref": "#/$defs/str"},
+        "fire": {"oneOf": [{"$ref": "#/$defs/dayFire"}, {"type": "null"}]},
+        "flood": {"oneOf": [{"$ref": "#/$defs/dayFlood"}, {"type": "null"}]}
+      }
+    },
+    "dayFire": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ffdi", "ffdiRating", "gfdi", "gfdiRating", "fbi", "afdrsRating", "kbdiMm", "droughtFactor", "maxTemperatureC", "minHumidityPct", "maxWindKmh", "maxGustKmh", "rainMm"],
+      "properties": {
+        "ffdi": {"$ref": "#/$defs/num"}, "ffdiRating": {"$ref": "#/$defs/str"}, "gfdi": {"$ref": "#/$defs/num"}, "gfdiRating": {"$ref": "#/$defs/str"},
+        "fbi": {"$ref": "#/$defs/int"}, "afdrsRating": {"$ref": "#/$defs/str"}, "kbdiMm": {"$ref": "#/$defs/num"}, "droughtFactor": {"$ref": "#/$defs/num"},
+        "maxTemperatureC": {"$ref": "#/$defs/num"}, "minHumidityPct": {"$ref": "#/$defs/int"}, "maxWindKmh": {"$ref": "#/$defs/num"},
+        "maxGustKmh": {"$ref": "#/$defs/num"}, "rainMm": {"$ref": "#/$defs/num"}
+      }
+    },
+    "dayFlood": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rainMm", "rainProbabilityPct", "riverDischargeCumecs", "dischargeRatioToMean"],
+      "properties": {
+        "rainMm": {"$ref": "#/$defs/num"}, "rainProbabilityPct": {"$ref": "#/$defs/int"},
+        "riverDischargeCumecs": {"$ref": "#/$defs/num"}, "dischargeRatioToMean": {"$ref": "#/$defs/num"}
+      }
+    },
+    "hour": {
+      "type": "object", "additionalProperties": false,
+      "required": ["at", "temperatureC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windGustKmh", "precipitationMm", "precipitationProbabilityPct", "condition", "fire"],
+      "properties": {
+        "at": {"$ref": "#/$defs/instant"}, "temperatureC": {"$ref": "#/$defs/num"}, "humidityPct": {"$ref": "#/$defs/int"},
+        "windSpeedKmh": {"$ref": "#/$defs/num"}, "windDirectionDeg": {"$ref": "#/$defs/int"}, "windGustKmh": {"$ref": "#/$defs/num"},
+        "precipitationMm": {"$ref": "#/$defs/num"}, "precipitationProbabilityPct": {"$ref": "#/$defs/int"}, "condition": {"$ref": "#/$defs/str"},
+        "fire": {"oneOf": [{"$ref": "#/$defs/hourFire"}, {"type": "null"}]}
+      }
+    },
+    "hourFire": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ffdi", "ffdiRating", "gfdi", "gfdiRating", "fbi", "afdrsRating", "droughtFactor"],
+      "properties": {
+        "ffdi": {"$ref": "#/$defs/num"}, "ffdiRating": {"$ref": "#/$defs/str"}, "gfdi": {"$ref": "#/$defs/num"}, "gfdiRating": {"$ref": "#/$defs/str"},
+        "fbi": {"$ref": "#/$defs/int"}, "afdrsRating": {"$ref": "#/$defs/str"}, "droughtFactor": {"type": "number"}
+      }
+    },
+    "history": {
+      "type": "object", "additionalProperties": false, "required": ["at", "askedAt", "incident", "requested"],
+      "properties": {
+        "at": {"$ref": "#/$defs/instantOrNull"}, "askedAt": {"$ref": "#/$defs/instantOrNull"},
+        "incident": {"$ref": "#/$defs/str"}, "requested": {"$ref": "#/$defs/instant"}
+      }
+    }
+  }
+}

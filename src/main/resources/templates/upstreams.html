@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html th:replace="~{layout :: page('Upstreams', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section>
+    <h1>Upstreams · spend, allowance, breakers</h1>
+    <div class="figures">
+        <div><div class="v" th:text="${held.hexagons}">0</div><div class="k">hexagons</div></div>
+        <div><div class="v" th:text="${held.active}">0</div><div class="k">active</div></div>
+        <div><div class="v" th:text="${held.served}">0</div><div class="k">served</div></div>
+        <div><div class="v" th:text="${held.fetched}">0</div><div class="k">fetched</div></div>
+        <div><div class="v" th:text="${held.inFlight}">0</div><div class="k">in flight</div></div>
+    </div>
+
+    <div th:each="u : ${upstreams}">
+        <h2><span th:text="${u.id}">open-meteo</span>
+            <span class="badge text-bg-success" th:if="${u.usable}">ready</span>
+            <span class="badge text-bg-secondary" th:unless="${u.configured}">unconfigured</span>
+            <span class="badge text-bg-warning" th:if="${u.configured and !u.withinBudget}">held</span>
+            <span class="badge text-bg-danger" th:if="${u.breaker.openUntil != null}">paused</span>
+            <span class="badge text-bg-dark" th:if="${u.bills}">bills</span>
+        </h2>
+        <table class="table kv w-auto">
+            <tr><th>model</th><td class="mono" th:text="${u.model}"></td></tr>
+            <tr><th>units per fetch</th><td class="num" th:text="${u.unitsPerFetch}"></td></tr>
+            <tr><th>limits</th><td class="mono" th:text="${fmt.n(u.limits?.perMinute)} + '/min · ' + ${fmt.n(u.limits?.perHour)} + '/h · ' + ${fmt.n(u.limits?.perDay)} + '/day · ' + ${fmt.n(u.limits?.perMonth)} + '/month'"></td></tr>
+            <tr><th>spent</th><td class="mono" th:text="${u.spent['minute']} + ' this minute · ' + ${u.spent['hour']} + ' this hour · ' + ${u.spent['day']} + ' today · ' + ${u.spent['month']} + ' this month'"></td></tr>
+            <tr><th>today</th><td>
+                <span class="meter"><i th:classappend="${u.dayFraction > 0.9} ? 'bad' : (${u.dayFraction > 0.6} ? 'warn' : '')" th:style="'width:' + ${u.dayFraction * 100} + '%'"></i></span>
+                <span class="mono" th:text="${#numbers.formatDecimal(u.dayFraction * 100, 1, 1)} + '% of the day\'s allowance'"></span></td></tr>
+            <tr><th>this month</th><td>
+                <span class="meter"><i th:classappend="${u.monthFraction > 0.9} ? 'bad' : (${u.monthFraction > 0.6} ? 'warn' : '')" th:style="'width:' + ${u.monthFraction * 100} + '%'"></i></span>
+                <span class="mono" th:text="${#numbers.formatDecimal(u.monthFraction * 100, 1, 1)} + '%'"></span></td></tr>
+            <tr><th>budget</th><td th:text="${u.configured} ? ${u.budgetReason} : ${u.unavailableReason}"></td></tr>
+            <tr><th>breaker</th><td>
+                <span th:if="${u.breaker.openUntil != null}" th:text="'open until ' + ${fmt.utc(u.breaker.openUntil)} + ' after ' + ${u.breaker.lastFailure}"></span>
+                <span th:if="${u.breaker.openUntil == null}" th:text="'closed · ' + ${u.breaker.consecutiveFailures} + ' consecutive failures · ' + ${u.breaker.openings} + ' openings this run'"></span>
+                <span class="muted" th:if="${u.breaker.lastFailureAt != null}" th:text="' · last failure ' + ${fmt.ago(u.breaker.lastFailureAt)} + ': ' + ${u.breaker.lastFailure}"></span></td></tr>
+            <tr><th>calls in last minute</th><td class="num" th:text="${u.callsInLastMinute}"></td></tr>
+        </table>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="muted small">last 24 hours, units per hour (max <span th:text="${hourMax[u.id]}"></span>)</div>
+                <div class="bars">
+                    <i th:each="h : ${hourly[u.id]}" th:classappend="${h.units == 0} ? 'zero' : (${h.failures > 0} ? 'over' : '')"
+                       th:style="'height:' + ${#numbers.formatDecimal(100.0 * h.units / hourMax[u.id], 0, 0)} + '%'"
+                       th:title="${fmt.utc(h.hour)} + ': ' + ${h.units} + ' units, ' + ${h.calls} + ' calls, ' + ${h.failures} + ' failed'"></i>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="muted small">last 31 days, units per UTC day against the daily allowance (<span th:text="${fmt.n(u.limits?.perDay)}"></span>)</div>
+                <div class="bars">
+                    <i th:each="d : ${daily[u.id]}" th:classappend="${d.units == 0} ? 'zero' : (${u.limits?.perDay != null and d.units > u.limits.perDay * 0.9} ? 'over' : '')"
+                       th:style="'height:' + ${#numbers.formatDecimal(100.0 * d.units / dayMax[u.id], 0, 0)} + '%'"
+                       th:title="${d.date} + ': ' + ${d.units} + ' units'"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Breaker history</h2>
+    <table class="table w-auto" th:unless="${#lists.isEmpty(breakerHistory)}">
+        <thead><tr><th>at</th><th>upstream</th><th>what</th><th>reason</th></tr></thead>
+        <tbody>
+        <tr th:each="e : ${breakerHistory}">
+            <td class="mono" th:text="${fmt.utc(e.at)}"></td>
+            <td th:text="${e.upstream}"></td>
+            <td th:text="${e.what}"></td>
+            <td th:text="${e.reason}"></td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="muted" th:if="${#lists.isEmpty(breakerHistory)}">No breaker has opened this run.</p>
+
+    <h2>Sources</h2>
+    <table class="table kv w-auto">
+        <tr><th>Bureau stations</th><td><span th:text="${sources.bureau.stations}"></span> stations · updated <span th:text="${fmt.ago(sources.bureau.lastUpdateAt)}"></span></td></tr>
+        <tr th:each="f : ${sources.bureau.files}"><th th:text="'  ' + ${f.key}"></th>
+            <td><span th:text="${f.value.stations}"></span> stations · read <span th:text="${fmt.ago(f.value.readAt)}"></span> · checked <span th:text="${fmt.ago(f.value.checkedAt)}"></span>
+                <span class="text-danger" th:if="${f.value.failure != null}" th:text="' · ' + ${f.value.failure}"></span></td></tr>
+        <tr><th>Bureau warnings</th><td><span th:text="${sources.bureau.warnings}"></span> current · polled <span th:text="${fmt.ago(sources.bureau.warningsPolledAt)}"></span>
+            <span class="text-danger" th:unless="${#maps.isEmpty(sources.bureau.warningFailures)}" th:text="' · ' + ${sources.bureau.warningFailures}"></span></td></tr>
+        <tr><th>CFS ratings</th><td><span th:text="${sources.cfs.districts}"></span> districts · read <span th:text="${fmt.ago(sources.cfs.ratingsReadAt)}"></span>
+            <span class="text-danger" th:if="${sources.cfs.ratingsFailure != null}" th:text="' · ' + ${sources.cfs.ratingsFailure}"></span></td></tr>
+        <tr><th>CFS district shapes</th><td>read <span th:text="${fmt.ago(sources.cfs.districtShapesReadAt)}"></span>
+            <span class="text-danger" th:if="${sources.cfs.districtShapesFailure != null}" th:text="' · ' + ${sources.cfs.districtShapesFailure}"></span></td></tr>
+        <tr><th>curing</th><td><span th:text="${sources.cfs.curingDistricts}"></span> districts have a figure</td></tr>
+        <tr><th>terrain</th><td>elevation <span th:text="${fmt.n(sources.terrain.elevationFile)}"></span> · land cover <span th:text="${fmt.n(sources.terrain.landCoverFile)}"></span></td></tr>
+    </table>
+
+    <h2>Recent calls</h2>
+    <table class="table">
+        <thead><tr><th>at</th><th>upstream</th><th class="num">units</th><th>ok</th><th class="num">ms</th><th>detail</th></tr></thead>
+        <tbody>
+        <tr th:each="c : ${recent}">
+            <td class="mono" th:text="${fmt.utc(c['at'])}"></td>
+            <td th:text="${c['upstream']}"></td>
+            <td class="num" th:text="${c['units']}"></td>
+            <td th:text="${c['ok']} ? 'ok' : 'failed'" th:classappend="${c['ok']} ? '' : 'text-danger'"></td>
+            <td class="num" th:text="${fmt.n(c['latency_ms'])}"></td>
+            <td class="wrap" th:text="${c['detail']}"></td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+</body>
+</html>

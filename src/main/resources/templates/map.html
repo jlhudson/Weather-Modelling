@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html th:replace="~{layout :: page('Map', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section>
+    <div class="map-tools">
+        <label>Colour by
+            <select class="form-select form-select-sm" id="value">
+                <option value="temperatureC">temperature °C</option>
+                <option value="humidityPct">humidity %</option>
+                <option value="windSpeedKmh">wind km/h</option>
+                <option value="windGustKmh">gust km/h</option>
+                <option value="ffdi" selected>FFDI</option>
+                <option value="gfdi">GFDI</option>
+                <option value="fbi">FBI (AFDRS grass)</option>
+                <option value="officialRating">official rating</option>
+                <option value="droughtFactor">drought factor</option>
+                <option value="kbdiMm">KBDI mm</option>
+                <option value="curingPct">curing %</option>
+                <option value="ageMinutes">age min</option>
+                <option value="elevationM">elevation m</option>
+                <option value="leads">land use leads</option>
+                <option value="kind">kind</option>
+            </select>
+        </label>
+        <label><input class="form-check-input" id="grid" type="checkbox"> every hexagon</label>
+        <label><input class="form-check-input" id="stations" type="checkbox" checked> stations</label>
+        <label>Time
+            <input id="time" max="0" min="-168" step="1" type="range" value="0">
+            <span class="mono" id="timeLabel">now</span>
+        </label>
+        <button class="btn btn-sm btn-outline-secondary py-0" id="now" type="button">now</button>
+        <span class="muted" id="status"></span>
+        <span class="legend ms-auto" id="legend"></span>
+    </div>
+    <div class="position-relative">
+        <div id="map"></div>
+        <div class="hidden" id="detail"></div>
+    </div>
+    <p class="muted mb-0 mt-1">
+        <span th:text="${hexagons}">0</span> hexagons held (<span th:text="${cellKm}">15</span> km) ·
+        <span th:text="${stations}">0</span> stations · <span th:text="${warnings}">0</span> warnings ·
+        the map draws what is held and never fetches; <em>probe</em> on a point asks for it.
+    </p>
+    <script th:src="@{/js/map.js}"></script>
+</section>
+</body>
+</html>

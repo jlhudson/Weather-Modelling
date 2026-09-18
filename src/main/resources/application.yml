@@ -1,67 +1,55 @@
-# One configuration, one environment (D-114), and as close to empty as it can be (D-147).
-#
-# Every tuning parameter this application has carries its default in the class that reads it, as a
-# @DefaultValue on a @ConfigurationProperties record. What is left here is Spring's own wiring plus the
-# handful of values that genuinely differ between one machine and the next - and each of those reads an
-# environment variable. Secrets arrive from .env, never from this file (D-101).
-#
-# To change a tuning value, read the record: WeatherProperties, WeatherAppProperties, TerrainProperties,
-# DiagnosticsProperties. Any key they declare can be set here to override the default, and none of them
-# needs to be.
+# One configuration, one environment, and as close to empty as it can be. Every setting this service
+# has carries its default in GullyProperties (or TerrainProperties, DiagnosticsProperties) and is
+# printed once at startup; what is here is Spring's own wiring plus the handful of values that differ
+# between one machine and the next, each read from an environment variable. Secrets never appear here.
 spring:
   application:
-    name: weather
+    name: gully
   threads:
     virtual:
       enabled: true
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/weather}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5435/weather}
     username: ${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:weather}}
     password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:change-me}}
     hikari:
       maximum-pool-size: 10
       connection-timeout: 10000
-  # Flyway owns the changes ddl-auto cannot make, and nothing else (src/main/resources/db/migration/README.md).
-  # Hibernate still creates tables and adds nullable columns; a migration runs first and is written to
-  # no-op when its table is not there yet, so a fresh database and a populated one reach the same schema.
-  #
-  # baseline-version is 0 so that both do. With the default of 1, V1 would run on an empty database and
-  # be skipped on the live one, which is the asymmetry that makes hybrid setups go wrong.
+  # Flyway owns the schema (db/migration). baseline-version 0 so V1 runs on a database the old
+  # service's Hibernate built as well as on an empty one.
   flyway:
     enabled: true
     baseline-on-migrate: true
     baseline-version: 0
-    baseline-description: the schema Hibernate built
+    baseline-description: before Gully
     locations: classpath:db/migration
-  jpa:
-    # Hibernate owns table creation while the schema is still growing (D-091, D-115); Flyway owns the
-    # alterations it cannot perform (D-206). Never validate here until every table has a migration.
-    hibernate:
-      ddl-auto: update
-    open-in-view: false
-    properties:
-      hibernate:
-        jdbc:
-          batch_size: 100
-          time_zone: UTC
-        order_inserts: true
-        order_updates: true
-        query:
-          fail_on_pagination_over_collection_fetch: true
-      # Note: do not add jakarta.persistence.schema-generation.* here. In Hibernate those properties take
-      # precedence over ddl-auto and silently switch database DDL off. The entities are still the schema;
-      # a change update cannot make is a migration rather than a database reset (D-206).
   thymeleaf:
-    cache: false
+    cache: true
   http:
     clients:
       connect-timeout: 10s
       read-timeout: 30s
+  mvc:
+    problemdetails:
+      enabled: true
+  jackson:
+    default-property-inclusion: always
 
 server:
   port: 8082
   shutdown: graceful
   forward-headers-strategy: framework
+  compression:
+    enabled: true
+    mime-types: application/json, application/geo+json, application/problem+json, application/schema+json, text/html, text/css, application/javascript
+    min-response-size: 1024
+
+springdoc:
+  api-docs:
+    path: /api/v1/openapi.json
+  paths-to-match: /api/v1/**
+  swagger-ui:
+    enabled: false
 
 management:
   endpoints:
@@ -73,6 +61,12 @@ management:
       probes:
         enabled: true
       show-details: when-authorized
+      # A dead database shows as a restarting container, which is what we want (docs/06 item 11).
+      group:
+        readiness:
+          include: readinessState, db
+        liveness:
+          include: livenessState
   health:
     readinessstate:
       enabled: true
@@ -80,32 +74,29 @@ management:
       enabled: true
 
 logging:
-  # Spring's default prefix is a hundred characters - the PID, the application name in brackets, a
-  # forty-column logger - before the first word that matters. What a line needs is when, how loud,
-  # which thread and who said it; the class name alone is enough to find it.
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%-20.20t] %-30.30logger{0} : %m%n%wEx"
+  # Structured JSON in production: set LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs (compose.yaml does).
+  structured:
+    format:
+      console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:}
   level:
-    au.weather: INFO
-    # The frameworks announce themselves in twenty lines nobody reads on a healthy boot (D-194). They may
-    # still warn. One exception keeps its INFO: the web server, whose one line names the port. "Starting"
-    # and "Started" are logged under au.weather.WeatherApplication and stay.
+    au.gully: INFO
     org.springframework: WARN
     org.springframework.boot.tomcat.TomcatWebServer: INFO
-    org.hibernate: WARN
     org.apache: WARN
     com.zaxxer.hikari: WARN
+    org.flywaydb: WARN
 
-# The few that are a property of the machine rather than of the system. Everything else this
-# application can be told is in the properties records, with its default and the reason for it.
-#
-# weather.app is a separate prefix from weather on purpose: WeatherProperties binds `weather`, and two
-# records on one prefix only works in Boot while their key sets do not overlap. See WeatherAppProperties.
-weather:
-  app:
-    console:
-      code: ${WEATHER_CONSOLE_CODE:12345678}
-    api:
-      cors-origins: ${WEATHER_CORS_ORIGINS:}
-  # MET Norway blocks callers who do not identify themselves. Put a real contact here in production.
+# The few that are a property of the machine rather than of the system.
+gully:
   contact: ${WEATHER_CONTACT:https://github.com/jlhudson/Weather-Modelling}
+  console:
+    code: ${WEATHER_CONSOLE_CODE:12345678}
+  api:
+    cors-origins: ${WEATHER_CORS_ORIGINS:}
+  history:
+    backups: ${WEATHER_BACKUPS_DIR:}
+  terrain:
+    elevation-file: ${WEATHER_ELEVATION_FILE:}
+    land-cover-file: ${WEATHER_LAND_COVER_FILE:}

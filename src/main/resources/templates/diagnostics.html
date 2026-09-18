@@ -2,117 +2,82 @@
 <html th:replace="~{layout :: page('Diagnostics', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
 <body>
 <section>
-    <div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
-        <div>
-            <h1 class="h4 mb-1">Diagnostics</h1>
-            <p class="text-secondary mb-0">What the morning agent reads (docs/26, D-234): the startup record, the
-                weather block, and <strong>every warning and error this application has logged</strong>
-                as one row per signature — errors kept <span th:text="${fmt.human(retention.keepErrors())}"></span>,
-                warnings <span th:text="${fmt.human(retention.keepWarnings())}"></span>, from when each was last seen.
-                Clearing deletes, so the next read holds only what happened since.</p>
-        </div>
-        <form class="d-flex gap-2 align-items-center flex-wrap" method="get" th:action="@{/console/diagnostics}">
-            <select class="form-select form-select-sm" name="window" style="width:auto">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <h1>Diagnostics</h1>
+        <form class="d-flex gap-1" method="get" th:action="@{/console/diagnostics}">
+            <select class="form-select form-select-sm w-auto" name="window">
                 <option th:each="w : ${windows}" th:selected="${w.key == window}" th:text="${w.value}" th:value="${w.key}"></option>
             </select>
-            <select class="form-select form-select-sm" name="level" style="width:auto">
+            <select class="form-select form-select-sm w-auto" name="level">
                 <option th:selected="${level == null}" value="">warnings and errors</option>
                 <option th:selected="${level == 'ERROR'}" value="ERROR">errors only</option>
                 <option th:selected="${level == 'WARN'}" value="WARN">warnings only</option>
             </select>
-            <button class="btn btn-sm btn-outline-secondary">Read</button>
+            <button class="btn btn-sm btn-outline-secondary py-0">Read</button>
         </form>
     </div>
+    <div class="alert alert-success py-1 my-2" th:if="${cleared != null}"><span th:text="${cleared}"></span> cleared.</div>
 
-    <div class="alert alert-success py-2" th:if="${cleared != null}">
-        <span th:text="${cleared}"></span> signature<span th:unless="${cleared == 1}">s</span> cleared.
+    <div class="figures">
+        <div><div class="v" th:text="${uptime}">0</div><div class="k">up</div></div>
+        <div><div class="v" th:text="${summary.logs.errors}">0</div><div class="k">errors in window</div></div>
+        <div><div class="v" th:text="${summary.logs.warnings}">0</div><div class="k">warnings in window</div></div>
+        <div><div class="v" th:text="${summary.logs.held}">0</div><div class="k">signatures held</div></div>
+        <div><div class="v" th:text="${summary.logs.capture.dropped}">0</div><div class="k">dropped</div></div>
+        <div><div class="v" th:text="${summary.gully.held.hexagons}">0</div><div class="k">hexagons</div></div>
+        <div><div class="v" th:text="${summary.gully.held.snapshots}">0</div><div class="k">snapshots</div></div>
     </div>
 
-    <div class="row g-2 mb-3">
-        <div class="col-6 col-lg-3">
-            <div class="card h-100"><div class="card-body py-2">
-                <div class="small text-secondary">App</div>
-                <div>ready <span th:text="${fmt.ago(summary.app.readyAt)}"></span></div>
-                <div class="small text-secondary">up <span th:text="${uptime}"></span>
-                    <span class="text-danger" th:unless="${#lists.isEmpty(summary.startup.failed)}"> · <span th:text="${#lists.size(summary.startup.failed)}"></span> phase(s) failed</span></div>
-            </div></div>
-        </div>
-        <div class="col-6 col-lg-3">
-            <div class="card h-100"><div class="card-body py-2">
-                <div class="small text-secondary">Providers</div>
-                <div><span th:text="${#lists.size(summary.weather.providers)}"></span> in the chain</div>
-                <div class="small text-secondary"><span th:each="p, i : ${summary.weather.providers}"><span
-                        th:classappend="${p.usable} ? 'text-success' : 'text-danger'" th:text="${p.id}"></span><span
-                        th:unless="${i.last}"> · </span></span></div>
-            </div></div>
-        </div>
-        <div class="col-6 col-lg-3">
-            <div class="card h-100"><div class="card-body py-2">
-                <div class="small text-secondary">Log, in the window</div>
-                <div><span class="badge text-bg-danger" th:text="${summary.logs.errors}"></span> errors
-                    <span class="badge text-bg-warning text-dark" th:text="${summary.logs.warnings}"></span> warnings</div>
-                <div class="small text-secondary"><span th:text="${summary.logs.held}"></span> signatures held in all ·
-                    <span th:text="${summary.logs.capture.waiting}"></span> waiting
-                    <span class="text-danger" th:if="${summary.logs.capture.dropped > 0}" th:text="'· ' + ${summary.logs.capture.dropped} + ' dropped'"></span></div>
-            </div></div>
-        </div>
-        <div class="col-6 col-lg-3">
-            <div class="card h-100"><div class="card-body py-2">
-                <div class="small text-secondary">Cache</div>
-                <div><span th:text="${summary.weather.cache.anchors}"></span> anchors ·
-                    <span th:text="${summary.weather.cache.hitRate}"></span>% hit</div>
-                <div class="small text-secondary">reach <span th:text="${summary.weather.cache.reachKm}"></span> km ·
-                    <span th:text="${summary.weather.droughtCells}"></span> drought ·
-                    <span th:text="${summary.weather.riverCells}"></span> river</div>
-            </div></div>
-        </div>
+    <div class="alert alert-danger py-1" th:unless="${#lists.isEmpty(summary.startup.failed)}">
+        <strong>Startup steps failed:</strong> <span th:each="f : ${summary.startup.failed}" th:text="${f} + ' '"></span>
     </div>
 
-    <div class="alert alert-danger py-2" th:unless="${#lists.isEmpty(summary.startup.failed)}">
-        <strong>Startup phases failed:</strong>
-        <ul class="mb-0"><li th:each="f : ${summary.startup.failed}" th:text="${f}"></li></ul>
-    </div>
+    <h2>Upstreams</h2>
+    <table class="table w-auto">
+        <thead><tr><th>upstream</th><th>usable</th><th>why not</th><th class="num">today</th><th class="num">month</th><th>breaker</th></tr></thead>
+        <tbody>
+        <tr th:each="u : ${summary.gully.upstreams}">
+            <td th:text="${u.id}"></td>
+            <td th:classappend="${u.usable} ? 'text-success' : 'text-danger'" th:text="${u.usable} ? 'yes' : 'no'"></td>
+            <td th:text="${u.configured} ? ${u.budgetReason} : ${u.unavailableReason}"></td>
+            <td class="num" th:text="${u.spent['day']}"></td>
+            <td class="num" th:text="${u.spent['month']}"></td>
+            <td th:text="${u.breaker.open} ? 'open until ' + ${fmt.utc(u.breaker.openUntil)} : 'closed'"></td>
+        </tr>
+        </tbody>
+    </table>
 
-    <h2 class="h6 mt-3">The governor, as it stands</h2>
-    <p class="small text-secondary" th:text="${summary.weather.tuning.reason}"></p>
-
-    <div class="d-flex justify-content-between align-items-end mt-3 mb-1 flex-wrap gap-2">
-        <h2 class="h6 mb-0">Warnings and errors — one row per signature, most recent first</h2>
-        <div class="d-flex gap-2">
-            <form method="post" th:action="@{/console/diagnostics/logs/clear}">
-                <input name="level" th:value="${level}" type="hidden">
-                <input name="window" th:value="${window}" type="hidden">
-                <input name="before" th:value="${summary.generatedAt}" type="hidden">
-                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Clear every signature shown, as read at this moment? Lines that arrive afterwards stay.')"
-                        th:disabled="${#lists.isEmpty(events)}">Clear what is shown</button>
-            </form>
-        </div>
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mt-3">
+        <h2 class="mb-0">Warnings and errors — one row per signature, most recent first</h2>
+        <form method="post" th:action="@{/console/diagnostics/logs/clear}">
+            <input name="level" th:value="${level}" type="hidden">
+            <input name="window" th:value="${window}" type="hidden">
+            <input name="before" th:value="${now}" type="hidden">
+            <button class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('Clear every signature shown?')" th:disabled="${#lists.isEmpty(events)}">Clear what is shown</button>
+        </form>
     </div>
-    <p class="text-secondary small" th:if="${#lists.isEmpty(events)}">Nothing in the window.</p>
-    <table class="table table-sm table-hover small align-middle" th:unless="${#lists.isEmpty(events)}">
-        <thead>
-        <tr><th></th><th>Count</th><th>Last</th><th>First</th><th>Where</th><th>Signature</th><th></th></tr>
-        </thead>
+    <p class="muted" th:if="${#lists.isEmpty(events)}">Nothing in the window.</p>
+    <table class="table" th:unless="${#lists.isEmpty(events)}">
+        <thead><tr><th></th><th class="num">count</th><th>last</th><th>first</th><th>where</th><th>signature</th><th></th></tr></thead>
         <tbody>
         <tr th:each="e : ${events}">
-            <td><span class="badge" th:classappend="${e.level == 'ERROR'} ? 'text-bg-danger' : 'text-bg-warning text-dark'" th:text="${e.level}"></span></td>
-            <td class="text-end" th:text="${e.count}"></td>
-            <td th:text="${fmt.ago(e.lastSeenAt)}" th:title="${e.lastSeenAt}"></td>
-            <td th:text="${fmt.ago(e.firstSeenAt)}" th:title="${e.firstSeenAt}"></td>
-            <td><code th:text="${e.shortLogger()}" th:title="${e.logger}"></code>
-                <div class="text-secondary" th:text="${e.thread}"></div></td>
+            <td><span class="badge" th:classappend="${e.level == 'ERROR'} ? 'text-bg-danger' : 'text-bg-warning'" th:text="${e.level}"></span></td>
+            <td class="num" th:text="${e.count}"></td>
+            <td class="mono" th:text="${fmt.ago(e.lastSeenAt)}" th:title="${e.lastSeenAt}"></td>
+            <td class="mono" th:text="${fmt.ago(e.firstSeenAt)}" th:title="${e.firstSeenAt}"></td>
+            <td><code th:text="${e.shortLogger()}" th:title="${e.logger}"></code><div class="muted" th:text="${e.thread}"></div></td>
             <td style="max-width:40rem">
                 <details>
                     <summary th:text="${e.pattern}"></summary>
-                    <div class="mt-1"><span class="text-secondary">latest:</span> <span th:text="${e.message}"></span></div>
-                    <div class="mt-1" th:if="${e.exception != null}"><span class="text-secondary">exception:</span> <code th:text="${e.exception}"></code></div>
-                    <pre class="mt-1 mb-0 small bg-body-tertiary p-2" style="white-space:pre-wrap" th:if="${e.trace != null}" th:text="${e.trace}"></pre>
+                    <div class="mt-1"><span class="muted">latest:</span> <span th:text="${e.message}"></span></div>
+                    <div class="mt-1" th:if="${e.exception != null}"><span class="muted">exception:</span> <code th:text="${e.exception}"></code></div>
+                    <pre class="mt-1 mb-0 small wrap" th:if="${e.trace != null}" th:text="${e.trace}"></pre>
                 </details>
             </td>
-            <td class="text-end">
+            <td>
                 <form class="d-inline" method="post" th:action="@{/console/diagnostics/logs/{id}/clear(id=${e.id})}">
                     <input name="window" th:value="${window}" type="hidden">
-                    <button class="btn btn-sm btn-outline-secondary" title="Delete this signature; it comes back as a new row if it recurs">×</button>
+                    <button class="btn btn-sm btn-outline-secondary py-0" title="Delete this signature">×</button>
                 </form>
             </td>
         </tr>
@@ -120,26 +85,20 @@
     </table>
 
     <details class="mt-3">
-        <summary class="h6 text-secondary">Startup phases, this start</summary>
-        <table class="table table-sm small mt-2">
-            <thead><tr><th>Phase</th><th>Step</th><th>Took</th><th>Outcome</th></tr></thead>
+        <summary class="muted">Startup steps, this start</summary>
+        <table class="table w-auto mt-1">
+            <thead><tr><th>phase</th><th>step</th><th class="num">ms</th><th>outcome</th></tr></thead>
             <tbody>
             <tr th:each="p : ${summary.startup.phases}">
-                <td th:text="${p.phase}"></td><td th:text="${p.name}"></td><td th:text="${p.millis} + ' ms'"></td>
+                <td th:text="${p.phase}"></td><td th:text="${p.name}"></td><td class="num" th:text="${p.millis}"></td>
                 <td th:classappend="${#strings.startsWith(p.outcome, 'FAILED')} ? 'text-danger'" th:text="${p.outcome}"></td>
             </tr>
             </tbody>
         </table>
     </details>
-
-    <h2 class="h6 mt-3">As the agent reads it</h2>
-    <p class="small text-secondary mb-1">The same payloads the API serves under <code>/api/diagnostics</code> with a key, here behind the console login:
-        <a th:href="@{/console/diagnostics/summary.json(window=${window})}">summary.json</a> ·
-        <a th:href="@{/console/diagnostics/logs.json(window=${window},level=${level})}">logs.json</a>.</p>
-    <p class="small text-secondary">The API: <code>GET /api/diagnostics?window=</code> ·
-        <code>GET /api/diagnostics/logs?level=&amp;window=</code> · <code>GET /api/diagnostics/logs/{id}</code> ·
-        <code>DELETE /api/diagnostics/logs?before=</code>. The same shape as the Hub's and Operations'
-        (docs/27 27.11.6), so one agent reads all three.</p>
+    <p class="muted mt-2">As the agent reads it: <a th:href="@{/console/diagnostics/summary.json(window=${window})}">summary.json</a> ·
+        the API: <code>GET /api/diagnostics?window=</code> · <code>GET /api/diagnostics/logs?level=&amp;window=</code> ·
+        <code>DELETE /api/diagnostics/logs?before=</code>.</p>
 </section>
 </body>
 </html>

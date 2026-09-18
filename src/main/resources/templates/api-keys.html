@@ -2,37 +2,23 @@
 <html th:replace="~{layout :: page('API keys', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
 <body>
 <section>
-    <h1 class="h4">API keys</h1>
-    <p class="text-secondary">One key per consumer, rotatable and revocable individually. A key grants everything for
-                              now; the scope column exists. Send it as <code>X-Api-Key</code> or <code>Authorization:
-                                                                                                       Bearer</code>,
-                              never in the URL. Every read is logged, and every key is held to 600 requests a minute so
-                              one consumer's bug cannot take out the others.</p>
-    <div class="alert alert-success" th:if="${issued != null}">
-        Key for <strong th:text="${issued.key.consumer}"></strong>, shown once: <code class="user-select-all"
-                                                                                      th:text="${issued.plaintext}"></code>
+    <h1>API keys</h1>
+    <p class="muted">One key per consumer, with a scope. Sent as <code>X-Api-Key</code> or <code>Authorization: Bearer</code>,
+        never in the URL. Every read is logged; every key answers the <code>RateLimit-*</code> headers and stops at its
+        daily cap. Scopes: ALL; READINGS (readings, fire-indices, status, spend); LAYER (the hexagons); DIAGNOSTICS.</p>
+    <div class="alert alert-success py-1" th:if="${issued != null}">
+        Key for <strong th:text="${issued.key.consumer}"></strong> (<span th:text="${issued.key.scope}"></span>), shown once:
+        <code class="user-select-all" th:text="${issued.plaintext}"></code>
     </div>
-    <div class="alert alert-success py-2" th:if="${message}" th:text="${message}"></div>
-    <div class="alert alert-danger py-2" th:if="${error}" th:text="${error}"></div>
-    <form class="row g-2 mb-3" method="post" th:action="@{/console/api-keys}">
-        <div class="col-auto"><input class="form-control form-control-sm" name="consumer"
-                                     placeholder="consumer, e.g. firebuddy" required></div>
-        <div class="col-auto">
-            <button class="btn btn-sm btn-primary">Issue key</button>
-        </div>
+    <form class="d-flex gap-1 mb-2" method="post" th:action="@{/console/api-keys}">
+        <input class="form-control form-control-sm w-auto" name="consumer" placeholder="consumer, e.g. hub" required>
+        <select class="form-select form-select-sm w-auto" name="scope">
+            <option th:each="s : ${scopes}" th:text="${s}" th:value="${s}"></option>
+        </select>
+        <button class="btn btn-sm btn-primary py-0">Issue</button>
     </form>
-    <table class="table table-sm align-middle">
-        <thead>
-        <tr>
-            <th>Consumer</th>
-            <th>Prefix</th>
-            <th>Scope</th>
-            <th>Created</th>
-            <th>Last used</th>
-            <th>State</th>
-            <th></th>
-        </tr>
-        </thead>
+    <table class="table w-auto">
+        <thead><tr><th>consumer</th><th>prefix</th><th>scope</th><th>created</th><th>last used</th><th>state</th><th></th></tr></thead>
         <tbody>
         <tr th:each="k : ${keys}">
             <td th:text="${k.consumer}"></td>
@@ -43,14 +29,11 @@
             <td th:text="${k.active()} ? 'active' : 'revoked ' + ${fmt.ago(k.revokedAt)}"></td>
             <td>
                 <form method="post" th:action="@{/console/api-keys/{id}/revoke(id=${k.id})}" th:if="${k.active()}">
-                    <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Revoke this key?')">Revoke
-                    </button>
+                    <button class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('Revoke this key?')">Revoke</button>
                 </form>
             </td>
         </tr>
-        <tr th:if="${#lists.isEmpty(keys)}">
-            <td class="text-secondary" colspan="7">No keys issued. Issue one to call <code>/api/weather</code>.</td>
-        </tr>
+        <tr th:if="${#lists.isEmpty(keys)}"><td class="muted" colspan="7">No keys issued.</td></tr>
         </tbody>
     </table>
 </section>

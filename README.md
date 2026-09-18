@@ -1,89 +1,83 @@
-# Weather
+# Gully
 
-One point in, the weather out.
+The weather, and the fire danger, at a point — now, or at a time.
 
-A standalone Spring Boot service holding what used to be the weather half of
-[The Hub Database](https://github.com/jlhudson/The-Hub-Database): an anchor cache that answers most
-readings without a call, a chain of forecast providers with a ledger and a governor over their free
-allowances, a 365-day drought spin-up behind the fire indices, and GloFAS river discharge behind the
-flood block. It was split out under D-242 — three applications, three databases, HTTP between them —
-and D-249: this service holds the cache, the Hub holds the question of when to ask. Since D-252 the
-Hub keeps no fallback: an incident this service does not answer for is *owed* a reading and is asked
-about again on every sweep until it gets one.
+Gully is the overhaul of the Weather service that was split out of [The Hub Database](https://github.com/jlhudson/The-Hub-Database)
+(its D-242, D-249 and D-252), rebuilt to the catalogue in [docs/06-overhaul.md](docs/06-overhaul.md) on
+19 September 2026, every item. The name is the Adelaide Hills gully wind. The Hub asks, Gully answers,
+and the values are the values: no confidence scores, no "estimate" or "actual" branching; a missing
+value is missing, never zero; every answer carries its source and its time.
 
-Java 25, Spring Boot 4.1.1, PostgreSQL 18 + PostGIS 3.6, one Maven module. Port **8082** inside the
-container; `WEATHER_PORT` is the host side of the compose mapping.
+**How it works, in one paragraph.** Australia is divided into 15 km hexagons by arithmetic (the two
+constants are at the top of `Grid`); a point is answered by the reading held for its hexagon, fetched
+once at the centre from Open-Meteo — Google Weather is the overflow — and kept until the upstream says
+it is stale. Nothing is pre-warmed: a hexagon exists once something inside it has been asked about,
+and The Hub's sweep of its open incidents keeps their hexagons warm. Every Bureau of Meteorology station
+gets a hexagon of its own whose "now" is the station's values, free, every ten minutes; the Bureau's
+warnings, the CFS's district rating and total fire ban, the grass curing the operator enters, the land
+use and elevation from mounted terrain files, and a drought index stepped forward daily from the
+station ledger all sit on the hexagon, so the full fire picture — McArthur forest and grassland, the
+AFDRS grassland index and its rating, the official rating, the wind and its next change, the warnings
+— is a lookup, never a computation on request. History is written only while an incident is present.
+One in-memory cache holds all of it, rebuilt from Postgres at start; the database is not touched to
+answer a request.
 
-**An overhaul is being chosen from.** [docs/06-overhaul.md](docs/06-overhaul.md) is the catalogue of
-what to rebuild — a pre-warmed grid in place of the anchor cache, time-series storage, a real v1 API,
-AFDRS, observations and warnings, and the language question — with what each one deletes and what it
-changes on the Hub. Until a proposal is ticked, this README describes what runs today.
+Java 25, Spring Boot 4.1.1, PostgreSQL 18, one Maven module, plain SQL (no entity manager), Flyway.
+Port **8082** inside the container; `WEATHER_PORT` is the host side of the compose mapping.
 
 ## The API
 
-Every `/api/**` route needs an API key in `X-Api-Key` or `Authorization: Bearer`, issued on this
-service's own `/console/api-keys`. Answers are JSON, times are ISO-8601 UTC, errors are
-`{"error": "..."}`. Every GET carries a strong ETag hashed from its body and would answer `304` to a
-matching `If-None-Match` — but every body carries `generatedAt`, so the hash changes on every request
-and the `304` never fires in practice (docs/02 §2.0).
+Every `/api/**` route needs an API key (`X-Api-Key` or `Authorization: Bearer`), issued on
+`/console/api-keys` with a scope. Answers are JSON, times ISO-8601 UTC, errors RFC 9457 problem details,
+bodies compressed and fingerprinted (a strong `ETag` that only changes when the reading does), rate
+limits in the `RateLimit-*` headers. The OpenAPI document is at `/api/v1/openapi.json`.
 
 | Route | What it answers |
 |---|---|
-| `GET /api/weather?lat=&lon=&forecast=false&force=false` | The reading at a point: provenance, current conditions, fire, flood, drought, and the days and hours when `forecast=true`. `force=true` skips the cache and spends allowance. |
-| `GET /api/weather/status` | Every provider with its limits and what it has spent, the cache counters, the governor's current tuning, and the drought and river cell counts. |
-| `GET /api/weather/spend?provider=&since=` | Allowance units the ledger recorded for one provider since an instant. |
-| `GET /api/weather/spend/daily?provider=&from=&to=` | The same, cut into UTC days. At most 62. |
-| `GET /api/weather/coverage.geojson?hourly=false&hours=24` | The cache as a FeatureCollection: four concentric outlines over the ground it covers, plus every anchor and cell. |
-| `GET /api/diagnostics?window=` | The docs/26 shape, with a `weather` block. Plus `/logs`, `/logs/{id}` and the two `DELETE`s. |
-| `GET /actuator/health`, `/health/liveness`, `/health/readiness` | Public. |
+| `GET /api/v1/readings?lat=&lon=&forecast=&at=&incident=` | The reading at a point: the hexagon, the source, the conditions now (station or model), the nearest station's values, the fire picture, flood, drought, warnings, and with `forecast=true` the days and hours. `at=` answers from history; `incident=` writes it. |
+| `GET /api/v1/hexagons.geojson?at=` | Every hexagon held, as polygons carrying the values a map colours by. Pre-rendered, fingerprinted, never fetches. |
+| `GET /api/v1/hexagons`, `GET /api/v1/hexagons/{id}` | The list, and everything held for one: reading, drought state, river, history. |
+| `GET /api/v1/fire-indices?temperatureC=&humidityPct=&windKmh=&droughtFactor=&curingPct=&fuelLoadTHa=&condition=` | The indices for given inputs, from the one set of formulas. |
+| `GET /api/v1/status`, `GET /api/v1/upstreams/{id}/spend?since=`, `/spend/daily?from=&to=`, `/spend/hourly` | Upstreams with their allowance and breaker, sources, what is held, and the spend ledger. |
+| `GET /api/v1/contract/reading.schema.json` | The reading's shape as a JSON Schema. Public. |
+| `GET /api/diagnostics`, `/logs`, `/logs/{id}`, the two `DELETE`s | The shape The Hub's morning agent reads. |
+| `GET /api/weather` | The old route in its old shape, for one release. |
 
-Full shapes and curl examples: [docs/02-api.md](docs/02-api.md).
+Full shapes and curl examples: [docs/02-api.md](docs/02-api.md). The contract itself:
+[src/main/resources/contract/reading.schema.json](src/main/resources/contract/reading.schema.json),
+kept identically in The Hub and checked by both builds.
 
 ## Running it
 
-**With compose.** Copy `.env.example` to `.env`, set `WEATHER_CONSOLE_CODE` and
-`POSTGRES_PASSWORD`, then:
+**With compose.** Copy `.env.example` to `.env`, set `WEATHER_CONSOLE_CODE` and `POSTGRES_PASSWORD`, then:
 
+```bash
+docker compose up -d --build
 ```
-docker compose up -d        # builds the image from this checkout on every up
-```
 
-The console is at <http://localhost:8082/console/weather>, username `operator`, the 8-digit code from
-`.env`. That is the whole stack — Postgres with PostGIS, this service, and with `COMPOSE_PROFILES=edge`
-and a `CLOUDFLARE_TUNNEL_TOKEN` in `.env` the Cloudflare connector that publishes it at
-`weather.surefirehudson.com` — and it is the same file Portainer deploys onto a VPS from this
-repository's `main`, with the machine's values as the stack's environment variables (The Hub's
-[28 · Deployment](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/28-deployment.md) is
-the runbook for all four). Beside the Hub on one development machine it keeps its own Postgres, on
-host port 5435 (`WEATHER_DB_PORT`; the Hub's is 5432, IncidentWatch's 5433, Operations' 5434), and the
-Hub reaches it at `http://host.docker.internal:8082` (`HUB_WEATHER_URL` in the Hub's `.env`) with a key
-issued on `/console/api-keys` here. Ports are on loopback only; IncidentWatch, 8082 inside its own
-container, publishes on 8083.
+The console is at <http://localhost:8082/console/map>, username `operator`, the 8-digit code from
+`.env`. The stack is Postgres, the service, and with `COMPOSE_PROFILES=edge` and a
+`CLOUDFLARE_TUNNEL_TOKEN` the Cloudflare connector that publishes it. The Hub reaches it at
+`HUB_WEATHER_URL` with a key issued on `/console/api-keys` here. The database is the same volume the
+old service used: the migration runs over it and keeps the keys.
 
-**From the IDE.** `au.weather.WeatherApplication`, with a PostGIS database reachable at
-`localhost:5435` through `SPRING_DATASOURCE_URL` — this repository's compose Postgres, started alone
-with `docker compose up -d db`. Hibernate creates the eight tables on the first boot: the four that
-came from the Hub (`weather_anchor`, `weather_call`, `drought_cell`, `river_cell`) and this
-service's own `api_key`, `api_access_log`, `console_user` and `log_event`. No migration is needed for
-an empty database. Set `GOOGLE_WEATHER_KEY` only if you want the billed fallback — the defaults use
-Open-Meteo alone.
+**From the IDE.** `au.gully.Application`, with Postgres reachable at `localhost:5435` (this repository's
+compose Postgres, started alone with `docker compose up -d db`). Flyway creates the schema on first boot.
 
-**The build.** `./mvnw -B -ntp verify`. There is no `@SpringBootTest` and nothing in the test suite
-needs a database or the network.
+**The build.** `./mvnw -B -ntp verify`. The unit tests need nothing; the one end-to-end test starts a
+throwaway Postgres with Testcontainers and is skipped where Docker is not available.
 
 ## Configuring it
 
-The shipped `application.yml` is almost empty by design (D-147). Every tuning value carries its
-default in the record that reads it — `WeatherProperties`, `WeatherAppProperties`, `TerrainProperties`,
-`DiagnosticsProperties` — and naming a key in the yml overrides one line of it. The environment
-variables are the handful that differ between one machine and the next, and they are all in
-`.env.example`. Every key with its default: [docs/03-configuration.md](docs/03-configuration.md).
+Every setting carries its default in `GullyProperties` and is printed once at startup; the shipped
+`application.yml` is the handful that differ between machines, each from an environment variable, all
+in `.env.example`. The full list: [docs/03-configuration.md](docs/03-configuration.md).
 
 ## The docs
 
-- [docs/01-what-it-does.md](docs/01-what-it-does.md) — the cache, the provider chain, the governor, drought and flood, and what is deliberately not here
+- [docs/01-what-it-does.md](docs/01-what-it-does.md) — hexagons, upstreams, the Bureau, the CFS, drought, history, the fire picture
 - [docs/02-api.md](docs/02-api.md) — the contract, with curl
-- [docs/03-configuration.md](docs/03-configuration.md) — every `weather.*` key and every environment variable
-- [docs/04-migration-from-the-hub.md](docs/04-migration-from-the-hub.md) — the four tables to dump and restore, and the Hub's side of the wiring
-- [docs/05-decisions.md](docs/05-decisions.md) — D-242, D-249 and D-252 as agreed, plus this service's own three
-- [docs/06-overhaul.md](docs/06-overhaul.md) — the overhaul catalogue: where we are, fifteen proposals with effort, deletions and Hub impact, and the sequence to do them in
+- [docs/03-configuration.md](docs/03-configuration.md) — every setting and every environment variable
+- [docs/04-migration-from-the-hub.md](docs/04-migration-from-the-hub.md) — what moved, what the Hub changed, what a second copy would need
+- [docs/05-decisions.md](docs/05-decisions.md) — the decisions this service took
+- [docs/06-overhaul.md](docs/06-overhaul.md) — the catalogue this rebuild was made from, ticked

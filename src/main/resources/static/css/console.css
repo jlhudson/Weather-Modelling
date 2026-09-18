@@ -1,0 +1,69 @@
+/* The console's own stylesheet: what Bootstrap 5.3.5 does not say. Dense, numeric, one column of
+   attention. Everything that was decoration is gone; what is left makes tables read like tables. */
+
+:root { --g-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+html { font-size: 13px; }
+body { min-height: 100vh; }
+
+/* The chrome: one thin bar, the pages as plain links, the operator and the theme on the right. */
+.g-nav { border-bottom: 1px solid var(--bs-border-color); padding: .35rem .75rem; display: flex; gap: .25rem; align-items: center; }
+.g-nav .brand { font-weight: 600; margin-right: .5rem; text-decoration: none; color: inherit; }
+.g-nav a.nav-link { padding: .2rem .5rem; border-radius: .25rem; color: var(--bs-secondary-color); }
+.g-nav a.nav-link.active { color: var(--bs-body-color); background: var(--bs-tertiary-bg); }
+.g-nav .right { margin-left: auto; display: flex; gap: .5rem; align-items: center; color: var(--bs-secondary-color); }
+
+main { padding: .75rem; }
+h1 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .5rem; }
+h2 { font-size: .85rem; font-weight: 600; margin: 1rem 0 .35rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Numbers are numbers: aligned, monospace, right-justified where they sit in a column. */
+.num, td.num, th.num { font-family: var(--g-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.mono { font-family: var(--g-mono); font-size: .92em; }
+.table { --bs-table-cell-padding-y: .15rem; --bs-table-cell-padding-x: .4rem; font-size: .92rem; margin-bottom: .5rem; }
+.table th { font-weight: 500; color: var(--bs-secondary-color); white-space: nowrap; }
+.table.sortable th { cursor: pointer; user-select: none; }
+.table.sortable th.asc::after { content: " ▲"; font-size: .7em; }
+.table.sortable th.desc::after { content: " ▼"; font-size: .7em; }
+.kv th { width: 11rem; font-weight: 500; color: var(--bs-secondary-color); }
+
+/* A row of figures: one number each, the label under it. */
+.figures { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; margin-bottom: .75rem; }
+.figures div { line-height: 1.15; }
+.figures .v { font-family: var(--g-mono); font-size: 1.25rem; font-weight: 600; }
+.figures .k { font-size: .75rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Bars: a spend against an allowance, a day against a month. */
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
+.bars > i { display: block; flex: 1 1 0; background: var(--bs-primary); min-width: 3px; }
+.bars > i.over { background: var(--bs-danger); }
+.bars > i.zero { background: var(--bs-tertiary-bg); }
+.meter { height: 6px; background: var(--bs-tertiary-bg); border-radius: 3px; overflow: hidden; width: 140px; display: inline-block; vertical-align: middle; }
+.meter > i { display: block; height: 100%; background: var(--bs-success); }
+.meter > i.warn { background: var(--bs-warning); }
+.meter > i.bad { background: var(--bs-danger); }
+
+.badge { font-weight: 500; }
+.muted { color: var(--bs-secondary-color); }
+.wrap { white-space: pre-wrap; word-break: break-word; }
+details > summary { cursor: pointer; }
+
+/* The map takes the page; the detail panel sits over its right edge. */
+#map { height: calc(100vh - 92px); min-height: 480px; }
+.map-tools { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; margin-bottom: .4rem; }
+.map-tools label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; }
+.map-tools select, .map-tools input[type=range] { max-width: 14rem; }
+#detail { position: absolute; top: .5rem; right: .5rem; width: 30rem; max-width: calc(100% - 1rem); max-height: calc(100% - 1rem); overflow: auto; z-index: 1000;
+  background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .3rem; padding: .5rem .6rem; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+#detail.hidden { display: none; }
+#detail h3 { font-size: .95rem; margin: 0 0 .25rem; }
+#detail .table { font-size: .85rem; }
+.legend { display: inline-flex; gap: .15rem; align-items: center; }
+.legend i { display: inline-block; width: 1.1rem; height: .7rem; }
+
+/* Leaflet under the theme. */
+[data-bs-theme=dark] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.85); }
+[data-bs-theme=dark] .leaflet-container.no-invert .leaflet-tile-pane { filter: none; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--bs-body-bg); color: var(--bs-body-color); }
+.leaflet-popup-content { font-size: .85rem; margin: .5rem .7rem; }
+.leaflet-bar a { background: var(--bs-body-bg); color: var(--bs-body-color); border-bottom-color: var(--bs-border-color); }
+.leaflet-control-layers { background: var(--bs-body-bg); color: var(--bs-body-color); }
