@@ -9,9 +9,10 @@ import java.util.List;
 import static au.gully.science.Numbers.round1;
 
 /**
- * The drought state of a hexagon's area — the hexagon and its ring — stepped forward one day at a
- * time (docs/06 item 7). Held on the hexagon and written to its row, so a quiet area keeps its
- * state and picks up where it left off.
+ * The drought state of an area of hexagons — a hexagon and its ring, in a fixed tiling (W-11) —
+ * stepped forward one day at a time (docs/06 item 7). Held per area in {@code drought_area}, and
+ * copied onto every hexagon of the area that has been asked about, so a quiet area keeps its state
+ * and picks up where it left off.
  *
  * @param kbdiMm       the deficit at the end of {@code computedFor}
  * @param computedFor  the last complete day the integration has run to
@@ -19,6 +20,8 @@ import static au.gully.science.Numbers.round1;
  * @param days         how many days it has run over
  * @param recentRainMm the last twenty days' rain, oldest first, which the drought factor needs
  * @param from         where the inputs came from: {@code stations}, {@code archive} or both
+ * @param area         the id of the area's centre cell; null on a state computed before the areas existed
+ * @param areaCells    how many cells the area has (seven at radius 1); null on such a state
  */
 public record DroughtState(
         double kbdiMm,
@@ -27,7 +30,9 @@ public record DroughtState(
         LocalDate computedFor,
         int days,
         List<Double> recentRainMm,
-        String from
+        String from,
+        String area,
+        Integer areaCells
 ) {
 
     public DroughtState {
@@ -44,7 +49,7 @@ public record DroughtState(
     public DroughtIndex index() {
         double factor = droughtFactor();
         return new DroughtIndex(round1(kbdiMm), Kbdi.band(kbdiMm), round1(factor), round1(meanAnnualRainfallMm),
-                spunUpFrom, computedFor, days, recentRainMm);
+                spunUpFrom, computedFor, days, recentRainMm, area, areaCells);
     }
 
     /**
@@ -58,7 +63,14 @@ public record DroughtState(
         while (window.size() > Kbdi.WINDOW_DAYS) {
             window.removeFirst();
         }
-        return new DroughtState(kbdi, meanAnnualRainfallMm, spunUpFrom, day, days + 1, window, from);
+        return new DroughtState(kbdi, meanAnnualRainfallMm, spunUpFrom, day, days + 1, window, from, area, areaCells);
+    }
+
+    /**
+     * The same state, as the state of an area.
+     */
+    public DroughtState forArea(String areaId, int cells) {
+        return new DroughtState(kbdiMm, meanAnnualRainfallMm, spunUpFrom, computedFor, days, recentRainMm, from, areaId, cells);
     }
 
     static double[] array(List<Double> values) {

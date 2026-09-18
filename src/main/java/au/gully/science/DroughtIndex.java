@@ -23,6 +23,8 @@ import static au.gully.science.Numbers.round1;
  * @param computedFor          the day the values describe
  * @param days                 how many days the integration has run over
  * @param recentRainMm         the daily rain that fed the drought factor, oldest first, today last
+ * @param area                 the id of the area's centre hexagon, which every hexagon of the area shares
+ * @param areaHexagons         how many hexagons the area has
  */
 public record DroughtIndex(
         double kbdiMm,
@@ -32,7 +34,9 @@ public record DroughtIndex(
         LocalDate spunUpFrom,
         LocalDate computedFor,
         int days,
-        List<Double> recentRainMm
+        List<Double> recentRainMm,
+        String area,
+        Integer areaHexagons
 ) {
 
     public DroughtIndex {

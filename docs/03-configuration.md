@@ -57,8 +57,9 @@ every upstream's host, model, licence, allowance, cost per fetch, per-minute lim
 (`OpenMeteo.SPEC`, `GoogleWeather.SPEC`); the budget guard (90%) and the breaker's trip count (3);
 the Bureau's product identifiers and cadences (`StationFile`, `WarningFiles`, `StationReader.EVERY`,
 `WarningsReader.EVERY`); the station ledger's cadence (six hours) and the rain day (9 am); the CFS
-URLs and cadences (`Ratings`, `Districts`); the drought window (365 days), the archive lag (5 days)
-and the station reach (75 km) (`DroughtAreas`); the river cells (5 km) (`Rivers`); the history's
+URLs and cadences (`Ratings`, `Districts`); the drought area's radius (1: a hexagon and its ring, seven
+cells; 2 would be nineteen), the drought window (365 days), the archive lag (5 days) and the station
+reach (75 km) (`DroughtAreas`); the river cells (5 km) (`Rivers`); the history's
 "current" window (three hours, `History.CURRENT_FOR`); the grassland fuel load (4.5 t/ha,
 `FirePictures`); the wind-change window (48 hours); the refresh executor and the tile cache.
 

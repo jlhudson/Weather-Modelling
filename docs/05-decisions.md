@@ -116,3 +116,19 @@ there is no Hibernate. The four platform tables the old service's Hibernate buil
 **Why.** Start-up time (the service starts in about two seconds), one place the schema is written, and
 nothing that silently alters a table. The end-to-end test boots against the old schema to prove the
 migration.
+
+### W-11 · Drought areas are a fixed tiling of seven hexagons, one spin-up each
+
+**The decision.** The plane is tiled into fixed areas — a hexagon and its ring, seven cells about 45 km
+across, on a lattice so the areas never overlap and never move — and the drought state is per area:
+spun up once at the area's centre by whichever hexagon in it is asked about first, stepped once a day
+for all of them, held in `drought_area` and copied onto each hexagon's row. The radius is one
+constant; 2 would make nineteen-cell areas about 75 km across.
+
+**Why.** The inputs were already pooled over the ring, but the state was per asked hexagon, so
+neighbouring incidents each paid the year of archive — 51 asked hexagons, 51 archive fetches — for
+what was the same rain. An area anchored to the first hexagon hit would have overlapped its
+neighbours and depended on the order of asks; a lattice does neither. **What it costs.** The rain
+gradient inside 45 km — the Adelaide plains against the Mount Lofty Ranges — is one figure, as it was
+already for the inputs. — James, 19 September 2026.
+

@@ -102,9 +102,11 @@ public class HexagonStore {
         h = replace(cell.id(), old -> old.asked(now));
         if (firstAsk || created) {
             repository.saveActivity(h);
-            h = ensureDrought(h, now);
             h = ensureRiver(h, lat, lon, now);
         }
+        // Every ask, not only the first: cheap when the area is current, and the way a hexagon picks up an
+        // area spun up or adopted since it was last asked about.
+        h = ensureDrought(h, now);
 
         boolean stationFresh = pictures.now(h, now).map(n -> "station".equals(n.from())).orElse(false);
         Forecast f = h.forecast();
@@ -300,29 +302,35 @@ public class HexagonStore {
 
     // ---------------------------------------------------------------- drought and rivers
 
+    /**
+     * The hexagon carries a copy of its area's state (W-11): the area is spun up once, by whichever
+     * hexagon in it is asked about first, and stepped once a day for all of them; the copy is
+     * refreshed here whenever the area has moved on.
+     */
     private Hexagon ensureDrought(Hexagon h, Instant now) {
         ZoneId zone = zoneOf(h);
-        LocalDate yesterday = LocalDate.now(zone).minusDays(1);
-        DroughtState state = h.drought();
+        DroughtState state;
         try {
-            if (state == null) {
-                state = droughtAreas.spinUp(h.cell(), zone, LocalDate.now(zone)).orElse(null);
-            } else if (state.computedFor().isBefore(yesterday)) {
-                state = droughtAreas.stepTo(h.cell(), state, yesterday);
-            } else {
-                return h;
-            }
+            state = droughtAreas.stateFor(h.cell(), zone, LocalDate.now(zone)).orElse(null);
         } catch (RuntimeException e) {
             log.warn("drought for {} not computed: {}", h.id(), e.getMessage());
             return h;
         }
-        if (state == null) {
+        if (state == null || sameDrought(h.drought(), state)) {
             return h;
         }
-        DroughtState fresh = state;
-        Hexagon after = replace(h.id(), old -> old.withDrought(fresh));
+        Hexagon after = replace(h.id(), old -> old.withDrought(state));
         repository.saveDrought(after);
         return after;
+    }
+
+    private static boolean sameDrought(DroughtState held, DroughtState area) {
+        return held != null && held.computedFor() != null && held.computedFor().equals(area.computedFor())
+                && Objects.equals(held.area(), area.area());
+    }
+
+    public int droughtAreaCount() {
+        return droughtAreas.size();
     }
 
     private Hexagon ensureRiver(Hexagon h, double lat, double lon, Instant now) {
@@ -344,39 +352,34 @@ public class HexagonStore {
 
     /**
      * The daily step (docs/06 item 7): every area whose last complete day is behind the calendar is
-     * stepped forward from the station ledger, exactly once per area per day. Runs on a short timer
-     * and does nothing until 9:10 am local, when the rain day has closed.
+     * stepped forward from the station ledger, exactly once per area per day, after 9:10 am in the
+     * area's zone when the rain day has closed; then every hexagon carrying a copy that the area
+     * has moved past takes the new state and has its picture recomputed. Runs on a short timer.
+     *
+     * @return how many areas were stepped
      */
     public int stepDrought() {
         Instant now = Instant.now();
-        int stepped = 0;
+        Set<String> stepped = droughtAreas.stepAll(now);
+        int copied = 0;
         for (String id : hexagons.keySet()) {
             Hexagon h = hexagons.get(id);
             if (h == null || h.drought() == null) {
                 continue;
             }
-            ZoneId zone = zoneOf(h);
-            java.time.ZonedDateTime local = now.atZone(zone);
-            if (local.toLocalTime().isBefore(java.time.LocalTime.of(9, 10))) {
+            DroughtState area = droughtAreas.held(h.cell()).orElse(null);
+            if (area == null || sameDrought(h.drought(), area)) {
                 continue;
             }
-            LocalDate yesterday = local.toLocalDate().minusDays(1);
-            if (!h.drought().computedFor().isBefore(yesterday)) {
-                continue;
-            }
-            try {
-                DroughtState next = droughtAreas.stepTo(h.cell(), h.drought(), yesterday);
-                if (next != null && !next.computedFor().equals(h.drought().computedFor())) {
-                    Hexagon after = replace(id, old -> old.withDrought(next));
-                    repository.saveDrought(after);
-                    recompute(id, now);
-                    stepped++;
-                }
-            } catch (RuntimeException e) {
-                log.warn("drought step for {} failed: {}", id, e.getMessage());
-            }
+            Hexagon after = replace(id, old -> old.withDrought(area));
+            repository.saveDrought(after);
+            recompute(id, now);
+            copied++;
         }
-        return stepped;
+        if (!stepped.isEmpty() || copied > 0) {
+            log.info("drought: {} areas stepped, {} hexagons took their area's state", stepped.size(), copied);
+        }
+        return stepped.size();
     }
 
     /**
@@ -443,6 +446,19 @@ public class HexagonStore {
         log.info("hexagons rehydrated: {} ({} active, {} with a forecast)", hexagons.size(),
                 hexagons.values().stream().filter(Hexagon::active).count(),
                 hexagons.values().stream().filter(Hexagon::hasForecast).count());
+        // States computed per hexagon before the areas existed become their area's state, the most
+        // recently computed first, so nothing already spun up is spent again (W-11).
+        int adopted = 0;
+        List<Hexagon> withDrought = hexagons.values().stream().filter(h -> h.drought() != null && h.drought().area() == null)
+                .sorted(Comparator.comparing((Hexagon h) -> h.drought().computedFor()).reversed()).toList();
+        for (Hexagon h : withDrought) {
+            if (droughtAreas.adopt(h.cell(), zoneOf(h).getId(), h.drought())) {
+                adopted++;
+            }
+        }
+        if (adopted > 0) {
+            log.info("drought areas: {} adopted from hexagons computed before the areas", adopted);
+        }
     }
 
     private Hexagon replace(String id, java.util.function.UnaryOperator<Hexagon> change) {

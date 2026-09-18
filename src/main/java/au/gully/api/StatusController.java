@@ -146,6 +146,7 @@ public class StatusController {
         m.put("withStation", all.stream().filter(Hexagon::hasStation).count());
         m.put("withForecast", all.stream().filter(Hexagon::hasForecast).count());
         m.put("withDrought", all.stream().filter(h -> h.drought() != null).count());
+        m.put("droughtAreas", store.droughtAreaCount());
         m.put("snapshots", history.count());
         m.put("served", store.servedCount());
         m.put("fetched", store.fetchedCount());

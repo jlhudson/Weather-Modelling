@@ -129,4 +129,46 @@ class GridTest {
         assertThat(rivers.areaKm2()).isCloseTo(21.65, offset(0.01));
         assertThat(Geo.haversineMetres(-34.93, 138.60, r.lat(), r.lon())).isLessThan(5_000 / Math.sqrt(3) + 5);
     }
+
+    /**
+     * The drought areas tile the plane (W-11): over a large block of cells, every cell is within the
+     * radius of exactly one fixed centre, a centre is its own centre, the area drawn around a centre
+     * is exactly the set of cells that map to it, and it has {@code 3r² + 3r + 1} cells. For the
+     * seven-cell flower and the nineteen-cell one, and for the square grid's blocks.
+     */
+    @Test
+    void theDroughtAreasTileThePlaneWithoutOverlapOrGaps() {
+        for (int radius = 1; radius <= 2; radius++) {
+            tiles(GRID, radius, 3 * radius * radius + 3 * radius + 1);
+        }
+        tiles(new Grid(15, 4), 1, 9);
+    }
+
+    private static void tiles(Grid grid, int radius, int expectedSize) {
+        java.util.Map<String, java.util.List<Cell>> members = new java.util.HashMap<>();
+        for (int q = -40; q <= 40; q++) {
+            for (int r = -40; r <= 40; r++) {
+                Cell c = grid.cell(q, r);
+                Cell centre = grid.areaCentre(c, radius);
+                assertThat(grid.distance(c, centre)).as("%s is within %d of its centre %s", c.id(), radius, centre.id()).isLessThanOrEqualTo(radius);
+                assertThat(grid.areaCentre(centre, radius).id()).as("a centre is its own centre").isEqualTo(centre.id());
+                members.computeIfAbsent(centre.id(), k -> new java.util.ArrayList<>()).add(c);
+            }
+        }
+        // Centres well inside the block have every member inside the block, so their count is the area's size.
+        int checked = 0;
+        for (java.util.Map.Entry<String, java.util.List<Cell>> e : members.entrySet()) {
+            Cell centre = grid.parse(e.getKey());
+            if (Math.abs(centre.q()) > 30 || Math.abs(centre.r()) > 30) {
+                continue;
+            }
+            assertThat(e.getValue()).as("members of " + e.getKey()).hasSize(expectedSize);
+            List<Cell> drawn = grid.area(centre, radius);
+            assertThat(drawn).hasSize(expectedSize);
+            assertThat(drawn.stream().map(Cell::id).collect(java.util.stream.Collectors.toSet()))
+                    .isEqualTo(e.getValue().stream().map(Cell::id).collect(java.util.stream.Collectors.toSet()));
+            checked++;
+        }
+        assertThat(checked).isGreaterThan(50);
+    }
 }

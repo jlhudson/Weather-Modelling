@@ -6,6 +6,7 @@ import au.gully.bureau.WarningsReader;
 import au.gully.cfs.Curing;
 import au.gully.cfs.Districts;
 import au.gully.cfs.Ratings;
+import au.gully.drought.DroughtAreas;
 import au.gully.drought.Rivers;
 import au.gully.hexagons.HexagonStore;
 import au.gully.platform.access.ConsoleUsers;
@@ -44,6 +45,7 @@ public class Startup implements ApplicationRunner {
     private final Curing curing;
     private final HexagonStore store;
     private final Rivers rivers;
+    private final DroughtAreas droughtAreas;
     private final StationReader stationReader;
     private final WarningsReader warnings;
     private final Ratings ratings;
@@ -62,6 +64,7 @@ public class Startup implements ApplicationRunner {
             stations.rehydrate();
             curing.rehydrate();
             rivers.rehydrate();
+            droughtAreas.rehydrate();
             store.rehydrate();
         });
         step(3, "timers", this::schedule);

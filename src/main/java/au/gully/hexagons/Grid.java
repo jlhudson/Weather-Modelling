@@ -130,13 +130,74 @@ public final class Grid {
     }
 
     /**
-     * The cell and its ring: the drought area (docs/06 item 7).
+     * How many steps apart two cells are: for hexagons the axial distance, for squares the
+     * Chebyshev distance (a diagonal step counts one, as {@link #ring} counts it).
      */
-    public List<Cell> area(Cell c) {
+    public int distance(Cell a, Cell b) {
+        int dq = a.q() - b.q(), dr = a.r() - b.r();
+        if (sides == 6) {
+            return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+        }
+        return Math.max(Math.abs(dq), Math.abs(dr));
+    }
+
+    /**
+     * The cell and every cell within {@code radius} steps of it: for a hexagon, radius 1 is the cell
+     * and its ring (seven), radius 2 is nineteen, and so on ({@code 3r² + 3r + 1}); for a square,
+     * the {@code (2r + 1)²} block.
+     */
+    public List<Cell> area(Cell centre, int radius) {
         List<Cell> out = new ArrayList<>();
-        out.add(c);
-        out.addAll(ring(c));
+        for (int dq = -radius; dq <= radius; dq++) {
+            for (int dr = -radius; dr <= radius; dr++) {
+                Cell c = cell(centre.q() + dq, centre.r() + dr);
+                if (distance(centre, c) <= radius) {
+                    out.add(c);
+                }
+            }
+        }
         return out;
+    }
+
+    /**
+     * The centre of the area of {@code radius} that a cell belongs to, in a fixed tiling of the
+     * plane by such areas: every cell is within {@code radius} of exactly one centre, and the centres
+     * never move, so the areas neither overlap nor depend on which cell was asked about first
+     * (docs/06 item 7, W-11).
+     * <p>
+     * For hexagons the centres are the lattice spanned by {@code (r+1, r)} and {@code (-r, 2r+1)} in
+     * axial coordinates, whose index is {@code 3r² + 3r + 1} — the size of the area, which is what
+     * makes the areas tile exactly (radius 1 is the seven-cell flower). A cell's lattice coordinates
+     * are solved for, rounded, and the neighbouring lattice points checked for the one within reach.
+     * For squares the centres are the multiples of {@code 2r + 1}.
+     */
+    public Cell areaCentre(Cell c, int radius) {
+        if (radius <= 0) {
+            return c;
+        }
+        if (sides != 6) {
+            int side = 2 * radius + 1;
+            return cell(Math.floorDiv(c.q() + radius, side) * side, Math.floorDiv(c.r() + radius, side) * side);
+        }
+        int uq = radius + 1, ur = radius, vq = -radius, vr = 2 * radius + 1;
+        double det = (double) uq * vr - (double) vq * ur;
+        double a = (c.q() * vr - c.r() * vq) / det;
+        double b = (c.r() * uq - c.q() * ur) / det;
+        long a0 = Math.round(a), b0 = Math.round(b);
+        Cell best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (long da = -1; da <= 1; da++) {
+            for (long db = -1; db <= 1; db++) {
+                long la = a0 + da, lb = b0 + db;
+                Cell centre = cell((int) (la * uq + lb * vq), (int) (la * ur + lb * vr));
+                int d = distance(c, centre);
+                if (d < bestDistance) {
+                    bestDistance = d;
+                    best = centre;
+                }
+            }
+        }
+        return best;
     }
 
     /**

@@ -189,11 +189,12 @@
     },
     "drought": {
       "type": "object", "additionalProperties": false,
-      "required": ["kbdiMm", "kbdiBand", "droughtFactor", "meanAnnualRainfallMm", "spunUpFrom", "computedFor", "days", "recentRainMm"],
+      "required": ["kbdiMm", "kbdiBand", "droughtFactor", "meanAnnualRainfallMm", "spunUpFrom", "computedFor", "days", "recentRainMm", "area", "areaHexagons"],
       "properties": {
         "kbdiMm": {"type": "number"}, "kbdiBand": {"$ref": "#/$defs/str"}, "droughtFactor": {"type": "number"},
         "meanAnnualRainfallMm": {"type": "number"}, "spunUpFrom": {"$ref": "#/$defs/dateOrNull"}, "computedFor": {"$ref": "#/$defs/dateOrNull"},
-        "days": {"type": "integer"}, "recentRainMm": {"type": "array", "items": {"$ref": "#/$defs/num"}}
+        "days": {"type": "integer"}, "recentRainMm": {"type": "array", "items": {"$ref": "#/$defs/num"}},
+        "area": {"$ref": "#/$defs/str"}, "areaHexagons": {"type": ["integer", "null"]}
       }
     },
     "warning": {
