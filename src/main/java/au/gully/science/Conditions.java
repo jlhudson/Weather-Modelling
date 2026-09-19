@@ -14,7 +14,7 @@ import java.time.Instant;
  * flood turn on, and they are here rather than in a separate fire-shaped type because they are not
  * fire-shaped: soil moisture decides infiltration for a flood and fuel dryness for a fire, and
  * boundary layer height disperses bushfire smoke and a hazmat plume identically. Splitting them by the
- * incident that happens to want them would file the same measurement in two places.
+ * caller that happens to want them would file the same measurement in two places.
  *
  * @param at                       the instant these conditions describe, not the instant they were fetched
  * @param humidityPct              relative humidity at 2 m; with temperature and wind, three of the four FFDI inputs

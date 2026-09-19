@@ -1,6 +1,7 @@
 // The map: every hexagon held, coloured by what makes it active - a station in it, a forecast held
-// because an incident asked, the drought stepped for its area - or by one value; the weather it
-// knows drawn on it as a wind arrow and a temperature/humidity label; the tessellation on request;
+// because something asked, fading as the forecast ages towards its expiry, the drought stepped for
+// its area - or by one value; the weather it knows drawn on it as a wind arrow and a
+// temperature/humidity label; a switch to see only the forecasts; the tessellation on request;
 // the stations; a time slider over the history; and a click that opens everything held for a
 // hexagon. Deferred, so it runs after Leaflet and console.js.
 (function () {
@@ -12,14 +13,14 @@
 
     var map = L.map('map').setView([-34.93, 138.6], 7);
     window.gullyBaseLayer(map);
-    var hexLayer = L.geoJSON(null, {style: styleOf, onEachFeature: onHexagon}).addTo(map);
+    var hexLayer = L.geoJSON(null, {style: styleOf, onEachFeature: onHexagon, filter: shown}).addTo(map);
     var gridLayer = L.geoJSON(null, {style: {color: '#888', weight: .6, fill: false, opacity: .6}, interactive: false});
     var stationLayer = L.layerGroup().addTo(map);
     var glyphLayer = L.layerGroup().addTo(map);
-    var etag = null, value = 'activity', at = null;
+    var etag = null, value = 'activity', at = null, lastFc = null;
 
     // ---- colouring: what makes a hexagon active, the published rating colours for the ratings, a ramp for a number
-    // Amber for a forecast held (an incident asked), blue for a station in it, a purple ring where the
+    // Amber for a forecast held (something asked), blue for a station in it, a purple ring where the
     // drought has been stepped; nothing yet is a faint outline.
     var ACT = {forecast: '#f59e0b', station: '#3b82f6', drought: '#a855f7', none: '#9ca3af'};
     var RATING = {'LOW-MODERATE': '#9bc466', 'HIGH': '#f7e463', 'VERY HIGH': '#f0a04b', 'SEVERE': '#e35d3c', 'EXTREME': '#c1272d', 'CATASTROPHIC': '#6d2077',
@@ -52,12 +53,24 @@
         if (value === 'humidityPct') return ramp(1 - (v - r[0]) / (r[1] - r[0]));
         return ramp((v - r[0]) / (r[1] - r[0]));
     }
+    // How much of a forecast's life is left: 1 when just fetched, 0 at its expiry, 0 once stale. The
+    // amber fades with it, so a hexagon that has not been asked about lately is visibly going.
+    function freshness(p) {
+        if (p.stale) return 0;
+        if (!p.refreshedAt || !p.expiresAt) return 1;
+        var from = Date.parse(p.refreshedAt), to = Date.parse(p.expiresAt);
+        if (isNaN(from) || isNaN(to) || to <= from) return 1;
+        return Math.max(0, Math.min(1, (to - Date.now()) / (to - from)));
+    }
+    // The forecasts-only switch: without a forecast, a hexagon is not drawn at all.
+    function shown(f) { return !$('forecasts').checked || f.properties.hasForecast; }
     function styleOf(f) {
         var p = f.properties;
         if (value === 'activity') {
             var fill = p.hasForecast ? ACT.forecast : p.hasStation ? ACT.station : null;
+            var fillOpacity = !fill ? .03 : p.hasForecast ? .1 + .45 * freshness(p) : .3;
             return {color: p.hasDrought ? ACT.drought : '#777', weight: p.hasDrought ? 1.8 : .6, opacity: p.hasDrought ? .95 : .45,
-                dashArray: p.stale ? '4 3' : null, fillColor: fill || '#000', fillOpacity: fill ? (p.active ? .5 : .3) : .03};
+                dashArray: p.stale ? '4 3' : null, fillColor: fill || '#000', fillOpacity: fillOpacity};
         }
         var c = colour(p);
         return {color: p.warm ? '#111' : '#555', weight: p.active ? 1.2 : .7, dashArray: p.stale ? '4 3' : null,
@@ -66,7 +79,7 @@
     function legend() {
         var el = $('legend'), html = '';
         if (value === 'activity') {
-            html = '<i style="background:' + ACT.forecast + '" title="incident · forecast held"></i><span class="muted me-2">incident · forecast held</span>'
+            html = '<i style="background:' + ACT.forecast + '" title="forecast held · fades as it ages"></i><span class="muted me-2">forecast held · fades as it ages</span>'
                 + '<i style="background:' + ACT.station + '" title="station in it"></i><span class="muted me-2">station in it</span>'
                 + '<i style="background:transparent;border:2px solid ' + ACT.drought + '" title="drought stepped"></i><span class="muted me-2">drought stepped</span>'
                 + '<i style="background:transparent;border:1px solid #777" title="nothing yet"></i><span class="muted">nothing yet</span>';
@@ -88,14 +101,19 @@
             return r.json();
         }).then(function (fc) {
             if (!fc) return;
-            hexLayer.clearLayers();
-            hexLayer.addData(fc);
-            glyphs();
+            lastFc = fc;
+            draw();
             var m = fc.meta || {};
             $('status').textContent = (m.hexagons || 0) + ' hexagons' + (at ? ' at ' + when(at) : '')
                 + (m.active != null ? ' · ' + m.withForecast + ' with a forecast (' + m.active + ' asked about) · ' + m.withStation + ' with a station'
                     + (m.withDrought == null ? '' : ' · ' + m.withDrought + ' with the drought stepped') : '');
         }).catch(function (e) { $('status').textContent = 'layer failed: ' + e; });
+    }
+    // The held layer drawn again: the filter and the styles are read at draw time, so a switch redraws.
+    function draw() {
+        hexLayer.clearLayers();
+        if (lastFc) hexLayer.addData(lastFc);
+        glyphs();
     }
     function onHexagon(f, layer) {
         var p = f.properties;
@@ -211,8 +229,8 @@
                 html += '</tbody></table>';
             }
             if (h.history && h.history.length) {
-                html += '<h2>history <span class="muted">' + h.historyCount + ' snapshots</span></h2><table class="table table-sm"><thead><tr><th>at</th><th>incident</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th>FFDI</th></tr></thead><tbody>';
-                h.history.forEach(function (s) { var sc = s.current || {}, sf = s.fire || {}; html += '<tr><td class="mono">' + when(s.at) + '</td><td>' + esc(s.incident) + '</td><td class="num">' + fmt(sc.temperatureC) + '</td><td class="num">' + fmt(sc.humidityPct) + '</td><td class="num">' + fmt(sc.windSpeedKmh) + '</td><td>' + (sf.ffdi != null ? sf.ffdi + ' ' + esc(sf.ffdiRating) : '—') + '</td></tr>'; });
+                html += '<h2>history <span class="muted">' + h.historyCount + ' snapshots</span></h2><table class="table table-sm"><thead><tr><th>at</th><th>ref</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th>FFDI</th></tr></thead><tbody>';
+                h.history.forEach(function (s) { var sc = s.current || {}, sf = s.fire || {}; html += '<tr><td class="mono">' + when(s.at) + '</td><td>' + esc(s.ref) + '</td><td class="num">' + fmt(sc.temperatureC) + '</td><td class="num">' + fmt(sc.humidityPct) + '</td><td class="num">' + fmt(sc.windSpeedKmh) + '</td><td>' + (sf.ffdi != null ? sf.ffdi + ' ' + esc(sf.ffdiRating) : '—') + '</td></tr>'; });
                 html += '</tbody></table>';
             }
             if (h.ledger && h.ledger.length) {
@@ -246,6 +264,7 @@
     $('grid').addEventListener('change', grid);
     $('stations').addEventListener('change', stations);
     $('weather').addEventListener('change', glyphs);
+    $('forecasts').addEventListener('change', draw);
     $('time').addEventListener('change', slid);
     $('now').addEventListener('click', function () { $('time').value = 0; slid(); });
     map.on('zoomend', glyphs);
@@ -257,5 +276,7 @@
     legend();
     load();
     stations();
+    // Reloaded every minute; between reloads the amber keeps fading.
     setInterval(function () { if (!document.hidden && !at) load(); }, 60000);
+    setInterval(function () { if (!document.hidden && value === 'activity') hexLayer.setStyle(styleOf); }, 20000);
 })();

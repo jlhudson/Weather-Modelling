@@ -4,7 +4,7 @@ import lombok.experimental.UtilityClass;
 
 /**
  * WMO code table 4677, reduced to the twenty-eight values Open-Meteo actually emits. Kept because a
- * bare {@code 95} on an incident screen is not a fact anybody can act on, and because the alternative
+ * bare {@code 95} on a screen is not a fact anybody can act on, and because the alternative
  * is asking the upstream for a text field it charges the same to send.
  */
 @UtilityClass

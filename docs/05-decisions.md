@@ -42,8 +42,8 @@ config** — kept in spirit: `gully.upstreams.order` ships `open-meteo, google`,
 
 ### W-4 · Hexagons, not anchors; nothing pre-warmed
 
-**The decision.** Every reading belongs to a 15 km hexagon on the Australian Albers plane, worked out
-by arithmetic and never stored until asked about. A point is answered by its hexagon's reading; there
+**The decision.** Every reading belongs to a 20 km hexagon on the Australian Albers plane, worked out
+by arithmetic from one anchor and never stored until asked about; hexagons and only hexagons. A point is answered by its hexagon's reading; there
 is no search for a nearby reading, no radius, no time tier, and no grid of readings kept warm over
 the state.
 
@@ -65,15 +65,19 @@ The governor — six hundred lines that tied *how much we spend* to *how accurat
 dials it coupled are different dials. Spend is bounded by the budget; accuracy is a property of the
 hexagon and the upstream, not of the day's spend.
 
-### W-6 · History is written by incidents, at most every three hours
+### W-6 · History is written for asks that carry a ref, at most every three hours
 
 **The decision.** A snapshot of a hexagon's current conditions and fire picture — never the forecast —
-is written only when an ask says an incident is present, and not again for that hexagon inside three
-hours. Stations never write history. Nothing is ever deleted from the table by the service.
+is written only when an ask carries a `ref` — what the reading is for, in the caller's words — and not
+again for that hexagon inside three hours. Stations never write history. Nothing is ever deleted from
+the table by the service.
 
-**Why.** The question D-252 left open is "what was the weather at this time", and it is only ever asked
-about an incident. A station updating every ten minutes would write eight thousand rows a day for
-nothing anyone would read; a snapshot per incident-hexagon per three hours is a few hundred a season.
+**Why.** The question D-252 left open is "what was the weather at this time", and it is asked about
+something the caller can name. A station updating every ten minutes would write eight thousand rows a
+day for nothing anyone would read; a snapshot per ref-hexagon per three hours is a few hundred a season.
+*Amended 19 September 2026: the ask named an incident when this was taken; it names a ref now, because
+this is a weather service and a reading is asked for for any reason. The Hub passes its incident id as
+the ref.*
 
 ### W-7 · The upstream's own expiry, and a station's "now" beats a model's
 
@@ -119,16 +123,16 @@ migration.
 
 ### W-11 · Drought areas are a fixed tiling of seven hexagons, one spin-up each
 
-**The decision.** The plane is tiled into fixed areas — a hexagon and its ring, seven cells about 45 km
-across, on a lattice so the areas never overlap and never move — and the drought state is per area:
+**The decision.** The plane is tiled into fixed areas — a hexagon and its ring, seven cells, three across,
+about 60 km, on a lattice so the areas never overlap and never move — and the drought state is per area:
 spun up once at the area's centre by whichever hexagon in it is asked about first, stepped once a day
 for all of them, held in `drought_area` and copied onto each hexagon's row. The radius is one
-constant; 2 would make nineteen-cell areas about 75 km across.
+constant; 2 would make nineteen-cell areas about 100 km across.
 
 **Why.** The inputs were already pooled over the ring, but the state was per asked hexagon, so
-neighbouring incidents each paid the year of archive — 51 asked hexagons, 51 archive fetches — for
+neighbouring asks each paid the year of archive — 51 asked hexagons, 51 archive fetches — for
 what was the same rain. An area anchored to the first hexagon hit would have overlapped its
 neighbours and depended on the order of asks; a lattice does neither. **What it costs.** The rain
-gradient inside 45 km — the Adelaide plains against the Mount Lofty Ranges — is one figure, as it was
+gradient inside 60 km — the Adelaide plains against the Mount Lofty Ranges — is one figure, as it was
 already for the inputs. — James, 19 September 2026.
 

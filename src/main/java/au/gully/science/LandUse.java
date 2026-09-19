@@ -9,7 +9,7 @@ import java.util.Map;
  * about (docs/06 item 19). Counted once from the mounted land-cover raster when the hexagon is first
  * created, never on request.
  * <p>
- * It matters twice. It is worth returning for the point itself — "this incident is in pine forest",
+ * It matters twice. It is worth returning for the point itself — "this point is in pine forest",
  * "this is a car park" — and it decides which fire index is the right one: a hexagon that is mostly
  * forest leads with the McArthur forest index, mostly grass leads with the grassland indices, and one
  * that is mostly water or built-up carries both but says they apply to little of it.

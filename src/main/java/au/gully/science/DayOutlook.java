@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * One day of the forecast, reduced to what an incident actually turns on: how hot, how dry, how
+ * One day of the forecast, reduced to what a fire actually turns on: how hot, how dry, how
  * windy, and whether rain is coming. The hourly series carries the detail; this carries the shape of
  * the day, which is what a duty officer reads first.
  *

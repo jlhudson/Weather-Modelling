@@ -61,6 +61,7 @@ public class Startup implements ApplicationRunner {
         settings.print();
         step(1, "console user", consoleUsers::ensureUser);
         step(2, "registers from the database", () -> {
+            store.ensureGrid();
             stations.rehydrate();
             curing.rehydrate();
             rivers.rehydrate();

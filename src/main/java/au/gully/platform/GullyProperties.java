@@ -60,7 +60,7 @@ public record GullyProperties(
     }
 
     /**
-     * The incident history.
+     * The history.
      *
      * @param keep    how long a reading snapshot is kept. Nothing is ever deleted from the table by the
      *                service (docs/06 item 2); this bounds what is rebuilt into memory at start

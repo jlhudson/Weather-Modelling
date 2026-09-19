@@ -34,22 +34,23 @@ export WX=http://localhost:8082
 
 ---
 
-## 2.1 `GET /api/v1/readings?lat=&lon=&forecast=false&at=&incident=`
+## 2.1 `GET /api/v1/readings?lat=&lon=&forecast=false&at=&ref=`
 
 The reading at a point, from the hexagon it falls in: fetched if the hexagon holds nothing or its
 reading has expired, served from memory otherwise, refreshed in the background when close to expiry.
 One point per request, always.
 
 - `forecast=true` adds the days and hours ahead.
-- `incident=<id>` says an incident is present, which activates the hexagon's history: a snapshot of the
-  conditions and the fire picture is written, at most once every three hours per hexagon.
+- `ref=<anything>` says what the reading is for — an incident id, a job number, a planning exercise —
+  which activates the hexagon's history: a snapshot of the conditions and the fire picture is written,
+  tagged with the ref, at most once every three hours per hexagon.
 - `at=<instant>` answers from history: the snapshot nearest that time for the point's hexagon, with
   its own time in `history.at`, or `available: false` when the hexagon has none.
 - `400` when lat/lon are off the Earth or outside Australia; `at` in the future is a `400` too.
 
 ```
 curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73"
-curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&forecast=true&incident=INC0103"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&forecast=true&ref=INC0103"
 curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&at=2026-09-18T02:00:00Z"
 ```
 
@@ -125,7 +126,7 @@ What each block is:
 - **`warnings`** — the Bureau warnings in force for the hexagon's district.
 - **`forecast`** — only with `forecast=true`. A day arrives whole with its own `fire` and `flood`; an
   hour carries the eight fields anyone reads and its own indices.
-- **`history`** — only with `at=`: the snapshot's own time, when it was taken and the incident.
+- **`history`** — only with `at=`: the snapshot's own time, when it was taken and the ref it was taken for.
 
 **When nothing can answer**, it is a `200`, not an error, in the same shape:
 
@@ -136,7 +137,7 @@ What each block is:
  "station": { "..." }, "fire": null, "flood": null, "drought": null, "warnings": [], "forecast": null, "history": null, "disclaimer": "..."}
 ```
 
-The Hub treats `available == false` as "no reading" and keeps the incident owed.
+The Hub treats `available == false` as "no reading" and asks again on its next sweep.
 
 ---
 
@@ -148,7 +149,7 @@ Every hexagon held, as a `FeatureCollection` of polygons, each carrying the valu
 `landUse`, `kind`, `active`, `stale`, `warm`, `ageMinutes`, `refreshedAt`, `expiresAt`, `warnings`,
 `windChangeAt`, ...) and `meta` with the counts. Pre-rendered once per change and fingerprinted, so a
 map polling every minute gets `304` until something changes. With `at=`, the values as they were —
-only hexagons that had an incident have a value then. Never fetches. Served as `application/geo+json`;
+only hexagons asked about with a ref have a value then. Never fetches. Served as `application/geo+json`;
 a client that accepts only `application/json` is answered as that rather than refused, and the same
 goes for the contract's `application/schema+json`.
 

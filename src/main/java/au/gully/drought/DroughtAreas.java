@@ -24,8 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Drought over an area of hexagons, stepped forward daily (docs/06 item 7, W-11). Drought is a
- * property of a district, not a 15 km cell, so the plane is tiled into fixed areas of
- * {@link #RADIUS} — a hexagon and its ring, seven cells about 45 km across — and one state serves
+ * property of a district, not a 20 km cell, so the plane is tiled into fixed areas of
+ * {@link #RADIUS} — a hexagon and its ring, seven cells, three across, about 60 km — and one state serves
  * every hexagon in the area: the first hexagon asked about in an area spins it up, the rest share
  * it, and it is stepped once a day for all of them. The areas never move and never overlap
  * ({@link Grid#areaCentre}), so which hexagon was asked about first changes nothing.
@@ -44,8 +44,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DroughtAreas {
 
     /**
-     * The area's radius in cells: 1 is the hexagon and its ring, seven cells, about 45 km across.
-     * 2 would be nineteen cells about 75 km across, one archive fetch for all of them, at the cost
+     * The area's radius in cells: 1 is the hexagon and its ring, seven cells, three across, about 60 km.
+     * 2 would be nineteen cells about 100 km across, one archive fetch for all of them, at the cost
      * of the rain gradient across the Mount Lofty Ranges being one figure.
      */
     public static final int RADIUS = 1;

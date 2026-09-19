@@ -38,9 +38,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *       for a hexagon with nothing fetch it once.</li>
  *   <li>A hexagon with a Bureau station in it is always alive: its "now" is the station's, free,
  *       every ten minutes, and the upstream is called for its forecast only, when a forecast is asked for.</li>
- *   <li>The Hub sweeps its open incidents every few minutes, so their hexagons stay warm by being
- *       asked about and go cold on their own when the incident closes.</li>
- *   <li>History is written only when an ask says an incident is present.</li>
+ *   <li>A caller that keeps asking keeps its hexagons warm; they go cold on their own when it stops.</li>
+ *   <li>History is written only when an ask carries a ref - what the reading is for.</li>
  * </ul>
  */
 @Slf4j
@@ -89,11 +88,12 @@ public class HexagonStore {
      * The hexagon for a point, with a reading as fresh as the upstream allows.
      *
      * @param wantForecast whether the series is wanted; a station hexagon is not fetched without it
-     * @param incident     the incident's id when one is present, which is what writes history; null otherwise
+     * @param ref          what the reading is for, when the caller says - an incident id, a job number,
+     *                     anything - which is what writes history; null otherwise
      * @return the hexagon as it stands after the ask; its reading may be stale, and says so, when no
      * upstream could answer
      */
-    public Hexagon ask(double lat, double lon, boolean wantForecast, String incident) {
+    public Hexagon ask(double lat, double lon, boolean wantForecast, String ref) {
         Instant now = Instant.now();
         Cell cell = grid.cellOf(lat, lon);
         boolean created = !hexagons.containsKey(cell.id());
@@ -134,9 +134,9 @@ public class HexagonStore {
         if (h.forecast() != null && !stationFresh && h.forecast().currentExpired(now)) {
             stale.incrementAndGet();
         }
-        if (incident != null && !incident.isBlank()) {
+        if (ref != null && !ref.isBlank()) {
             Optional<FirePictures.Now> current = pictures.now(h, now);
-            if (current.isPresent() && history.snapshot(h, current.get(), incident.trim(), now)) {
+            if (current.isPresent() && history.snapshot(h, current.get(), ref.trim(), now)) {
                 h = replace(h.id(), old -> old.snapshotted(now));
                 repository.saveActivity(h);
             }
@@ -488,6 +488,13 @@ public class HexagonStore {
      */
     public long version() {
         return version.get();
+    }
+
+    /**
+     * The grid against the one the tables were written with; a change resets the hexagon-keyed tables.
+     */
+    public boolean ensureGrid() {
+        return repository.ensureGrid(grid);
     }
 
     public Grid grid() {

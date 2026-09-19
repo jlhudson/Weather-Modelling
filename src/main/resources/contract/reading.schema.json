@@ -39,10 +39,10 @@
     },
     "hexagon": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "lat", "lon", "widthKm", "sides", "elevationM", "elevationFrom", "slopeDeg", "zone", "fireBanDistrict", "bureauDistrict", "landUse", "stationId", "kind", "activatedAt", "refreshedAt", "expiresAt"],
+      "required": ["id", "lat", "lon", "widthKm", "elevationM", "elevationFrom", "slopeDeg", "zone", "fireBanDistrict", "bureauDistrict", "landUse", "stationId", "kind", "activatedAt", "refreshedAt", "expiresAt"],
       "properties": {
         "id": {"type": "string"}, "lat": {"type": "number"}, "lon": {"type": "number"},
-        "widthKm": {"type": "number"}, "sides": {"type": "integer"},
+        "widthKm": {"type": "number"},
         "elevationM": {"$ref": "#/$defs/num"}, "elevationFrom": {"enum": ["terrain", "model", "station", null]},
         "slopeDeg": {"$ref": "#/$defs/num"}, "zone": {"$ref": "#/$defs/str"},
         "fireBanDistrict": {"$ref": "#/$defs/str"}, "bureauDistrict": {"$ref": "#/$defs/str"},
@@ -264,10 +264,10 @@
       }
     },
     "history": {
-      "type": "object", "additionalProperties": false, "required": ["at", "askedAt", "incident", "requested"],
+      "type": "object", "additionalProperties": false, "required": ["at", "askedAt", "ref", "requested"],
       "properties": {
         "at": {"$ref": "#/$defs/instantOrNull"}, "askedAt": {"$ref": "#/$defs/instantOrNull"},
-        "incident": {"$ref": "#/$defs/str"}, "requested": {"$ref": "#/$defs/instant"}
+        "ref": {"$ref": "#/$defs/str"}, "requested": {"$ref": "#/$defs/instant"}
       }
     }
   }

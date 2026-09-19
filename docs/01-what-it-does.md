@@ -14,11 +14,13 @@ Nothing here is pre-warmed. A reading exists because something asked for it.
 
 ## 1.1 Hexagons
 
-Australia is divided into hexagons 15 km across the flats, on the Australian Albers plane so a hexagon
-is 15 km from Cape York to Hobart. The two constants are at the top of `au.gully.hexagons.Grid`: the
-width and the number of sides (six, or four for an upstream whose model is a square grid). The cells
-are not stored anywhere — any point's cell is arithmetic — so a hexagon only exists once something
-inside it has been asked about, and empty country costs nothing.
+Australia is divided into hexagons 20 km across the flats, on the Australian Albers plane so a hexagon
+is 20 km from Cape York to Hobart, laid out from one anchor: hexagon `0_0` is centred on the Murray
+Bridge Golf Course. The three constants are at the top of `au.gully.hexagons.Grid` — the width, the
+anchor's latitude and longitude — and changing one changes every hexagon's id, which the service
+notices at startup and resets the hexagon-keyed tables for. Hexagons, and only hexagons. The cells
+are never stored as a list and never generated — any point's hexagon is arithmetic from the anchor — so
+a hexagon only exists once something inside it has been asked about, and empty country costs nothing.
 
 A point is answered by the reading held for its hexagon, fetched once at the hexagon's centre and
 shared by everything inside it. A large fire is two to ten calls from The Hub, one after the other —
@@ -43,8 +45,8 @@ quarter-hour it covers, so a reading is current until that quarter-hour ends; it
 so the hourly and daily series are re-asked for an hour after they were fetched. Served close to expiry
 (`gully.refresh-ahead`, three minutes), a hexagon is refreshed in the background so the next ask is
 already fresh. Several asks arriving at once for a hexagon with nothing fetch it once. The Hub sweeps
-its open incidents every few minutes, so their hexagons stay warm by being asked about and go cold on
-their own when the incident closes; a forecast nobody has asked about for a day is dropped from memory
+keeps asking, so the hexagons it asks about stay warm and go cold on their own when it stops; a
+forecast nobody has asked about for a day is dropped from memory
 and the hexagon keeps only what it is made of.
 
 **A hexagon with a Bureau station in it is always alive.** Its "now" is the station's values, which
@@ -117,8 +119,8 @@ carried on every active hexagon in the district; a hexagon with no curing figure
 
 The fire indices need a drought factor; a drought factor needs a soil moisture deficit; a deficit
 needs a year of daily rain and maximum temperature integrated into a Keetch–Byram index and then a
-Griffiths factor. Drought is a property of a district, not a 15 km cell, so the plane is tiled into
-fixed **drought areas** of seven hexagons — a hexagon and its ring, about 45 km across (W-11) — and one
+Griffiths factor. Drought is a property of a district, not a 20 km cell, so the plane is tiled into
+fixed **drought areas** of seven hexagons — a hexagon and its ring, three across, about 60 km (W-11) — and one
 state serves every hexagon in the area, from the Bureau stations inside those seven hexagons (or the
 nearest within 75 km). The areas never move and never overlap, so it does not matter which hexagon in
 one is asked about first: the first spins the area up, the rest share it.
@@ -164,17 +166,21 @@ puts it after the grassland model has been checked against a bad day's published
 ## 1.9 History
 
 A snapshot of a hexagon's current conditions and fire picture — never the forecast — is written to
-`reading_snapshot` when The Hub asks about the hexagon and says an incident is present, at most once
-every three hours per hexagon. Only hexagons that had an incident have history; nothing is ever
-deleted from the table by the service; a nightly export goes to the backups volume. Asking the API for
-a past time returns the snapshot nearest that time, with its own time, or says there is none. The
-Hub sends the incident's start time when it asks late.
+`reading_snapshot` when an ask about the hexagon carries a `ref` — what the reading is for: an
+incident id, a job number, a planning exercise, anything the caller names — at most once every three
+hours per hexagon. This is a weather service, not an incident service: a reading is asked for for any
+reason, and the ref is the caller's word for it. Only hexagons asked about with a ref have history;
+nothing is ever deleted from the table by the service; a nightly export goes to the backups volume.
+Asking the API for a past time returns the snapshot nearest that time, with its own time, or says
+there is none.
 
 ## 1.10 The console map
 
 The map draws every hexagon held, and by default what makes each one active: amber where a forecast
-is held because an incident asked, blue where a Bureau station sits in it, a purple ring where the
-drought has been stepped for its area, a faint outline where there is nothing yet. On every hexagon
+is held because something asked — fading as the forecast ages towards its expiry, so a hexagon nobody
+is asking about any more is visibly going — blue where a Bureau station sits in it, a purple ring where
+the drought has been stepped for its area, a faint outline where there is nothing yet; a switch shows
+the forecasts alone. On every hexagon
 that knows its weather, an arrow the way the wind blows, its length by the speed (from zoom 7), and
 the temperature, humidity and speed as a label (from zoom 9). A tooltip carries the values and the
 fire indices; a click opens everything held. The same select colours by any one value — the indices
@@ -184,7 +190,7 @@ device: the bar collapses on a phone, and only the map zooms.
 
 ## 1.11 What is deliberately not here
 
-The decision about *when* to ask stays in The Hub (its D-249): the stagger across open incidents, the
-re-ask on an upgrade or a move, the per-tick ceiling. This service has no incidents and no way to
-acquire any; it holds the cache, The Hub holds the question. There is no Hub-side cache and no Hub-side
-fallback (D-252): an incident this service does not answer for is owed a reading and asked about again.
+The decision about *when* to ask stays with the caller (The Hub's D-249: the stagger across what it
+watches, the re-ask on a change, the per-tick ceiling). This service knows nothing about what a reading
+is for beyond the ref the caller attaches; it holds the cache, the caller holds the question. There is
+no Hub-side cache and no Hub-side fallback (D-252): what this service does not answer is asked about again.

@@ -49,7 +49,7 @@ public record Reading(
     public static final String SCHEMA = "gully/reading/1";
 
     public static final String DISCLAIMER = "Weather from third-party forecast models and the Bureau of Meteorology's "
-            + "published station values, held per 15 km hexagon; the fire indices are computed here and the official "
+            + "published station values, held per 20 km hexagon; the fire indices are computed here and the official "
             + "rating is the CFS's. Not an official Bureau of Meteorology product.";
 
     public record Point(double lat, double lon) {
@@ -60,7 +60,7 @@ public record Reading(
      * @param refreshedAt when the forecast was fetched; null without one
      * @param expiresAt  when the "now" values go stale; null without a forecast
      */
-    public record HexagonBlock(String id, double lat, double lon, double widthKm, int sides, Double elevationM,
+    public record HexagonBlock(String id, double lat, double lon, double widthKm, Double elevationM,
                                String elevationFrom, Double slopeDeg, String zone, String fireBanDistrict,
                                String bureauDistrict, LandUseBlock landUse, String stationId, String kind,
                                Instant activatedAt, Instant refreshedAt, Instant expiresAt) {
@@ -156,8 +156,8 @@ public record Reading(
     /**
      * @param at       the snapshot's own time, which may be hours from the time asked for
      * @param askedAt  when the snapshot was taken
-     * @param incident the incident that caused it
+     * @param ref      the reference the ask carried: what the reading was for
      */
-    public record HistoryBlock(Instant at, Instant askedAt, String incident, Instant requested) {
+    public record HistoryBlock(Instant at, Instant askedAt, String ref, Instant requested) {
     }
 }

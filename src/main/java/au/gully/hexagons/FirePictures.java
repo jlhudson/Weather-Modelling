@@ -36,7 +36,7 @@ public class FirePictures {
     static final double GRASS_LOAD_T_HA = GrassFireDanger.STANDARD_LOAD_T_HA;
 
     /**
-     * The window the wind change is searched in, and the incident's hourly view is cut at.
+     * The window the wind change is searched in, and the hourly view is cut at.
      */
     public static final int FORECAST_HOURS = 48;
 

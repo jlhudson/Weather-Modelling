@@ -66,12 +66,14 @@ class EndToEndTest {
         // The legacy row is still there, with the hash of the plaintext the init script planted.
         String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
         assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "drought_area"}) {
+        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "drought_area", "grid_spec"}) {
             Long n = db.sql("select count(*) from " + table).query(Long.class).single();
             assertThat(n).as(table).isNotNull();
         }
         Long userCount = db.sql("select count(*) from console_user where username = 'operator'").query(Long.class).single();
         assertThat(userCount).isEqualTo(1);
+        // The grid the tables were written with was recorded on the first start.
+        assertThat(db.sql("select spec from grid_spec where id = 1").query(String.class).single()).isEqualTo(store.grid().spec());
     }
 
     @Test
@@ -250,7 +252,7 @@ class EndToEndTest {
         // The station answers "now", so a snapshot was written for the incident and is found nearest its time.
         assertThat(history.countFor(h.id())).isEqualTo(1);
         assertThat(history.nearest(h.id(), now)).isPresent();
-        assertThat(history.nearest(h.id(), now).get().incident()).isEqualTo("INC0001");
+        assertThat(history.nearest(h.id(), now).get().ref()).isEqualTo("INC0001");
         assertThat(history.allAt(now.plusSeconds(60))).containsKey(h.id());
         assertThat(store.ask(-34.93, 138.6, false, "INC0001").lastSnapshotAt()).as("inside three hours: one snapshot").isEqualTo(h.lastSnapshotAt());
         assertThat(history.countFor(h.id())).isEqualTo(1);

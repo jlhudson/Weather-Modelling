@@ -52,7 +52,9 @@ land use. In the container the files live on the `weather-data` volume at `/data
 
 ## 3.4 The constants
 
-What is not configuration, and where it lives: the cell width and shape (`Grid.CELL_KM`, `Grid.SIDES`);
+What is not configuration, and where it lives: the hexagon's width and the grid's anchor (`Grid.CELL_KM`, 20 km;
+`Grid.ANCHOR_LAT` and `ANCHOR_LON`, the Murray Bridge Golf Course — change either and the hexagon-keyed
+tables are reset at the next start, the service says so in the log);
 every upstream's host, model, licence, allowance, cost per fetch, per-minute limit and pause
 (`OpenMeteo.SPEC`, `GoogleWeather.SPEC`); the budget guard (90%) and the breaker's trip count (3);
 the Bureau's product identifiers and cadences (`StationFile`, `WarningFiles`, `StationReader.EVERY`,

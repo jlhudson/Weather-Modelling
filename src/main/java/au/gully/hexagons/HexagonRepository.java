@@ -30,6 +30,39 @@ public class HexagonRepository {
         this.json = json;
     }
 
+    /**
+     * The grid the hexagon-keyed tables were written with, against the grid the code has. A change to
+     * the width or the anchor ({@code Grid}'s constants) changes every hexagon's id, so the hexagons,
+     * the history, the drought areas and the river cells are reset — they are rebuilt from the sources
+     * as they are asked about; the history is the one real loss, and re-gridding accepts it. Called
+     * before anything is rehydrated.
+     *
+     * @return whether the tables were reset
+     */
+    public boolean ensureGrid(Grid grid) {
+        String spec = grid.spec();
+        String held = db.sql("select spec from grid_spec where id = 1").query(String.class).optional().orElse(null);
+        if (held == null) {
+            db.sql("insert into grid_spec (id, spec, since) values (1, :spec, :at)").param("spec", spec).param("at", Db.ts(Instant.now())).update();
+            log.info("grid: {}", spec);
+            return false;
+        }
+        if (held.equals(spec)) {
+            return false;
+        }
+        long hexagons = count("hexagon"), snapshots = count("reading_snapshot"), areas = count("drought_area"), rivers = count("river_discharge");
+        db.sql("truncate table hexagon, reading_snapshot, drought_area, river_discharge").update();
+        db.sql("update grid_spec set spec = :spec, since = :at where id = 1").param("spec", spec).param("at", Db.ts(Instant.now())).update();
+        log.warn("grid changed from [{}] to [{}]: every hexagon id changed, so {} hexagons, {} snapshots, {} drought areas and {} river cells were reset",
+                held, spec, hexagons, snapshots, areas, rivers);
+        return true;
+    }
+
+    private long count(String table) {
+        Long n = db.sql("select count(*) from " + table).query(Long.class).single();
+        return n == null ? 0 : n;
+    }
+
     public void insert(Hexagon h) {
         db.sql("""
                 insert into hexagon (id, q, r, lat, lon, zone, elevation_m, elevation_from, slope_deg, land_use, fire_ban_district,

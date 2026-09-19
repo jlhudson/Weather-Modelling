@@ -15,11 +15,12 @@ import java.util.Optional;
 
 /**
  * What the weather <em>was</em> (docs/06 item 2): a snapshot of a hexagon's current conditions and
- * fire picture — never the forecast — taken when The Hub asks about the hexagon and says an incident
- * is present, at most once every {@link #CURRENT_FOR}. Nothing is ever deleted from the table.
+ * fire picture — never the forecast — taken when an ask about the hexagon carries a ref (what the
+ * reading is for: an incident id, a job number, anything the caller names), at most once every
+ * {@link #CURRENT_FOR}. Nothing is ever deleted from the table.
  * <p>
  * A Bureau station updating every ten minutes never writes history on its own; its latest values
- * are simply kept. Only hexagons that had an incident have history.
+ * are simply kept. Only hexagons asked about with a ref have history.
  */
 @Slf4j
 @Repository
@@ -44,16 +45,16 @@ public class History {
      *
      * @return whether one was written
      */
-    public boolean snapshot(Hexagon h, FirePictures.Now now, String incident, Instant askedAt) {
+    public boolean snapshot(Hexagon h, FirePictures.Now now, String ref, Instant askedAt) {
         if (h.lastSnapshotAt() != null && Duration.between(h.lastSnapshotAt(), askedAt).compareTo(CURRENT_FOR) < 0) {
             return false;
         }
-        Snapshot s = new Snapshot(h.id(), now.at(), askedAt, incident, now.conditions(), now.from(),
+        Snapshot s = new Snapshot(h.id(), now.at(), askedAt, ref, now.conditions(), now.from(),
                 h.stationId() != null ? h.stationId() : h.nearestStationId(), h.fire(),
                 h.drought() == null ? null : h.drought().index(), h.forecast() == null ? null : h.forecast().upstream());
-        db.sql("insert into reading_snapshot (hexagon_id, at, asked_at, incident, payload) values (:h, :at, :asked, :inc, :p::jsonb)")
+        db.sql("insert into reading_snapshot (hexagon_id, at, asked_at, ref, payload) values (:h, :at, :asked, :ref, :p::jsonb)")
                 .param("h", h.id()).param("at", Db.ts(now.at())).param("asked", Db.ts(askedAt))
-                .param("inc", incident == null ? null : incident.substring(0, Math.min(128, incident.length())))
+                .param("ref", ref == null ? null : ref.substring(0, Math.min(128, ref.length())))
                 .param("p", json.write(s)).update();
         return true;
     }
@@ -105,7 +106,7 @@ public class History {
      * The rows since an instant, as maps, for the nightly export.
      */
     public List<Map<String, Object>> rowsSince(Instant since) {
-        return db.sql("select id, hexagon_id, at, asked_at, incident, payload from reading_snapshot where asked_at >= :since order by id")
+        return db.sql("select id, hexagon_id, at, asked_at, ref, payload from reading_snapshot where asked_at >= :since order by id")
                 .param("since", Db.ts(since)).query().listOfRows();
     }
 
@@ -114,7 +115,7 @@ public class History {
      *
      * @param at the time the conditions describe — the snapshot's own time, which the API reports
      */
-    public record Snapshot(String hexagonId, Instant at, Instant askedAt, String incident, Conditions current,
+    public record Snapshot(String hexagonId, Instant at, Instant askedAt, String ref, Conditions current,
                            String currentFrom, String stationId, FirePicture fire,
                            au.gully.science.DroughtIndex drought, String upstream) {
     }

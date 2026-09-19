@@ -23,7 +23,7 @@ public class Geo {
     }
 
     /**
-     * Whether a pair of numbers is a place on the Earth. A swapped pair puts an Adelaide incident in
+     * Whether a pair of numbers is a place on the Earth. A swapped pair puts an Adelaide point in
      * Kazakhstan, and a NaN is not anywhere.
      */
     public static boolean plausible(double lat, double lon) {

@@ -38,23 +38,29 @@ class GridTest {
         Cell c = GRID.cellOf(-35.02, 138.73);
         assertThat(GRID.parse(c.id())).isEqualTo(c);
         double d = Geo.haversineMetres(-35.02, 138.73, c.lat(), c.lon());
-        // Never further than the circumradius, 15 km / √3.
-        assertThat(d).isLessThan(15_000 / Math.sqrt(3) + 5);
+        // Never further than the circumradius, the width / √3.
+        assertThat(d).isLessThan(Grid.CELL_KM * 1000 / Math.sqrt(3) + 5);
         for (Cell n : GRID.ring(c)) {
             assertThat(Geo.haversineMetres(-35.02, 138.73, n.lat(), n.lon())).isGreaterThanOrEqualTo(d - 1);
         }
     }
 
     @Test
-    void theCellIsFifteenKilometresAcrossTheFlats() {
+    void theHexagonIsTheWidthAcrossTheFlatsAndAnchoredOnTheGolfCourse() {
+        // Hexagon 0_0 is centred on the anchor, and the anchor is in it.
+        Cell origin = GRID.cell(0, 0);
+        assertThat(origin.lat()).isCloseTo(Grid.ANCHOR_LAT, offset(1e-6));
+        assertThat(origin.lon()).isCloseTo(Grid.ANCHOR_LON, offset(1e-6));
+        assertThat(GRID.cellOf(Grid.ANCHOR_LAT, Grid.ANCHOR_LON).id()).isEqualTo("0_0");
+        assertThat(GRID.spec()).contains("20.0 km").contains("-35.13133,139.26558");
         Cell c = GRID.cellOf(-34.93, 138.60);
         List<Cell> ring = GRID.ring(c);
         assertThat(ring).hasSize(6);
         for (Cell n : ring) {
             // Centre to centre across a shared flat is the width across flats.
-            assertThat(Geo.haversineMetres(c.lat(), c.lon(), n.lat(), n.lon())).isCloseTo(15_000, offset(150.0));
+            assertThat(Geo.haversineMetres(c.lat(), c.lon(), n.lat(), n.lon())).isCloseTo(Grid.CELL_KM * 1000, offset(200.0));
         }
-        assertThat(GRID.areaKm2()).isCloseTo(194.9, offset(0.1));
+        assertThat(GRID.areaKm2()).isCloseTo(346.4, offset(0.1));
     }
 
     @Test
@@ -65,7 +71,7 @@ class GridTest {
         assertThat(outline.getFirst()).containsExactly(outline.getLast());
         for (int i = 0; i < 6; i++) {
             assertThat(Geo.haversineMetres(c.lat(), c.lon(), outline.get(i)[0], outline.get(i)[1]))
-                    .isCloseTo(15_000 / Math.sqrt(3), offset(150.0));
+                    .isCloseTo(Grid.CELL_KM * 1000 / Math.sqrt(3), offset(200.0));
         }
     }
 
@@ -79,7 +85,7 @@ class GridTest {
                 cells.add(GRID.cellOf(lat, lon).id());
             }
         }
-        assertThat(cells.size()).isBetween(20, 60);
+        assertThat(cells.size()).isBetween(12, 60);
         for (String id : cells) {
             Cell c = GRID.parse(id);
             for (Cell n : GRID.ring(c)) {
@@ -101,30 +107,19 @@ class GridTest {
     @Test
     void withinABoxListsTheCellsAndRefusesAContinent() {
         List<Cell> some = GRID.within(-35.3, 138.2, -34.6, 139.0, 3000);
-        assertThat(some.size()).isBetween(20, 70);
+        assertThat(some.size()).isBetween(12, 70);
         assertThat(some.stream().map(Cell::id).distinct().count()).isEqualTo(some.size());
         assertThat(GRID.within(-44, 112, -10, 154, 3000)).isEmpty();
     }
 
     @Test
-    void squaresTileTooAndHaveEightNeighbours() {
-        Grid squares = new Grid(15, 4);
-        Cell c = squares.cellOf(-34.93, 138.60);
-        assertThat(squares.ring(c)).hasSize(8);
-        assertThat(squares.outline(c)).hasSize(5);
-        assertThat(squares.areaKm2()).isEqualTo(225.0);
-        assertThat(squares.cellOf(c.lat(), c.lon())).isEqualTo(c);
-    }
-
-    @Test
-    void onlyFourAndSixSidesTile() {
-        assertThatThrownBy(() -> new Grid(15, 5)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Grid(0, 6)).isInstanceOf(IllegalArgumentException.class);
+    void aHexagonNeedsAWidth() {
+        assertThatThrownBy(() -> new Grid(0)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void aFinerGridForRiversNestsIndependently() {
-        Grid rivers = new Grid(5, 6);
+        Grid rivers = new Grid(5);
         Cell r = rivers.cellOf(-34.93, 138.60);
         assertThat(rivers.areaKm2()).isCloseTo(21.65, offset(0.01));
         assertThat(Geo.haversineMetres(-34.93, 138.60, r.lat(), r.lon())).isLessThan(5_000 / Math.sqrt(3) + 5);
@@ -134,14 +129,13 @@ class GridTest {
      * The drought areas tile the plane (W-11): over a large block of cells, every cell is within the
      * radius of exactly one fixed centre, a centre is its own centre, the area drawn around a centre
      * is exactly the set of cells that map to it, and it has {@code 3r² + 3r + 1} cells. For the
-     * seven-cell flower and the nineteen-cell one, and for the square grid's blocks.
+     * seven-cell flower and the nineteen-cell one.
      */
     @Test
     void theDroughtAreasTileThePlaneWithoutOverlapOrGaps() {
         for (int radius = 1; radius <= 2; radius++) {
             tiles(GRID, radius, 3 * radius * radius + 3 * radius + 1);
         }
-        tiles(new Grid(15, 4), 1, 9);
     }
 
     private static void tiles(Grid grid, int radius, int expectedSize) {

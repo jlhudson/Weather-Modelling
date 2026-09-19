@@ -43,14 +43,14 @@ public class ReadingsController {
     @GetMapping
     @Operation(summary = "The reading at a point",
             description = "Now by default. With `at`, the snapshot nearest that time for the point's hexagon — "
-                    + "only hexagons that had an incident have history. With `incident`, the ask writes history "
+                    + "only hexagons asked about with a ref have history. With `ref`, the ask writes history "
                     + "(at most once every three hours per hexagon).")
     public ResponseEntity<Reading> at(
             @Parameter(description = "latitude, -90..90") @RequestParam double lat,
             @Parameter(description = "longitude, -180..180") @RequestParam double lon,
             @Parameter(description = "include the days and hours ahead") @RequestParam(defaultValue = "false") boolean forecast,
             @Parameter(description = "an ISO-8601 instant in the past; answers from history") @RequestParam(required = false) String at,
-            @Parameter(description = "the incident present at the point, which writes history") @RequestParam(required = false) String incident) {
+            @Parameter(description = "what the reading is for - an incident id, a job number, anything; an ask carrying one writes history") @RequestParam(required = false) String ref) {
         if (!Geo.plausible(lat, lon)) {
             throw bad("lat must be -90..90 and lon must be -180..180");
         }
@@ -71,7 +71,7 @@ public class ReadingsController {
             return ResponseEntity.ok().cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
                     .lastModified(r.at() == null ? when : r.at()).body(r);
         }
-        Reading r = readings.now(lat, lon, forecast, incident);
+        Reading r = readings.now(lat, lon, forecast, ref);
         ResponseEntity.BodyBuilder b = ResponseEntity.ok();
         Instant expires = r.hexagon() == null ? null : r.hexagon().expiresAt();
         long seconds = expires == null ? 60 : Math.max(0, Duration.between(Instant.now(), expires).toSeconds());

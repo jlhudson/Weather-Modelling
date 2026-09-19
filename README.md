@@ -8,17 +8,18 @@ Gully is the overhaul of the Weather service that was split out of [The Hub Data
 and the values are the values: no confidence scores, no "estimate" or "actual" branching; a missing
 value is missing, never zero; every answer carries its source and its time.
 
-**How it works, in one paragraph.** Australia is divided into 15 km hexagons by arithmetic (the two
-constants are at the top of `Grid`); a point is answered by the reading held for its hexagon, fetched
-once at the centre from Open-Meteo — Google Weather is the overflow — and kept until the upstream says
-it is stale. Nothing is pre-warmed: a hexagon exists once something inside it has been asked about,
-and The Hub's sweep of its open incidents keeps their hexagons warm. Every Bureau of Meteorology station
+**How it works, in one paragraph.** Australia is divided into 20 km hexagons by arithmetic from one
+anchor, the Murray Bridge Golf Course (the constants are at the top of `Grid`); a point is answered by
+the reading held for its hexagon, fetched once at the centre from Open-Meteo — Google Weather is the
+overflow — and kept until the upstream says it is stale. Nothing is pre-warmed and nothing is
+generated: a hexagon exists once something inside it has been asked about, and a caller that keeps
+asking keeps its hexagons warm. Every Bureau of Meteorology station
 gets a hexagon of its own whose "now" is the station's values, free, every ten minutes; the Bureau's
 warnings, the CFS's district rating and total fire ban, the grass curing the operator enters, the land
 use and elevation from mounted terrain files, and a drought index stepped forward daily from the
 station ledger all sit on the hexagon, so the full fire picture — McArthur forest and grassland, the
 AFDRS grassland index and its rating, the official rating, the wind and its next change, the warnings
-— is a lookup, never a computation on request. History is written only while an incident is present.
+— is a lookup, never a computation on request. History is written only for asks that carry a `ref`.
 One in-memory cache holds all of it, rebuilt from Postgres at start; the database is not touched to
 answer a request.
 
@@ -34,7 +35,7 @@ limits in the `RateLimit-*` headers. The OpenAPI document is at `/api/v1/openapi
 
 | Route | What it answers |
 |---|---|
-| `GET /api/v1/readings?lat=&lon=&forecast=&at=&incident=` | The reading at a point: the hexagon, the source, the conditions now (station or model), the nearest station's values, the fire picture, flood, drought, warnings, and with `forecast=true` the days and hours. `at=` answers from history; `incident=` writes it. |
+| `GET /api/v1/readings?lat=&lon=&forecast=&at=&ref=` | The reading at a point: the hexagon, the source, the conditions now (station or model), the nearest station's values, the fire picture, flood, drought, warnings, and with `forecast=true` the days and hours. `at=` answers from history; `ref=` (what the reading is for) writes it. |
 | `GET /api/v1/hexagons.geojson?at=` | Every hexagon held, as polygons carrying the values a map colours by. Pre-rendered, fingerprinted, never fetches. |
 | `GET /api/v1/hexagons`, `GET /api/v1/hexagons/{id}` | The list, and everything held for one: reading, drought state, river, history. |
 | `GET /api/v1/fire-indices?temperatureC=&humidityPct=&windKmh=&droughtFactor=&curingPct=&fuelLoadTHa=&condition=` | The indices for given inputs, from the one set of formulas. |

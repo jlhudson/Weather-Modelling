@@ -34,8 +34,8 @@ public class Readings {
     /**
      * The reading now: the ask, then the assembly.
      */
-    public Reading now(double lat, double lon, boolean withForecast, String incident) {
-        return of(store.ask(lat, lon, withForecast, incident), new Reading.Point(lat, lon), withForecast);
+    public Reading now(double lat, double lon, boolean withForecast, String ref) {
+        return of(store.ask(lat, lon, withForecast, ref), new Reading.Point(lat, lon), withForecast);
     }
 
     /**
@@ -72,13 +72,13 @@ public class Readings {
         Hexagon h = held.get();
         Optional<History.Snapshot> nearest = history.nearest(h.id(), at);
         if (nearest.isEmpty()) {
-            return unavailable(point, h, "no history: no incident has been present in this hexagon");
+            return unavailable(point, h, "no history: nothing asked about this hexagon has carried a ref");
         }
         History.Snapshot s = nearest.get();
         Instant now = Instant.now();
         return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, now), null, s.at(), s.current(), s.currentFrom(),
                 station(h), fire(s.fire()), null, s.drought(), warnings(s.fire()), null,
-                new Reading.HistoryBlock(s.at(), s.askedAt(), s.incident(), at), Reading.DISCLAIMER);
+                new Reading.HistoryBlock(s.at(), s.askedAt(), s.ref(), at), Reading.DISCLAIMER);
     }
 
     public Reading unavailable(Reading.Point point, Hexagon h, String why) {
@@ -96,7 +96,7 @@ public class Readings {
         Grid grid = store.grid();
         Forecast f = h.forecast();
         LandUse land = h.landUse();
-        return new Reading.HexagonBlock(h.id(), round(h.cell().lat()), round(h.cell().lon()), grid.cellKm(), grid.sides(),
+        return new Reading.HexagonBlock(h.id(), round(h.cell().lat()), round(h.cell().lon()), grid.cellKm(),
                 h.elevationM(), h.elevationFrom(), h.slopeDeg(), h.zone(), h.fireBanDistrict(), h.bureauDistrict(),
                 land == null ? null : new Reading.LandUseBlock(land.pointClass() == null ? null : land.pointClass().key(),
                         land.byKey(), land.leads(), land.burnablePct()),

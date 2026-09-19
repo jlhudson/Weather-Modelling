@@ -51,7 +51,7 @@ public class LogSignatures {
 
     /**
      * The message with its variable parts masked: ids, hashes, timestamps and numbers become {@code #},
-     * so "incident 685e4ee6-… reopened after 3 pages" and "incident f70a5305-… reopened after 12 pages"
+     * so "ref 685e4ee6-… asked again after 3 hours" and "ref f70a5305-… asked again after 12 hours"
      * are one problem.
      */
     public static String pattern(String message) {

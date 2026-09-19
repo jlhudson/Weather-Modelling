@@ -153,7 +153,6 @@ public class StatusController {
         m.put("servedStale", store.staleCount());
         m.put("inFlight", store.inFlight());
         m.put("cellKm", store.grid().cellKm());
-        m.put("sides", store.grid().sides());
         return m;
     }
 

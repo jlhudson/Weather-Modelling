@@ -54,7 +54,7 @@ public class MapLayer {
     }
 
     /**
-     * The layer as it was at an instant, from the history: only hexagons that had an incident have
+     * The layer as it was at an instant, from the history: only hexagons asked about with a ref have
      * a value then. Not cached; the time slider asks for it rarely.
      */
     public Rendered at(Instant at) {
@@ -87,7 +87,6 @@ public class MapLayer {
         meta.put("withForecast", withForecast);
         meta.put("withDrought", withDrought);
         meta.put("cellKm", store.grid().cellKm());
-        meta.put("sides", store.grid().sides());
         meta.put("version", version);
         fc.put("meta", meta);
         byte[] bytes = json.write(fc).getBytes(StandardCharsets.UTF_8);
@@ -193,7 +192,7 @@ public class MapLayer {
         Conditions c = s.current();
         p.put("at", s.at() == null ? null : s.at().toString());
         p.put("from", s.currentFrom());
-        p.put("incident", s.incident());
+        p.put("ref", s.ref());
         p.put("temperatureC", c == null ? null : c.temperatureC());
         p.put("humidityPct", c == null ? null : c.humidityPct());
         p.put("windSpeedKmh", c == null ? null : c.windSpeedKmh());

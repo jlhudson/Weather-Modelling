@@ -46,7 +46,7 @@ public class Settings {
         m.put("gully.diagnostics.keep-errors", diagnostics.keepErrors());
         m.put("gully.diagnostics.keep-warnings", diagnostics.keepWarnings());
         m.put("grid.cell-km (constant)", Grid.CELL_KM);
-        m.put("grid.sides (constant)", Grid.SIDES);
+        m.put("grid.anchor (constant)", Grid.ANCHOR_LAT + "," + Grid.ANCHOR_LON);
         return m;
     }
 

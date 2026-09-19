@@ -6,83 +6,92 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The cell generator (docs/06 item 1). Australia is divided into cells of {@link #CELL_KM} across
- * with {@link #SIDES} sides, and every reading belongs to one. The cells are not stored anywhere: any
- * point's cell is arithmetic on the Albers plane, so a cell only exists once something inside it has
- * been asked about, and empty country costs nothing.
+ * The hexagon generator (docs/06 item 1). Australia is divided into flat-topped hexagons
+ * {@link #CELL_KM} across the flats, laid out from one {@link #ANCHOR_LAT anchor} — hexagon {@code 0_0}
+ * is centred on it — and every reading belongs to one. The hexagons are not stored anywhere and never
+ * generated as a list: any point's hexagon is arithmetic on the Albers plane from the anchor, so a
+ * hexagon only exists once something inside it has been asked about, and empty country costs nothing.
  * <p>
- * <strong>The two constants at the top are the whole design.</strong> Six sides is the default
- * because hexagons are the tiling whose cells are nearest to round — every point in one is within
- * half a cell-width of its centre, where a square's corner is 0.71 of a width away — and because a
- * ring of six is the natural "district" for the drought maths. Four is the other shape that tiles
- * without gaps, kept for an upstream whose model is a square grid. An upstream with a finer or coarser
- * model gets its own instance with its own size; {@link #DEFAULT} is the reading's.
+ * <strong>The three constants at the top are the whole design</strong>, and changing one changes every
+ * hexagon's id: {@code HexagonRepository} notices at startup and resets the hexagon-keyed tables
+ * (hexagons, history, drought areas, river cells), which is the deal a re-gridding makes.
  * <p>
- * Flat-topped hexagons in axial coordinates {@code (q, r)}; a cell's id is {@code q_r}. The size is
- * the width across the flats, so a 15 km hexagon is 15 km wide and 17.3 km tall; a 15 km square is
- * 15 km both ways.
+ * Hexagons, and only hexagons: they are the tiling whose cells are nearest to round — every point in
+ * one is within half a width of its centre — and a ring of six is the natural district for the
+ * drought maths (W-11). Axial coordinates {@code (q, r)}; a hexagon's id is {@code q_r}. The size is the
+ * width across the flats, so a 20 km hexagon is 20 km wide and 23.1 km tall.
  */
 public final class Grid {
 
-    public static final double CELL_KM = 15;
-    public static final int SIDES = 6;
+    /**
+     * The width of a hexagon across the flats, in kilometres.
+     */
+    public static final double CELL_KM = 20;
+
+    /**
+     * The anchor: hexagon {@code 0_0} is centred here. The Murray Bridge Golf Course, as OpenStreetMap
+     * places it (the course, not the clubhouse 400 m east).
+     */
+    public static final double ANCHOR_LAT = -35.13133;
+    public static final double ANCHOR_LON = 139.26558;
 
     private static final double SQRT3 = Math.sqrt(3);
 
     /** Declared after SQRT3: static fields initialise in order, and the constructor divides by it. */
-    public static final Grid DEFAULT = new Grid(CELL_KM, SIDES);
+    public static final Grid DEFAULT = new Grid(CELL_KM);
 
     private final double cellMetres;
-    private final int sides;
-    /** Circumradius of a hexagon, or half the side of a square. */
+    /** Circumradius: centre to corner. */
     private final double size;
+    /** The anchor on the plane, which every centre is offset from. */
+    private final double anchorX, anchorY;
 
-    public Grid(double cellKm, int sides) {
-        if (sides != 6 && sides != 4) {
-            throw new IllegalArgumentException("only four- and six-sided cells tile without gaps, not " + sides);
-        }
+    public Grid(double cellKm) {
         if (cellKm <= 0) {
-            throw new IllegalArgumentException("a cell needs a positive width, not " + cellKm + " km");
+            throw new IllegalArgumentException("a hexagon needs a positive width, not " + cellKm + " km");
         }
         this.cellMetres = cellKm * 1000;
-        this.sides = sides;
-        this.size = sides == 6 ? cellMetres / SQRT3 : cellMetres / 2;
+        this.size = cellMetres / SQRT3;
+        double[] anchor = Albers.forward(ANCHOR_LAT, ANCHOR_LON);
+        this.anchorX = anchor[0];
+        this.anchorY = anchor[1];
     }
 
     public double cellKm() {
         return cellMetres / 1000;
     }
 
-    public int sides() {
-        return sides;
+    /**
+     * What this grid is, in one string: the width and the anchor. Stored with the data, so a change
+     * to either constant is noticed at startup and the data keyed on the old grid is reset.
+     */
+    public String spec() {
+        return "hexagons " + cellKm() + " km, anchored " + ANCHOR_LAT + "," + ANCHOR_LON;
     }
 
     /**
-     * The ground one cell covers. A hexagon of width {@code w} across the flats has area
-     * {@code w² √3 / 2}; a square {@code w²}.
+     * The ground one hexagon covers: width {@code w} across the flats has area {@code w² √3 / 2}.
      */
     public double areaKm2() {
         double km = cellMetres / 1000;
-        return sides == 6 ? km * km * SQRT3 / 2 : km * km;
+        return km * km * SQRT3 / 2;
     }
 
     /**
-     * The cell a point falls in.
+     * The hexagon a point falls in: the plane from the anchor, flat-topped axial from the plane, then
+     * cube rounding to the nearest centre.
      */
     public Cell cellOf(double lat, double lon) {
         double[] xy = Albers.forward(lat, lon);
-        if (sides == 4) {
-            return cell((int) Math.floor(xy[0] / cellMetres), (int) Math.floor(xy[1] / cellMetres));
-        }
-        // Flat-topped axial from the plane, then cube rounding to the nearest centre.
-        double q = 2.0 / 3.0 * xy[0] / size;
-        double r = (-1.0 / 3.0 * xy[0] + SQRT3 / 3.0 * xy[1]) / size;
+        double x = xy[0] - anchorX, y = xy[1] - anchorY;
+        double q = 2.0 / 3.0 * x / size;
+        double r = (-1.0 / 3.0 * x + SQRT3 / 3.0 * y) / size;
         int[] qr = roundAxial(q, r);
         return cell(qr[0], qr[1]);
     }
 
     /**
-     * The cell at these axial coordinates, with its centre worked out.
+     * The hexagon at these axial coordinates, with its centre worked out.
      */
     public Cell cell(int q, int r) {
         double[] xy = centre(q, r);
@@ -93,12 +102,12 @@ public final class Grid {
     public Cell parse(String id) {
         int cut = id == null ? -1 : id.indexOf('_');
         if (cut <= 0) {
-            throw new IllegalArgumentException("not a cell id: " + id);
+            throw new IllegalArgumentException("not a hexagon id: " + id);
         }
         try {
             return cell(Integer.parseInt(id.substring(0, cut)), Integer.parseInt(id.substring(cut + 1)));
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("not a cell id: " + id);
+            throw new IllegalArgumentException("not a hexagon id: " + id);
         }
     }
 
@@ -107,44 +116,28 @@ public final class Grid {
     }
 
     /**
-     * The cells around one: six for a hexagon, eight for a square (a square's diagonal neighbours are
-     * as close to it as a hexagon's edge neighbours are).
+     * The six hexagons around one.
      */
     public List<Cell> ring(Cell c) {
         List<Cell> out = new ArrayList<>();
-        if (sides == 6) {
-            int[][] d = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
-            for (int[] v : d) {
-                out.add(cell(c.q() + v[0], c.r() + v[1]));
-            }
-        } else {
-            for (int dq = -1; dq <= 1; dq++) {
-                for (int dr = -1; dr <= 1; dr++) {
-                    if (dq != 0 || dr != 0) {
-                        out.add(cell(c.q() + dq, c.r() + dr));
-                    }
-                }
-            }
+        int[][] d = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
+        for (int[] v : d) {
+            out.add(cell(c.q() + v[0], c.r() + v[1]));
         }
         return out;
     }
 
     /**
-     * How many steps apart two cells are: for hexagons the axial distance, for squares the
-     * Chebyshev distance (a diagonal step counts one, as {@link #ring} counts it).
+     * How many steps apart two hexagons are.
      */
     public int distance(Cell a, Cell b) {
         int dq = a.q() - b.q(), dr = a.r() - b.r();
-        if (sides == 6) {
-            return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
-        }
-        return Math.max(Math.abs(dq), Math.abs(dr));
+        return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
     }
 
     /**
-     * The cell and every cell within {@code radius} steps of it: for a hexagon, radius 1 is the cell
-     * and its ring (seven), radius 2 is nineteen, and so on ({@code 3r² + 3r + 1}); for a square,
-     * the {@code (2r + 1)²} block.
+     * The hexagon and every hexagon within {@code radius} steps of it: radius 1 is the hexagon and its
+     * ring (seven, three across), radius 2 is nineteen, and so on ({@code 3r² + 3r + 1}).
      */
     public List<Cell> area(Cell centre, int radius) {
         List<Cell> out = new ArrayList<>();
@@ -160,24 +153,19 @@ public final class Grid {
     }
 
     /**
-     * The centre of the area of {@code radius} that a cell belongs to, in a fixed tiling of the
-     * plane by such areas: every cell is within {@code radius} of exactly one centre, and the centres
-     * never move, so the areas neither overlap nor depend on which cell was asked about first
-     * (docs/06 item 7, W-11).
+     * The centre of the area of {@code radius} that a hexagon belongs to, in a fixed tiling of the
+     * plane by such areas: every hexagon is within {@code radius} of exactly one centre, and the
+     * centres never move, so the areas neither overlap nor depend on which hexagon was asked about
+     * first (docs/06 item 7, W-11).
      * <p>
-     * For hexagons the centres are the lattice spanned by {@code (r+1, r)} and {@code (-r, 2r+1)} in
-     * axial coordinates, whose index is {@code 3r² + 3r + 1} — the size of the area, which is what
-     * makes the areas tile exactly (radius 1 is the seven-cell flower). A cell's lattice coordinates
-     * are solved for, rounded, and the neighbouring lattice points checked for the one within reach.
-     * For squares the centres are the multiples of {@code 2r + 1}.
+     * The centres are the lattice spanned by {@code (r+1, r)} and {@code (-r, 2r+1)} in axial
+     * coordinates, whose index is {@code 3r² + 3r + 1} — the size of the area, which is what makes the
+     * areas tile exactly (radius 1 is the seven-cell flower). A hexagon's lattice coordinates are solved
+     * for, rounded, and the neighbouring lattice points checked for the one within reach.
      */
     public Cell areaCentre(Cell c, int radius) {
         if (radius <= 0) {
             return c;
-        }
-        if (sides != 6) {
-            int side = 2 * radius + 1;
-            return cell(Math.floorDiv(c.q() + radius, side) * side, Math.floorDiv(c.r() + radius, side) * side);
         }
         int uq = radius + 1, ur = radius, vq = -radius, vr = 2 * radius + 1;
         double det = (double) uq * vr - (double) vq * ur;
@@ -201,34 +189,26 @@ public final class Grid {
     }
 
     /**
-     * The cell's outline as a closed ring of {@code [lat, lon]} pairs, first vertex repeated last, for
-     * GeoJSON and for the raster overlay.
+     * The hexagon's outline as a closed ring of {@code [lat, lon]} pairs, first vertex repeated last,
+     * for GeoJSON and for the raster overlay.
      */
     public List<double[]> outline(Cell c) {
         double[] xy = centre(c.q(), c.r());
         List<double[]> out = new ArrayList<>();
-        if (sides == 6) {
-            for (int i = 0; i < 6; i++) {
-                double a = Math.toRadians(60 * i);
-                out.add(Albers.inverse(xy[0] + size * Math.cos(a), xy[1] + size * Math.sin(a)));
-            }
-        } else {
-            double h = size;
-            out.add(Albers.inverse(xy[0] - h, xy[1] - h));
-            out.add(Albers.inverse(xy[0] + h, xy[1] - h));
-            out.add(Albers.inverse(xy[0] + h, xy[1] + h));
-            out.add(Albers.inverse(xy[0] - h, xy[1] + h));
+        for (int i = 0; i < 6; i++) {
+            double a = Math.toRadians(60 * i);
+            out.add(Albers.inverse(xy[0] + size * Math.cos(a), xy[1] + size * Math.sin(a)));
         }
         out.add(out.getFirst());
         return out;
     }
 
     /**
-     * Every cell whose centre falls inside a lat/lon box, for the console's "show every hexagon"
-     * switch. Bounded, because the tessellation of the whole country is forty thousand cells and a map
-     * zoomed out that far cannot draw them anyway.
+     * Every hexagon whose centre falls inside a lat/lon box, for the console's "show every hexagon"
+     * switch. Bounded, because the tessellation of the whole country is tens of thousands of hexagons
+     * and a map zoomed out that far cannot draw them anyway.
      *
-     * @return the cells, or an empty list when the box holds more than {@code max}
+     * @return the hexagons, or an empty list when the box holds more than {@code max}
      */
     public List<Cell> within(double south, double west, double north, double east, int max) {
         // Walk the box's projected extent with a margin of one cell so the edge cells are included.
@@ -238,8 +218,8 @@ public final class Grid {
         double maxX = Math.max(Math.max(a[0], b[0]), Math.max(c[0], d[0])) + cellMetres;
         double minY = Math.min(Math.min(a[1], b[1]), Math.min(c[1], d[1])) - cellMetres;
         double maxY = Math.max(Math.max(a[1], b[1]), Math.max(c[1], d[1])) + cellMetres;
-        double stepX = sides == 6 ? size * 1.5 : cellMetres;
-        double stepY = sides == 6 ? size * SQRT3 / 2 : cellMetres;
+        double stepX = size * 1.5;
+        double stepY = size * SQRT3 / 2;
         long count = (long) ((maxX - minX) / stepX + 2) * (long) ((maxY - minY) / stepY + 2);
         if (count > max * 4L) {
             return List.of();
@@ -265,14 +245,14 @@ public final class Grid {
     }
 
     /**
-     * A lattice of {@code across × across} points spread over the cell's bounding box, keeping the
-     * ones inside the cell — for reading a raster across the whole cell rather than at its centre
-     * (docs/06 items 17 and 19). About three-quarters of the lattice survives on a hexagon.
+     * A lattice of {@code across × across} points spread over the hexagon's bounding box, keeping the
+     * ones inside it — for reading a raster across the whole hexagon rather than at its centre
+     * (docs/06 items 17 and 19). About three-quarters of the lattice survives.
      */
     public List<double[]> lattice(Cell c, int across) {
         double[] xy = centre(c.q(), c.r());
-        double halfW = sides == 6 ? size : size;
-        double halfH = sides == 6 ? size * SQRT3 / 2 : size;
+        double halfW = size;
+        double halfH = size * SQRT3 / 2;
         List<double[]> out = new ArrayList<>();
         for (int i = 0; i < across; i++) {
             for (int j = 0; j < across; j++) {
@@ -287,22 +267,19 @@ public final class Grid {
     }
 
     /**
-     * Whether an offset from a cell's centre, in metres on the plane, is inside the cell. A
-     * flat-topped hexagon of circumradius {@code s} spans {@code ±s} horizontally at its middle and
-     * narrows by {@code |dy| / √3} as it rises.
+     * Whether an offset from a hexagon's centre, in metres on the plane, is inside it. A flat-topped
+     * hexagon of circumradius {@code s} spans {@code ±s} horizontally at its middle and narrows by
+     * {@code |dy| / √3} as it rises.
      */
     private boolean inside(double dx, double dy) {
-        if (sides == 4) {
-            return Math.abs(dx) <= size && Math.abs(dy) <= size;
-        }
         return Math.abs(dy) <= size * SQRT3 / 2 && Math.abs(dx) <= size - Math.abs(dy) / SQRT3;
     }
 
+    /**
+     * A hexagon's centre on the plane: the axial offset from the anchor.
+     */
     private double[] centre(int q, int r) {
-        if (sides == 6) {
-            return new double[]{size * 1.5 * q, size * SQRT3 * (r + q / 2.0)};
-        }
-        return new double[]{(q + 0.5) * cellMetres, (r + 0.5) * cellMetres};
+        return new double[]{anchorX + size * 1.5 * q, anchorY + size * SQRT3 * (r + q / 2.0)};
     }
 
     /**

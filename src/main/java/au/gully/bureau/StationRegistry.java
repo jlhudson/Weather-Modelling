@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Every Bureau station the state files have ever named, its latest values, and the compact ledger
  * behind the drought maths (docs/06 item 12): one row per station every six hours, holding the
  * day's rain to 9 am and the running maximum temperature — enough to step a soil moisture deficit
- * forward a day at a time, and nothing like the incident history, which stations never write.
+ * forward a day at a time, and nothing like the history, which stations never write.
  * <p>
  * The station list comes from the files themselves, never from a hand-typed table, and is kept in
  * {@code station} so a restart knows where the stations are before the first poll answers. The
