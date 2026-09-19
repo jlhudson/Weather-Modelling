@@ -281,16 +281,18 @@ public class HexagonStore {
 
     /**
      * The station register changed: every hexagon re-finds its station and its nearest, and every
-     * station gets a hexagon of its own so the map can show it and it can answer "now" for free.
+     * station gets a hexagon of its own - and one for each neighbour within its reach - so the map
+     * can show them and they can answer "now" for free.
      */
     public int stationsChanged() {
         Instant now = Instant.now();
         int changed = 0;
         for (Station s : stations.all()) {
-            Cell cell = grid.cellOf(s.lat(), s.lon());
-            if (!hexagons.containsKey(cell.id())) {
-                hexagons.computeIfAbsent(cell.id(), k -> create(cell, now));
-                changed++;
+            for (Cell cell : grid.cellsReaching(s.lat(), s.lon(), Grid.STATION_REACH_KM)) {
+                if (!hexagons.containsKey(cell.id())) {
+                    hexagons.computeIfAbsent(cell.id(), k -> create(cell, now));
+                    changed++;
+                }
             }
         }
         for (String id : hexagons.keySet()) {

@@ -15,9 +15,9 @@ import static au.gully.science.Numbers.round1;
 
 /**
  * "Now" from the ground for a hexagon (W-13). A hexagon with several stations inside it blends them
- * ({ #inCell}): each weighted by its distance from the centre, brought to the hexagon's mean
+ * ({@link #inCell}): each weighted by its distance from the centre, brought to the hexagon's mean
  * elevation, so two stations 300 m apart in height do not average to a temperature neither has. A
- * hexagon with no station of its own takes the stations around it ({ #at}): the nearest ring
+ * hexagon with no station of its own takes the stations around it ({@link #at}): the nearest ring
  * of six first, and when fewer than { #SHARE} of them have a station reporting, the next ring
  * too — eighteen hexagons, the same share. Fewer than that and there is no "now" from the ground;
  * the model's series stands in.
@@ -102,7 +102,12 @@ public final class Interpolation {
         if (ring1.size() < needed && RINGS >= 2) {
             List<Candidate> ring2 = candidates(grid, stations, grid.ring(cell, 2), cell, at);
             List<Candidate> both = new ArrayList<>(ring1);
-            both.addAll(ring2);
+            // A station within reach of a hexagon in each ring counts once.
+            for (Candidate c : ring2) {
+                if (both.stream().noneMatch(b -> b.station().id().equals(c.station().id()))) {
+                    both.add(c);
+                }
+            }
             needed = (int) Math.ceil(18 * SHARE);
             used = both;
             ring = 2;

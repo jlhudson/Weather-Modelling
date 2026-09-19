@@ -22,9 +22,9 @@ import java.util.Map;
  *
  * @param available   whether there is a reading at all; false with {@code unavailable} saying why
  * @param at          the time {@code current} describes: the station's observation time, or the model's
- * @param currentFrom {@code station} when the Bureau station in the hexagon supplied "now", {@code stations}
- *                    when several inside it were blended, {@code neighbours} when the stations around it
- *                    were (W-13), {@code model} otherwise
+ * @param currentFrom {@code station} when the hexagon's Bureau station supplied "now" - in it, or within a
+ *                    fifth of its width of its edge - {@code stations} when several were blended,
+ *                    {@code neighbours} when the stations around it were (W-13), {@code model} otherwise
  * @param station     the nearest Bureau station's latest values, inside the hexagon or not, with its distance
  * @param nearby      how the stations' values were blended and brought here, when they were (ring 0 is
  *                    the hexagon's own stations); null otherwise

@@ -32,8 +32,9 @@ class InterpolationTest {
         return new StationRegistry(null) {
             @Override
             public List<Station> inCells(Grid grid, java.util.Collection<Cell> cells) {
+                // As the register does: a station counts for the hexagon it is in and any it reaches.
                 java.util.Set<String> ids = cells.stream().map(Cell::id).collect(java.util.stream.Collectors.toSet());
-                return stations.stream().filter(s -> ids.contains(grid.cellOf(s.lat(), s.lon()).id())).toList();
+                return stations.stream().filter(s -> grid.cellsReaching(s.lat(), s.lon(), Grid.STATION_REACH_KM).stream().anyMatch(c -> ids.contains(c.id()))).toList();
             }
 
             @Override
@@ -124,5 +125,22 @@ class InterpolationTest {
         assertThat(States.covering(-12.46, 130.84)).containsExactly("nt");
         assertThat(States.covering(-27.47, 153.03)).contains("qld");
         assertThat(States.covering(-33.87, 151.21)).contains("nsw").doesNotContain("sa");
+    }
+
+    @Test
+    void aStationJustOverTheEdgeIsBlendedAsOneOfTheHexagonsOwn() {
+        Cell centre = GRID.cell(0, 0);
+        double[] c0 = Albers.forward(centre.lat(), centre.lon());
+        // One station inside, one a kilometre over the northern edge: both the hexagon's, so a blend at ring 0.
+        double[] over = Albers.inverse(c0[0], c0[1] + 8500);
+        List<Station> stations = List.of(
+                new Station("IN", null, "INSIDE", centre.lat(), centre.lon(), 50.0, "Australia/Adelaide", "SA_PW001", "sa"),
+                new Station("OVER", null, "OVER THE EDGE", over[0], over[1], 50.0, "Australia/Adelaide", "SA_PW001", "sa"));
+        List<Observation> obs = List.of(reading("IN", 20.0, 50, 10.0, 90), reading("OVER", 24.0, 50, 10.0, 90));
+        Interpolation.Result r = Interpolation.inCell(GRID, registry(stations, obs), centre, 50.0, NOW).orElseThrow();
+        assertThat(r.ring()).isEqualTo(0);
+        assertThat(r.stations()).extracting(Interpolation.Used::id).containsExactlyInAnyOrder("IN", "OVER");
+        // The one at the centre is nearer, so it weighs more: the blend sits below the midpoint of 22.
+        assertThat(r.conditions().temperatureC()).isBetween(20.0, 22.0);
     }
 }

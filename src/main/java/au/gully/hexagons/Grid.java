@@ -34,6 +34,15 @@ public final class Grid {
     public static final double ANCHOR_LAT = -35.13133;
     public static final double ANCHOR_LON = 139.26558;
 
+    /**
+     * How far outside a hexagon a Bureau station still counts as the hexagon's own: a fifth of the
+     * width, 3 km at 15 km. A station a few hundred metres over the line is as much this hexagon's
+     * weather as its neighbour's, and without a reach the hexagon beside a town's station had nothing
+     * of its own. A station reaches every hexagon whose edge is within this distance - its own and
+     * up to three neighbours at a corner - and each of them takes it as "in it".
+     */
+    public static final double STATION_REACH_KM = CELL_KM / 5;
+
     private static final double SQRT3 = Math.sqrt(3);
 
     /** Declared after SQRT3: static fields initialise in order, and the constructor divides by it. */
@@ -143,6 +152,51 @@ public final class Grid {
             }
         }
         return out;
+    }
+
+    /**
+     * The distance from a point to a hexagon, in kilometres: zero inside it, else to its nearest edge.
+     */
+    public double distanceKm(Cell c, double lat, double lon) {
+        double[] p = Albers.forward(lat, lon), o = centre(c.q(), c.r());
+        double dx = p[0] - o[0], dy = p[1] - o[1];
+        if (inside(dx, dy)) {
+            return 0;
+        }
+        double best = Double.MAX_VALUE;
+        for (int i = 0; i < 6; i++) {
+            double a = Math.toRadians(60 * i), b = Math.toRadians(60 * (i + 1));
+            best = Math.min(best, toSegment(dx, dy, size * Math.cos(a), size * Math.sin(a), size * Math.cos(b), size * Math.sin(b)));
+        }
+        return best / 1000;
+    }
+
+    /**
+     * The hexagons a point counts for: the one it is in, and any neighbour whose edge is within the
+     * reach. One inside, two near an edge, three near a corner.
+     */
+    public List<Cell> cellsReaching(double lat, double lon, double reachKm) {
+        Cell own = cellOf(lat, lon);
+        List<Cell> out = new ArrayList<>();
+        out.add(own);
+        if (reachKm <= 0) {
+            return out;
+        }
+        for (Cell n : ring(own)) {
+            if (distanceKm(n, lat, lon) <= reachKm) {
+                out.add(n);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The distance from a point to a segment, all in metres on the plane.
+     */
+    private static double toSegment(double px, double py, double ax, double ay, double bx, double by) {
+        double vx = bx - ax, vy = by - ay, wx = px - ax, wy = py - ay;
+        double t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / (vx * vx + vy * vy)));
+        return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
     }
 
     /**

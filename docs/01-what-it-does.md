@@ -45,9 +45,13 @@ A reading has two halves, and the service never lets one stand in for the other 
 
 **"Now" comes from the ground.** In order, and the reading's `currentFrom` says which:
 
-- `station` — a Bureau station sits in the hexagon and its latest values are fresh (under seventy
-  minutes old). They are the reading's "now" as they are, unmoved: an observation is a fact.
-- `stations` — several stations sit in the hexagon. They are blended: each weighted by the inverse
+- `station` — the hexagon's Bureau station has fresh values (under seventy minutes old). They are the
+  reading's "now" as they are, unmoved: an observation is a fact. A station is the hexagon's when it
+  is inside it **or within a fifth of the width of its edge** (`Grid.STATION_REACH_KM`, 3 km at 15 km):
+  a station a kilometre over the line is as much this hexagon's weather as its neighbour's, so it
+  counts for both — for up to three hexagons at a corner. The `station` block says whether it is
+  inside and how far from the centre it sits.
+- `stations` — several stations count for the hexagon (inside it, or within reach). They are blended: each weighted by the inverse
   square of its distance from the hexagon's centre, its temperature and dew point first brought to the
   hexagon's mean elevation by the lapse rates (−6.5 °C/km and −2 °C/km), humidity recomputed from the
   two, wind averaged as a vector. Two stations 300 m apart in height do not average to a temperature

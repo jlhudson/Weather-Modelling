@@ -53,6 +53,8 @@ public class StationRegistry {
      * six-hourly ledger and is what the ledger row carries as the day's maximum.
      */
     private final Map<String, DayMax> dayMax = new ConcurrentHashMap<>();
+    /** Per grid, per station: the hexagon ids it counts for. Cleared when a station's details change. */
+    private final Map<String, Map<String, List<String>>> reach = new ConcurrentHashMap<>();
     private volatile Instant lastUpdateAt;
 
     public StationRegistry(JdbcClient db) {
@@ -64,6 +66,7 @@ public class StationRegistry {
      */
     public void rehydrate() {
         stations.clear();
+        reach.clear();
         for (Station s : db.sql("select id, wmo_id, name, lat, lon, height_m, zone, district, state from station")
                 .query(StationRegistry::station).list()) {
             stations.put(s.id(), s);
@@ -95,6 +98,9 @@ public class StationRegistry {
         for (StationFile.StationReading r : readings) {
             Station s = r.station();
             Station known = stations.put(s.id(), s);
+            if (known == null || known.lat() != s.lat() || known.lon() != s.lon()) {
+                reach.values().forEach(m -> m.remove(s.id()));
+            }
             if (known == null || !known.equals(s)) {
                 db.sql("""
                         insert into station (id, wmo_id, name, lat, lon, height_m, zone, district, state, first_seen_at, last_seen_at)
@@ -197,19 +203,20 @@ public class StationRegistry {
     }
 
     /**
-     * The hexagon's own station: the one nearest its centre where there are several inside it. The
-     * others are not lost - "now" is blended from all of them ({ Interpolation.inCell}) - but one
-     * is the hexagon's for the links, the logs and the drought ledger.
+     * The hexagon's own station: the one nearest its centre where several count for it. The others
+     * are not lost - "now" is blended from all of them (Interpolation.inCell) - but one is the
+     * hexagon's for the links, the logs and the drought ledger. A station counts for the hexagon it
+     * is in and for any neighbour whose edge is within {@link Grid#STATION_REACH_KM}.
      */
     public Optional<Station> inCell(Grid grid, Cell cell) {
         return stations.values().stream()
-                .filter(s -> grid.cellOf(s.lat(), s.lon()).id().equals(cell.id()))
+                .filter(s -> reaches(grid, s).contains(cell.id()))
                 .min(Comparator.comparingDouble((Station s) -> Grid.planarMetres(cell.lat(), cell.lon(), s.lat(), s.lon()))
                         .thenComparing(Station::id));
     }
 
     /**
-     * The stations inside any of the cells, for the drought maths.
+     * The stations counting for any of the cells - inside one, or within reach of its edge - each once.
      */
     public List<Station> inCells(Grid grid, Collection<Cell> cells) {
         Set<String> ids = new HashSet<>();
@@ -217,9 +224,18 @@ public class StationRegistry {
             ids.add(c.id());
         }
         return stations.values().stream()
-                .filter(s -> ids.contains(grid.cellOf(s.lat(), s.lon()).id()))
+                .filter(s -> { for (String id : reaches(grid, s)) { if (ids.contains(id)) return true; } return false; })
                 .sorted(Comparator.comparing(Station::id))
                 .toList();
+    }
+
+    /**
+     * The ids of the hexagons a station counts for, worked out once per station and grid: a station
+     * does not move, and the map asks this for every hexagon on every render.
+     */
+    private List<String> reaches(Grid grid, Station s) {
+        Map<String, List<String>> forGrid = reach.computeIfAbsent(grid.spec(), k -> new ConcurrentHashMap<>());
+        return forGrid.computeIfAbsent(s.id(), k -> grid.cellsReaching(s.lat(), s.lon(), Grid.STATION_REACH_KM).stream().map(Cell::id).toList());
     }
 
     /**

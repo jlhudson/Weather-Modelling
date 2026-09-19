@@ -130,9 +130,11 @@ public class Readings {
         }
         Station st = s.get();
         Observation o = stations.latest(id).orElse(null);
-        boolean inside = st.id().equals(h.stationId());
+        // Inside means inside: a station within reach of the edge is the hexagon's, and says how far off it is.
+        boolean inside = store.grid().cellOf(st.lat(), st.lon()).id().equals(h.id());
+        double km = round1(Grid.planarMetres(h.cell().lat(), h.cell().lon(), st.lat(), st.lon()) / 1000);
         return new Reading.StationBlock(st.id(), st.name(), st.lat(), st.lon(), st.heightM(),
-                inside ? 0.0 : h.nearestStationKm(), inside, o == null ? null : o.at(),
+                inside ? 0.0 : km, inside, o == null ? null : o.at(),
                 o == null ? null : o.temperatureC(), o == null ? null : o.apparentTemperatureC(),
                 o == null ? null : o.dewPointC(), o == null ? null : o.humidityPct(), o == null ? null : o.windSpeedKmh(),
                 o == null ? null : o.windDirectionDeg(), o == null ? null : o.windDirection(), o == null ? null : o.windGustKmh(),

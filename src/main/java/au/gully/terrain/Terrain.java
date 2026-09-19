@@ -25,7 +25,7 @@ import static au.gully.science.Numbers.round1;
  * when it is first created (docs/06 items 17 and 19). No upstream call, no expiry, works offline;
  * a finer file replaces either without changing anything else. Without a file, a hexagon that is
  * asked about reads its elevation from Open-Meteo and its land cover from Digital Earth Australia
- * ({ DeaLandCover}) on the ask, so nothing need be mounted for either to be there.
+ * ({@link DeaLandCover}) on the ask, so nothing need be mounted for either to be there.
  * <p>
  * Neither file is committed or downloaded by the service. Geoscience Australia's 9-second DEM (about
  * 250 m, a few hundred megabytes for the country) is the elevation; ABARES' catchment-scale land use

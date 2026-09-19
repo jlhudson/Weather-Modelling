@@ -58,8 +58,8 @@ public class FirePictures {
 
     /**
      * The conditions "now" for a hexagon, from the ground first (W-13): the stations inside it when
-     * they are fresh - one as it is, several blended at the hexagon's elevation ({ Interpolation#inCell});
-     * else the stations around it, brought to its elevation ({ Interpolation#at}); else the
+     * they are fresh - one as it is, several blended at the hexagon's elevation ({@link Interpolation#inCell});
+     * else the stations around it, brought to its elevation ({@link Interpolation#at}); else the
      * model's series read at this moment; else nothing.
      */
     public Optional<Now> now(Hexagon h, Instant at) {

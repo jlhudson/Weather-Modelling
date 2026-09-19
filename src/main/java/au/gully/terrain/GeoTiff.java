@@ -30,7 +30,7 @@ import java.util.zip.Inflater;
  * The file is read positionally, never mapped, so a five-gigabyte land-use raster costs no address
  * space, and the last few decoded tiles are kept so the thousands of samples a hexagon overlay takes
  * hit the disk a handful of times. A raster fetched for one hexagon - a few kilobytes from a WCS -
- * is read the same way from memory ({ #of}).
+ * is read the same way from memory ({@link #of}).
  */
 public final class GeoTiff implements AutoCloseable {
 

@@ -180,6 +180,13 @@ The share rule (30% of a ring) is what stops one distant station speaking for a 
 **What it costs.** A blend is an estimate, and is never allowed to judge a forecast (W-12); only a
 measurement throws one out. — James, 19 September 2026.
 
+**Added the same day: the reach.** A station counts for the hexagon it is in and for any neighbour
+whose edge is within a fifth of the width (`Grid.STATION_REACH_KM`, 3 km at 15 km) — two hexagons
+near an edge, three near a corner. Before this, the hexagon beside a town's station, with the
+station a few hundred metres over its line, had nothing of its own and went to the neighbours'
+blend; now the station is "in it" for both, and where a hexagon gains two such stations they are
+blended at ring 0. The reach is a fraction of the width, not a distance, so it follows the grid.
+
 ### W-14 · Nothing on a timer: the sources are read on request, whole, when an ask finds them due
 
 **The decision.** No source is polled. An ask for a hexagon reads the Bureau's station file for the
