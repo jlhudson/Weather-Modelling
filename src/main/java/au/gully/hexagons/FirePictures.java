@@ -64,8 +64,12 @@ public class FirePictures {
             }
         }
         Forecast f = h.forecast();
-        if (f != null && f.current() != null) {
-            return Optional.of(new Now(f.current(), "model", f.current().at()));
+        if (f != null) {
+            // The model's "now" is its series read at this moment, not its current block from the fetch.
+            Conditions c = f.at(at);
+            if (c != null) {
+                return Optional.of(new Now(c, "model", c.at() == null ? at : c.at()));
+            }
         }
         return Optional.empty();
     }
@@ -100,7 +104,7 @@ public class FirePictures {
         }
         Conditions c = now.get().conditions();
         Forecast f = h.forecast();
-        Conditions model = f == null ? null : f.current();
+        Conditions model = f == null ? null : f.at(at);
         DroughtState drought = h.drought();
         DroughtIndex index = drought == null ? null : drought.index();
 

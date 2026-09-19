@@ -111,9 +111,14 @@ curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&at=2026
 What each block is:
 
 - **`hexagon`** — what the point's hexagon is made of, and the state of what it holds. `kind` is
-  `station`, `forecast`, `both` or `bare`; `expiresAt` is when the "now" values go stale.
-- **`source`** — the upstream the forecast came from and how long it is good for; `stale` is true when
-  the upstream's own expiry has passed and nothing has answered since. Null on a station-only reading.
+  `station`, `forecast`, `both` or `bare`; `expiresAt` is when the forecast's life ends.
+- **`source`** — the upstream the forecast came from, when it was fetched, when its life ends
+  (`expiresAt`) under the cap in force now (`life`, `PT3H`, or `PT5H` while the allowance is tight), and
+  `stale`, true when its life has ended and nothing has answered since. Null on a station-only reading.
+- **`drift`** — the station in the hexagon against the forecast at the station's time (docs/01 §1.3):
+  `temperatureC`, `humidityPct`, `windKmh`, `rainMm` as station minus forecast, `score` (the worst as a
+  share of its tolerance), `worst`, and `drifted` — true when that threw the forecast out. Null where
+  the hexagon has no station, no forecast, or no comparison yet.
 - **`at`, `current`, `currentFrom`** — the conditions now and where they came from: `station` when a
   Bureau station in the hexagon supplied them (its own fields; the model-only ones are null), `model`
   otherwise. `at` is the time they describe.
@@ -156,10 +161,22 @@ goes for the contract's `application/schema+json`.
 curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/hexagons.geojson" -D - -o /dev/null | grep -i etag
 ```
 
+## 2.3 `GET /api/v1/drift?hours=24` and `GET /api/v1/drift/recent?hexagon=&limit=`
+
+How the forecasts are doing against the stations (docs/01 §1.3). The first is per hexagon over a
+window: how many comparisons, the mean and worst score, how many forecasts were thrown out, the mean
+absolute difference of each of the four, and the latest comparison; with the tolerances and the life
+in force. The second is the comparisons themselves, newest first, for one hexagon or all.
+
+```
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/drift?hours=168"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/drift/recent?hexagon=0_0&limit=50"
+```
+
 `GET /api/v1/hexagons` is the same as a list of rows; `GET /api/v1/hexagons/{id}` is everything held
 for one — its reading, its drought state, its river, its history.
 
-## 2.3 `GET /api/v1/fire-indices?...`
+## 2.4 `GET /api/v1/fire-indices?...`
 
 The indices for given inputs, from the one set of formulas: McArthur's forest and grassland meters and
 the AFDRS grassland model with its rating. For a calculator, a what-if, or a check against a published
@@ -177,7 +194,7 @@ curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/fire-indices?temperatureC=30&humidityP
            "spreadKmh": 3.42, "moisturePct": 6.2, "rateOfSpreadKmh": 7.21, "intensityKwm": 16770, "flameHeightM": 3.3, "fbi": 47, "afdrsRating": "High"}}
 ```
 
-## 2.4 `GET /api/v1/status` and the spend reads
+## 2.5 `GET /api/v1/status` and the spend reads
 
 Everything needed to decide whether it is worth calling this service right now and what it will cost:
 each upstream with its allowance, its spend per window, its breaker and the reason it may not be
@@ -192,27 +209,27 @@ curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/upstreams/open-meteo/spend/hourly"
 
 `spend/daily` is at most 62 days and a `400` past that.
 
-## 2.5 The contract and the document
+## 2.6 The contract and the document
 
 ```
 curl -sS "$WX/api/v1/contract/reading.schema.json"     # public
 curl -sS "$WX/api/v1/openapi.json"                     # public
 ```
 
-## 2.6 Diagnostics
+## 2.7 Diagnostics
 
 Unchanged in shape from the split: `GET /api/diagnostics?window=`, `/logs?level=&window=&limit=`,
 `/logs/{id}`, `DELETE /logs?level=&before=`, `DELETE /logs/{id}`. The service block is now `gully`
 (the upstreams, the sources, what is held) in place of the old `weather` block. Needs the
 `DIAGNOSTICS` or `ALL` scope.
 
-## 2.7 `GET /api/weather`
+## 2.8 `GET /api/weather`
 
 The old route in its old shape — `provenance`, `current`, `fire`, `flood`, `drought`, `forecast`,
 `generatedAt`, `unavailable` — built from the new reading, for one release. `estimated` is always
 false. Gone with the next release.
 
-## 2.8 The health probes
+## 2.9 The health probes
 
 `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` are public; readiness
 includes the database, so a dead database shows as a restarting container.

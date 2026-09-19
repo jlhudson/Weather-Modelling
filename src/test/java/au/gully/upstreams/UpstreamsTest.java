@@ -30,7 +30,7 @@ class UpstreamsTest {
             """;
 
     @Test
-    void openMeteoIsParsedWithItsOwnExpiry() throws Exception {
+    void openMeteoIsParsedAndItsSeriesReadsAtAnyMoment() throws Exception {
         OpenMeteo om = new OpenMeteo(null);
         Forecast f = om.parse(JsonMapper.builder().build().readTree(OPEN_METEO));
         assertThat(f.upstream()).isEqualTo("open-meteo");
@@ -41,12 +41,19 @@ class UpstreamsTest {
         assertThat(f.current().humidityPct()).isEqualTo(81);
         assertThat(f.current().condition()).isEqualTo("Partly cloudy");
         assertThat(f.current().daytime()).isFalse();
-        // The current block covers a quarter-hour, so it expires at a quarter-hour boundary after now.
-        assertThat(f.currentExpiresAt()).isAfter(f.fetchedAt());
-        assertThat(Duration.between(f.fetchedAt(), f.currentExpiresAt())).isLessThanOrEqualTo(Duration.ofMinutes(15));
-        assertThat(f.currentExpiresAt().getEpochSecond() % 900).isZero();
-        assertThat(f.forecastExpiresAt()).isEqualTo(f.fetchedAt().plus(Duration.ofHours(1)));
+        // No expiry of its own: the service keeps it for its life. "Now" is the series read at the moment:
+        // halfway between the first two hours the values blend, the words come from the nearer hour.
         assertThat(f.hourly()).hasSize(3);
+        var half = f.at(Instant.ofEpochSecond(1789741800L));
+        assertThat(half.temperatureC()).isCloseTo(10.45, org.assertj.core.api.Assertions.offset(0.001));
+        assertThat(half.humidityPct()).isEqualTo(82);
+        assertThat(half.windDirectionDeg()).isEqualTo(203);
+        assertThat(half.precipitationMm()).as("the hour's own total").isEqualTo(0.0);
+        assertThat(f.at(Instant.ofEpochSecond(1789740000L)).temperatureC()).isEqualTo(10.7);
+        assertThat(f.at(Instant.ofEpochSecond(1789800000L)).temperatureC()).as("past the series: its last hour").isEqualTo(9.8);
+        assertThat(f.at(Instant.ofEpochSecond(1789000000L)).temperatureC()).as("before the series: its first hour").isEqualTo(10.7);
+        assertThat(f.precipitationBetween(Instant.ofEpochSecond(1789740000L), Instant.ofEpochSecond(1789747200L))).isEqualTo(0.1);
+        assertThat(f.precipitationBetween(Instant.ofEpochSecond(1789700000L), Instant.ofEpochSecond(1789747200L))).as("the series does not reach back").isNull();
         assertThat(f.daily()).hasSize(2);
         // Midnight local expressed as a UTC epoch comes back as the local date.
         assertThat(f.daily().getFirst().date()).isEqualTo(LocalDate.of(2026, 9, 18));

@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * The drought of a hexagon, stepped forward daily (docs/06 item 7): a soil moisture deficit
  * integrated from a year of daily rain and maximum temperature, and the drought factor that falls
  * out of it. It is the hexagon's, like everything else the hexagon holds — one state per hexagon,
- * on its row — and it needs no cell of its own: at 32 km a hexagon is already the scale a drought
+ * on its row — and it needs no cell of its own: at 25 km a hexagon is already the scale a drought
  * factor describes.
  * <p>
  * The inputs are the Bureau stations inside the hexagon (or the nearest within reach) — the day's

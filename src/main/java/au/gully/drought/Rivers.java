@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * GloFAS river discharge, keyed on the river model's own smaller cells — 5 km, because a river is a
- * line and a reading reused across a 32 km hexagon would confidently report a different watercourse.
+ * line and a reading reused across a 25 km hexagon would confidently report a different watercourse.
  * One fetch per river cell per day, held in memory and in {@code river_discharge}.
  */
 @Slf4j

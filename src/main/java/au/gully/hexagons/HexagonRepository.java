@@ -85,7 +85,11 @@ public class HexagonRepository {
                 .update();
     }
 
-    public void saveForecast(Hexagon h) {
+    /**
+     * @param expiresAt the end of the forecast's life under the cap in force when it was fetched, for
+     *                  the row's own readability; the store reads the cap live
+     */
+    public void saveForecast(Hexagon h, Instant expiresAt) {
         Forecast f = h.forecast();
         db.sql("""
                 update hexagon set zone = :zone, elevation_m = :elev, elevation_from = :elevFrom, upstream = :upstream,
@@ -96,8 +100,8 @@ public class HexagonRepository {
                 .param("upstream", f == null ? null : f.upstream())
                 .param("forecast", f == null ? null : json.write(f))
                 .param("fetched", Db.ts(f == null ? null : f.fetchedAt()))
-                .param("cur", Db.ts(f == null ? null : f.currentExpiresAt()))
-                .param("fx", Db.ts(f == null ? null : f.forecastExpiresAt()))
+                .param("cur", Db.ts((Instant) null))
+                .param("fx", Db.ts(f == null ? null : expiresAt))
                 .param("activated", Db.ts(h.activatedAt())).param("asked", Db.ts(h.lastAskedAt()))
                 .update();
     }

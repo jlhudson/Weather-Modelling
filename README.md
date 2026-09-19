@@ -8,10 +8,12 @@ Gully is the overhaul of the Weather service that was split out of [The Hub Data
 and the values are the values: no confidence scores, no "estimate" or "actual" branching; a missing
 value is missing, never zero; every answer carries its source and its time.
 
-**How it works, in one paragraph.** Australia is divided into 32 km hexagons by arithmetic from one
+**How it works, in one paragraph.** Australia is divided into 25 km hexagons by arithmetic from one
 anchor, the Murray Bridge Golf Course (the constants are at the top of `Grid`); a point is answered by
 the reading held for its hexagon, fetched once at the centre from Open-Meteo — Google Weather is the
-overflow — and kept until the upstream says it is stale. Nothing is pre-warmed and nothing is
+overflow — and kept for three hours (five when the allowance is tight), or less: the Bureau station in
+the hexagon is compared with the forecast every ten minutes, and a forecast that has drifted is thrown
+out. Nothing is pre-warmed and nothing is
 generated: a hexagon exists once something inside it has been asked about, and a caller that keeps
 asking keeps its hexagons warm. Every Bureau of Meteorology station
 gets a hexagon of its own whose "now" is the station's values, free, every ten minutes; the Bureau's
@@ -40,6 +42,7 @@ limits in the `RateLimit-*` headers. The OpenAPI document is at `/api/v1/openapi
 | `GET /api/v1/hexagons`, `GET /api/v1/hexagons/{id}` | The list, and everything held for one: reading, drought state, river, history. |
 | `GET /api/v1/fire-indices?temperatureC=&humidityPct=&windKmh=&droughtFactor=&curingPct=&fuelLoadTHa=&condition=` | The indices for given inputs, from the one set of formulas. |
 | `GET /api/v1/status`, `GET /api/v1/upstreams/{id}/spend?since=`, `/spend/daily?from=&to=`, `/spend/hourly` | Upstreams with their allowance and breaker, sources, what is held, and the spend ledger. |
+| `GET /api/v1/drift?hours=`, `GET /api/v1/drift/recent?hexagon=&limit=` | The stations against the forecasts: per hexagon over a window, and the comparisons themselves. |
 | `GET /api/v1/contract/reading.schema.json` | The reading's shape as a JSON Schema. Public. |
 | `GET /api/diagnostics`, `/logs`, `/logs/{id}`, the two `DELETE`s | The shape The Hub's morning agent reads. |
 | `GET /api/weather` | The old route in its old shape, for one release. |

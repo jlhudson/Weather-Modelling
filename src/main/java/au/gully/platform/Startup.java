@@ -44,6 +44,7 @@ public class Startup implements ApplicationRunner {
     private final Curing curing;
     private final HexagonStore store;
     private final Rivers rivers;
+    private final au.gully.hexagons.Drifts drifts;
     private final StationReader stationReader;
     private final WarningsReader warnings;
     private final Ratings ratings;
@@ -63,6 +64,7 @@ public class Startup implements ApplicationRunner {
             stations.rehydrate();
             curing.rehydrate();
             rivers.rehydrate();
+            drifts.rehydrate();
             store.rehydrate();
         });
         step(3, "timers", this::schedule);

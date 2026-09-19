@@ -27,7 +27,8 @@ new drought state is per hexagon area and is rebuilt from the Bureau's station l
 on first ask, at about six allowance units per area, once.
 
 Gully's own tables: `hexagon`, `reading_snapshot`, `station`, `station_sample`, `upstream_call`,
-`grass_curing`, `river_discharge`, and since `V3` `grid_spec` — the width and anchor the hexagon-keyed
+`grass_curing`, `river_discharge`, since `V5` `forecast_drift` (every comparison of a station against
+the forecast in its hexagon, W-12), and since `V3` `grid_spec` — the width and anchor the hexagon-keyed
 tables were written with, so a re-gridding resets them rather than leaving rows keyed on hexagons that
 no longer exist. `V3` also renamed `reading_snapshot.incident` to `ref`; `V2` made a `drought_area`
 table that `V4` dropped again (W-11, reversed). The one to be careful with is `reading_snapshot` — the history

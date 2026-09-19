@@ -78,7 +78,7 @@ class ReadingContractTest {
                         new Reading.LandUseBlock("built_up", Map.of("built_up", 70, "grassland", 22, "water", 8), "grass", 22), "023000", "both",
                         Instant.parse("2026-09-18T12:00:00Z"), Instant.parse("2026-09-18T13:45:00Z"), Instant.parse("2026-09-18T14:45:00Z")),
                 new Reading.Source("open-meteo", "best_match", "Weather data by Open-Meteo.com, CC BY 4.0", Instant.parse("2026-09-18T13:45:00Z"),
-                        Instant.parse("2026-09-18T14:00:00Z"), Instant.parse("2026-09-18T14:45:00Z"), false),
+                        Instant.parse("2026-09-18T16:45:00Z"), "PT3H", false),
                 at, current, "station",
                 new Reading.StationBlock("023000", "ADELAIDE (WEST TERRACE / NGAYIRDAPIRA)", -34.9257, 138.5832, 29.32, 0.0, true, at, 15.0, 11.4, 3.2, 45,
                         11.0, 42, "NE", 17.0, 1025.8, 0.0, 0.0, 23.4, 8.1, 71.0, "Clear"),
@@ -86,12 +86,13 @@ class ReadingContractTest {
                 List.of(new Reading.WarningBlock("IDS21037", "Severe Weather Warning", "for DAMAGING WINDS", "Damaging winds continuing", "SWW", "STD",
                         Instant.parse("2026-09-18T12:18:31Z"), Instant.parse("2026-09-18T12:18:26Z"), Instant.parse("2026-09-18T21:00:00Z"),
                         "http://reg.bom.gov.au/products/IDS21037.shtml")),
-                new Reading.ForecastBlock(List.of(day), List.of(hour), change), null, Reading.DISCLAIMER);
+                new Reading.ForecastBlock(List.of(day), List.of(hour), change),
+                new Reading.DriftBlock(at, "023000", "open-meteo", 1.2, -7, -2.5, null, 0.4, "temperature", false), null, Reading.DISCLAIMER);
     }
 
     static Reading empty() {
         return new Reading(Reading.SCHEMA, false, "no upstream answered and the hexagon holds no reading", new Reading.Point(-34.93, 138.6),
-                null, null, null, null, null, null, null, null, null, List.of(), null, null, Reading.DISCLAIMER);
+                null, null, null, null, null, null, null, null, null, List.of(), null, null, null, Reading.DISCLAIMER);
     }
 
     @Test
@@ -108,7 +109,7 @@ class ReadingContractTest {
     void aReadingFromHistoryMatchesTheSchema() throws IOException {
         Reading f = full();
         Reading past = new Reading(f.schema(), true, null, f.point(), f.hexagon(), null, f.at(), f.current(), f.currentFrom(), f.station(),
-                f.fire(), null, f.drought(), f.warnings(), null,
+                f.fire(), null, f.drought(), f.warnings(), null, null,
                 new Reading.HistoryBlock(f.at(), Instant.parse("2026-09-18T13:52:00Z"), "INC0103", Instant.parse("2026-09-18T12:00:00Z")),
                 f.disclaimer());
         assertMatches(past);

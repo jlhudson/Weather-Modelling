@@ -14,8 +14,8 @@ Nothing here is pre-warmed. A reading exists because something asked for it.
 
 ## 1.1 Hexagons
 
-Australia is divided into hexagons 32 km across the flats, on the Australian Albers plane so a hexagon
-is 32 km from Cape York to Hobart, laid out from one anchor: hexagon `0_0` is centred on the Murray
+Australia is divided into hexagons 25 km across the flats, on the Australian Albers plane so a hexagon
+is 25 km from Cape York to Hobart, laid out from one anchor: hexagon `0_0` is centred on the Murray
 Bridge Golf Course. The three constants are at the top of `au.gully.hexagons.Grid` — the width, the
 anchor's latitude and longitude — and changing one changes every hexagon's id, which the service
 notices at startup and resets the hexagon-keyed tables for. Hexagons, and only hexagons. The cells
@@ -40,11 +40,15 @@ Everything we know about a hexagon is one immutable value in one in-memory map, 
 any of it changes and rebuilt from the `hexagon` table when the service starts. Answering a request is
 one map lookup; the database is not touched.
 
-**The reading is kept until the upstream says it is stale.** Open-Meteo's current block states the
-quarter-hour it covers, so a reading is current until that quarter-hour ends; its models update hourly,
-so the hourly and daily series are re-asked for an hour after they were fetched. Served close to expiry
-(`gully.refresh-ahead`, three minutes), a hexagon is refreshed in the background so the next ask is
-already fresh. Several asks arriving at once for a hexagon with nothing fetch it once. The Hub sweeps
+**A forecast is kept for its life, or until the station says otherwise.** The life is a hard cap from
+the fetch: three hours, stretched to five once the day's allowance is 70% spent (`Life`), read live so a
+budget that tightens in the afternoon stretches every forecast already held. Inside that life the
+model's "now" is its hourly series read at the moment, not a current block from the fetch. Where a
+Bureau station sits in the hexagon, its every ten-minute observation is compared with the forecast at
+that moment (§1.3): a forecast that has drifted is thrown out early, the station is "now" regardless,
+and the days ahead are fetched again after an hour rather than at once — a model that is simply wrong
+today is not re-fetched every ten minutes. Served close to the end of its life (`gully.refresh-ahead`,
+three minutes), a hexagon is refreshed in the background so the next ask is already fresh. Several asks arriving at once for a hexagon with nothing fetch it once. The Hub sweeps
 keeps asking, so the hexagons it asks about stay warm and go cold on their own when it stops; a
 forecast nobody has asked about for a day is dropped from memory
 and the hexagon keeps only what it is made of.
@@ -59,7 +63,25 @@ until someone asks about it.
 its time, and the reading's `source.stale` says so. When there is nothing held at all, the answer is
 `available: false` with a sentence saying why, in the same shape.
 
-## 1.3 The upstreams
+## 1.3 Drift: the station against the forecast
+
+A hexagon with both a station and a forecast has a measure of how good the forecast is, every ten
+minutes: the station's latest values against the forecast read off its series at the same moment, on
+the four things a station measures directly and a fire index turns on — **temperature, humidity, wind
+speed and rain** (the station's total since 9 am against the model's for the same hours). Each is a
+difference, station minus forecast, and a share of the tolerance that would be accepted: 3 °C, 20
+points, 15 km/h, 5 mm. The **score is the worst of the four**, not their average — a forecast with the
+humidity twenty-five points wrong is no use to a fire index however good its temperature — and at 1
+the forecast has drifted and is thrown out.
+
+Not compared: wind direction, which swings with every gust and which a vane and a model cell disagree
+about on the calmest day; gusts, for the same reason; pressure, which models get right and fire does
+not turn on; and anything a station does not measure. Every comparison is written to `forecast_drift`,
+so the accuracy of the forecasts here is a question with numbers: `/api/v1/drift` per hexagon over a
+window, and the map's drift view — green agrees, red was thrown out — with the day's mean beside it.
+That is where "are the forecasts good enough here" gets answered.
+
+## 1.4 The upstreams
 
 `Upstream` is an interface with two implementations: `OpenMeteo` (the primary: free, keyless, CC BY
 4.0) and `GoogleWeather` (the overflow: three billed endpoints per fetch). Each carries its `Spec` —
@@ -79,7 +101,7 @@ variables over three days, twelve current and ten daily over seven — is charge
 the ten thousand a day, which is the overhaul's figure. The console's upstreams page shows the spend
 per hour and per day as bars against the allowance, with the breaker's history.
 
-## 1.4 The Bureau
+## 1.5 The Bureau
 
 The Bureau publishes its station data as one file per state on `reg.bom.gov.au`, refreshed every ten
 minutes: every automatic weather station with its latest values and its own details. All seven are
@@ -91,7 +113,7 @@ model's, with the distance and the time; where the station is inside the hexagon
 reading's "now".
 
 A compact ledger — one row per station every six hours, holding the day's rain to 9 am and the running
-maximum — is kept in `station_sample` for the drought maths (§1.6). Stations never write history.
+maximum — is kept in `station_sample` for the drought maths (§1.7). Stations never write history.
 
 The same server carries the warnings: one listing per state, read every five minutes, and the product
 each item points at, read once per issue. A warning names the public weather districts it covers, a
@@ -102,7 +124,7 @@ The Bureau paused some feeds during its platform upgrade in September 2026; each
 before it is relied on, and a state whose file does not answer contributes no stations until it does.
 `WEATHER_CONTACT` is sent in every request, as the Bureau asks.
 
-## 1.5 The CFS
+## 1.6 The CFS
 
 The official AFDRS rating per fire ban district — the rating, its Fire Behaviour Index and the total
 fire ban flag, for today and four days — is read hourly from the CFS GeoHub (without the district
@@ -115,7 +137,7 @@ Grass curing has no open feed (the GeoHub was checked on 18 September 2026 and c
 layer), so it is entered per district on the console each week in fire season, with the date. It is
 carried on every active hexagon in the district; a hexagon with no curing figure has no grassland index.
 
-## 1.6 Drought
+## 1.7 Drought
 
 The fire indices need a drought factor; a drought factor needs a soil moisture deficit; a deficit
 needs a year of daily rain and maximum temperature integrated into a Keetch–Byram index and then a
@@ -134,7 +156,7 @@ River discharge stays keyed on the river model's own smaller cells — 5 km, bec
 from GloFAS, once a day per cell while a hexagon in it is active. Antecedent rain comes from the same
 daily series the drought uses; forecast rain from the reading's own series.
 
-## 1.7 Terrain and land use
+## 1.8 Terrain and land use
 
 Two rasters on the service's own volume, mounted and never committed: Geoscience Australia's 9-second
 DEM for elevation, and ABARES' catchment-scale land use (or Geoscience Australia's land cover) for
@@ -147,7 +169,7 @@ upstream model's own elevation, no slope and no land use.
 Land use decides which index leads: mostly trees and scrub, the forest index; mostly grass and crop, the
 grassland indices; mostly water or built-up, both are carried and `appliesToPct` says how little.
 
-## 1.8 The fire picture
+## 1.9 The fire picture
 
 An *active* hexagon — one someone has asked about — carries the whole set, computed from what it holds
 and replaced whenever any input changes: the McArthur forest index (FFDI) and grassland index (GFDI),
@@ -160,7 +182,7 @@ deficit carried forward through the forecast's rain. The map colours by any of i
 The forest fire behaviour model of the AFDRS is not here yet; the doc that catalogued this rebuild
 puts it after the grassland model has been checked against a bad day's published number.
 
-## 1.9 History
+## 1.10 History
 
 A snapshot of a hexagon's current conditions and fire picture — never the forecast — is written to
 `reading_snapshot` when an ask about the hexagon carries a `ref` — what the reading is for: an
@@ -171,7 +193,7 @@ nothing is ever deleted from the table by the service; a nightly export goes to 
 Asking the API for a past time returns the snapshot nearest that time, with its own time, or says
 there is none.
 
-## 1.10 The console map
+## 1.11 The console map
 
 The map draws every hexagon held, and by default what makes each one active: amber where a forecast
 is held because something asked — fading as the forecast ages towards its expiry, so a hexagon nobody
@@ -185,7 +207,7 @@ in their rating colours, the rest on a ramp — and the time slider shows the la
 snapshots. The map never fetches; the probe on a point asks, and says so. The page is locked to the
 device: the bar collapses on a phone, and only the map zooms.
 
-## 1.11 What is deliberately not here
+## 1.12 What is deliberately not here
 
 The decision about *when* to ask stays with the caller (The Hub's D-249: the stagger across what it
 watches, the re-ask on a change, the per-tick ceiling). This service knows nothing about what a reading

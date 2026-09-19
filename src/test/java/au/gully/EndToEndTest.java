@@ -66,7 +66,7 @@ class EndToEndTest {
         // The legacy row is still there, with the hash of the plaintext the init script planted.
         String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
         assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec"}) {
+        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift"}) {
             Long n = db.sql("select count(*) from " + table).query(Long.class).single();
             assertThat(n).as(table).isNotNull();
         }

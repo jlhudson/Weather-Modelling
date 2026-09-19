@@ -31,10 +31,10 @@ import java.util.List;
  * seven, which its published weighting puts at about five units. The ledger charges five; the
  * console shows the day's total against the ten thousand.
  * <p>
- * <strong>What an answer is good for.</strong> The current block states the interval it covers
- * ({@code current.interval}, 900 seconds), so a reading is current until the end of that quarter-hour
- * and that is what the hexagon holds as its expiry (docs/06 item 0). The models behind the series
- * are updated hourly, so the series is re-asked for an hour after it was fetched.
+ * <strong>What an answer is good for</strong> is not the upstream's to say: the service keeps a forecast
+ * for three hours (five when the allowance is tight), throws it out early when the station in the
+ * hexagon says the model has drifted, and reads "now" off the hourly series at any moment inside that
+ * life ({@code Forecast#at}). The current block is the model's "now" at the moment of the fetch.
  */
 @Slf4j
 @Component
@@ -48,12 +48,17 @@ public class OpenMeteo implements Upstream {
     public static final int FORECAST_DAYS = 7;
     public static final int FORECAST_HOURS = 72;
 
+    /**
+     * The hours behind now the series also carries: enough to reach back to 9 am local from any hour of
+     * the day, which is what the rain comparison against a station needs ({@code Drift}).
+     */
+    public static final int PAST_HOURS = 24;
+
     /** The archive fetch behind a drought spin-up: a year of daily rain and temperature. */
     public static final double ARCHIVE_UNITS = 6.0;
     /** A few past days from the forecast endpoint, and one river discharge series. */
     public static final double SMALL_UNITS = 1.0;
 
-    private static final Duration SERIES_LIFE = Duration.ofHours(1);
 
     private static final List<String> CURRENT = List.of("temperature_2m", "relative_humidity_2m",
             "apparent_temperature", "dew_point_2m", "precipitation", "weather_code", "cloud_cover",
@@ -130,7 +135,7 @@ public class OpenMeteo implements Upstream {
                 + "&daily=" + String.join(",", DAILY)
                 + "&timezone=auto&timeformat=unixtime&wind_speed_unit=kmh&precipitation_unit=mm&temperature_unit=celsius"
                 + "&forecast_days=" + FORECAST_DAYS
-                + "&forecast_hours=" + FORECAST_HOURS;
+                + "&forecast_hours=" + FORECAST_HOURS + "&past_hours=" + PAST_HOURS;
         JsonNode root = read(url);
         return parse(root);
     }
@@ -147,7 +152,6 @@ public class OpenMeteo implements Upstream {
         }
         Instant now = Instant.now();
         Instant currentAt = epoch(Nodes.dbl(currentNode, "time"), now);
-        Integer interval = Nodes.integer(currentNode, "interval");
         Conditions current = conditions(currentNode, currentAt);
         // A model with nothing to say answers 200 with the right shape and every value null. Holding
         // that would be worse than failing, because a held nothing looks like an answer.
@@ -196,14 +200,7 @@ public class OpenMeteo implements Upstream {
             }
         }
 
-        // The upstream's own expiry: the end of the quarter-hour its current block covers. A block
-        // already older than that (it happens at the top of the hour) is good until the next one.
-        Instant currentExpires = currentAt.plusSeconds(interval == null ? 900 : interval);
-        while (!currentExpires.isAfter(now)) {
-            currentExpires = currentExpires.plusSeconds(interval == null ? 900 : interval);
-        }
-        return new Forecast(ID, SPEC.model(), SPEC.attribution(), now, currentExpires, now.plus(SERIES_LIFE),
-                Nodes.dbl(root, "elevation"), zone.getId(), current, hourly, daily);
+        return new Forecast(ID, SPEC.model(), SPEC.attribution(), now, Nodes.dbl(root, "elevation"), zone.getId(), current, hourly, daily);
     }
 
     // ---------------------------------------------------------------- the daily series

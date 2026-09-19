@@ -5,7 +5,7 @@
   "description": "What GET /api/v1/readings answers. Kept identically in Weather-Modelling (src/main/resources/contract) and The-Hub-Database (hub-services/src/main/resources/contract); each build checks what it serves or reads against its copy and the two copies against each other.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "available", "unavailable", "point", "hexagon", "source", "at", "current", "currentFrom", "station", "fire", "flood", "drought", "warnings", "forecast", "history", "disclaimer"],
+  "required": ["schema", "available", "unavailable", "point", "hexagon", "source", "at", "current", "currentFrom", "station", "fire", "flood", "drought", "warnings", "forecast", "drift", "history", "disclaimer"],
   "properties": {
     "schema": {"const": "gully/reading/1"},
     "available": {"type": "boolean"},
@@ -22,6 +22,7 @@
     "drought": {"oneOf": [{"$ref": "#/$defs/drought"}, {"type": "null"}]},
     "warnings": {"type": "array", "items": {"$ref": "#/$defs/warning"}},
     "forecast": {"oneOf": [{"$ref": "#/$defs/forecast"}, {"type": "null"}]},
+    "drift": {"oneOf": [{"$ref": "#/$defs/drift"}, {"type": "null"}]},
     "history": {"oneOf": [{"$ref": "#/$defs/history"}, {"type": "null"}]},
     "disclaimer": {"type": "string"}
   },
@@ -63,11 +64,20 @@
     },
     "source": {
       "type": "object", "additionalProperties": false,
-      "required": ["upstream", "model", "attribution", "fetchedAt", "currentExpiresAt", "forecastExpiresAt", "stale"],
+      "required": ["upstream", "model", "attribution", "fetchedAt", "expiresAt", "life", "stale"],
       "properties": {
         "upstream": {"type": "string"}, "model": {"$ref": "#/$defs/str"}, "attribution": {"$ref": "#/$defs/str"},
-        "fetchedAt": {"$ref": "#/$defs/instant"}, "currentExpiresAt": {"$ref": "#/$defs/instantOrNull"},
-        "forecastExpiresAt": {"$ref": "#/$defs/instantOrNull"}, "stale": {"type": "boolean"}
+        "fetchedAt": {"$ref": "#/$defs/instant"}, "expiresAt": {"$ref": "#/$defs/instantOrNull"},
+        "life": {"$ref": "#/$defs/str"}, "stale": {"type": "boolean"}
+      }
+    },
+    "drift": {
+      "type": "object", "additionalProperties": false,
+      "required": ["at", "stationId", "upstream", "temperatureC", "humidityPct", "windKmh", "rainMm", "score", "worst", "drifted"],
+      "properties": {
+        "at": {"$ref": "#/$defs/instant"}, "stationId": {"type": "string"}, "upstream": {"$ref": "#/$defs/str"},
+        "temperatureC": {"$ref": "#/$defs/num"}, "humidityPct": {"$ref": "#/$defs/int"}, "windKmh": {"$ref": "#/$defs/num"},
+        "rainMm": {"$ref": "#/$defs/num"}, "score": {"type": "number"}, "worst": {"$ref": "#/$defs/str"}, "drifted": {"type": "boolean"}
       }
     },
     "conditions": {

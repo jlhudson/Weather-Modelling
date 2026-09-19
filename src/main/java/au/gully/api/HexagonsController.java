@@ -79,7 +79,7 @@ public class HexagonsController {
         Instant now = Instant.now();
         List<Map<String, Object>> out = new ArrayList<>();
         for (Hexagon h : store.all().stream().sorted(Comparator.comparing(Hexagon::id)).toList()) {
-            out.add(row(h, now));
+            out.add(row(h, now, store));
         }
         return out;
     }
@@ -90,7 +90,7 @@ public class HexagonsController {
         Hexagon h = store.get(id).orElseThrow(() -> new ErrorResponseException(HttpStatus.NOT_FOUND,
                 ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "no hexagon " + id + " is held"), null));
         Instant now = Instant.now();
-        Map<String, Object> out = new LinkedHashMap<>(row(h, now));
+        Map<String, Object> out = new LinkedHashMap<>(row(h, now, store));
         Cell c = h.cell();
         out.put("reading", readings.of(h, new Reading.Point(c.lat(), c.lon()), true));
         out.put("drought", h.drought());
@@ -100,7 +100,7 @@ public class HexagonsController {
         return out;
     }
 
-    public static Map<String, Object> row(Hexagon h, Instant now) {
+    public static Map<String, Object> row(Hexagon h, Instant now, HexagonStore store) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", h.id());
         m.put("lat", h.cell().lat());
@@ -120,8 +120,8 @@ public class HexagonsController {
         m.put("leads", h.landUse() == null ? null : h.landUse().leads());
         m.put("upstream", h.forecast() == null ? null : h.forecast().upstream());
         m.put("refreshedAt", h.forecast() == null ? null : h.forecast().fetchedAt());
-        Instant expires = h.forecast() == null ? null : (h.hasStation() ? h.forecast().forecastExpiresAt() : h.forecast().currentExpiresAt());
-        m.put("expiresAt", expires);
+        m.put("expiresAt", store.life().expiresAt(h.forecast()));
+        m.put("drift", store.drift(h.id()).orElse(null));
         m.put("ageMinutes", h.forecast() == null ? null : Duration.between(h.forecast().fetchedAt(), now).toMinutes());
         m.put("droughtComputedFor", h.drought() == null ? null : h.drought().computedFor());
         m.put("droughtFactor", h.drought() == null ? null : au.gully.science.Numbers.round1(h.drought().droughtFactor()));

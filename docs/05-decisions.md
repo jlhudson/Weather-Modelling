@@ -42,7 +42,7 @@ config** — kept in spirit: `gully.upstreams.order` ships `open-meteo, google`,
 
 ### W-4 · Hexagons, not anchors; nothing pre-warmed
 
-**The decision.** Every reading belongs to a 32 km hexagon on the Australian Albers plane, worked out
+**The decision.** Every reading belongs to a 25 km hexagon on the Australian Albers plane, worked out
 by arithmetic from one anchor and never stored until asked about; hexagons and only hexagons. A point is answered by its hexagon's reading; there
 is no search for a nearby reading, no radius, no time tier, and no grid of readings kept warm over
 the state.
@@ -79,14 +79,18 @@ day for nothing anyone would read; a snapshot per ref-hexagon per three hours is
 this is a weather service and a reading is asked for for any reason. The Hub passes its incident id as
 the ref.*
 
-### W-7 · The upstream's own expiry, and a station's "now" beats a model's
+### W-7 · A forecast lives three hours, five when the allowance is tight; a station's "now" beats a model's
 
-**The decision.** A reading is current until the upstream says otherwise — the end of the quarter-hour
-Open-Meteo's current block covers — and the series until an hour after it was fetched. Where a Bureau
-station sits in the hexagon, its values are the reading's "now" and the upstream is asked for the
-series only, when a forecast is wanted.
+**The decision, as rewritten on 19 September 2026.** A forecast is kept for a hard cap from its fetch —
+three hours, five once the day's allowance is 70% spent, read live — and inside that life the model's
+"now" is its series read at the moment. Where a Bureau station sits in the hexagon, its values are the
+reading's "now", the upstream is asked for the series only, when a forecast is wanted, and the station
+can throw the forecast out early (W-12). *As first taken* the reading was current until the end of
+the quarter-hour Open-Meteo's current block covered and the series for an hour after its fetch.
 
-**Why.** Thirty fixed minutes was neither the model's cadence nor the station's. A station's values are
+**Why.** The upstream's own expiry was the model's cadence, not a measure of whether the forecast was
+any good, and it re-fetched every hour whether or not anything had changed. A cap the budget can
+stretch is the one lever that matters when the allowance is running out. A station's values are
 values, not a reading of a different grade, and they are free every ten minutes.
 
 ### W-8 · Terrain and land use from mounted files, read once
@@ -128,8 +132,25 @@ ring — and the drought state was per area, spun up once at the area's centre a
 neighbouring asks did not each pay the year of archive for the same rain (at 15 km, 51 asked hexagons
 had meant 51 archive fetches).
 
-**Reversed, 19 September 2026.** The hexagons went to 32 km the same day, which is already the scale a
+**Reversed, 19 September 2026.** The hexagons grew to 25 km the same day, which is already the scale a
 drought factor describes, and the areas were complexity for nothing: the drought is the hexagon's, like
 everything else the hexagon holds — spun up once per hexagon at its centre, about six units, stepped
 daily from the station ledger for free, kept on the hexagon's row. `V4` dropped the areas' table. — James.
+
+### W-12 · The station in the hexagon judges the forecast, on the four things it measures
+
+**The decision.** Every ten minutes, a hexagon with a station and a forecast compares the station's
+values with the forecast read off its series at the same moment — temperature, humidity, wind speed
+and rain since 9 am, each as station minus forecast and as a share of a tolerance (3 °C, 20 points,
+15 km/h, 5 mm). The score is the worst of the four; at 1 the forecast is thrown out, the station stays
+"now", and the days ahead are fetched again an hour later, not at once. Every comparison is written to
+`forecast_drift`; `/api/v1/drift` and the map's drift view read it.
+
+**Why.** A forecast's worth is how far it is from what the ground says, and only the station can say.
+The worst of four rather than an average, because a fire index fails on any one input: humidity
+twenty-five points wrong is a wrong index whatever the temperature. Direction, gusts and pressure are
+left out — the first two are noise at a point, the third is not what fire turns on — and anything a
+station does not measure cannot be judged. The hour before a re-fetch is what stops a model that is
+simply wrong today from being fetched every ten minutes at five units a time. **What it costs.** A
+hexagon without a station is not judged at all; its forecast lives out its cap. — James, 19 September 2026.
 

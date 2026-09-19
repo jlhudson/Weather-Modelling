@@ -33,7 +33,7 @@ public class HexagonsPageController {
         Instant now = Instant.now();
         List<Map<String, Object>> rows = store.all().stream()
                 .sorted(Comparator.comparing((Hexagon h) -> h.lastAskedAt() == null ? Instant.EPOCH : h.lastAskedAt()).reversed())
-                .map(h -> HexagonsController.row(h, now)).toList();
+                .map(h -> HexagonsController.row(h, now, store)).toList();
         model.addAttribute("rows", rows);
         model.addAttribute("active", store.all().stream().filter(Hexagon::active).count());
         model.addAttribute("withStation", store.all().stream().filter(Hexagon::hasStation).count());

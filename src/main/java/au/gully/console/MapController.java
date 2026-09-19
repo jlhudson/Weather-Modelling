@@ -143,7 +143,7 @@ public class MapController {
             return ResponseEntity.notFound().build();
         }
         Hexagon h = held.get();
-        Map<String, Object> out = new LinkedHashMap<>(HexagonsController.row(h, Instant.now()));
+        Map<String, Object> out = new LinkedHashMap<>(HexagonsController.row(h, Instant.now(), store));
         out.put("reading", readings.of(h, new Reading.Point(h.cell().lat(), h.cell().lon()), true));
         out.put("drought", h.drought());
         out.put("river", h.river() == null ? null : h.river().river(LocalDate.now(store.zoneOf(h))));

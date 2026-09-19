@@ -28,7 +28,7 @@
     var KIND = {station: '#3b82f6', forecast: '#f59e0b', both: '#a855f7', bare: '#9ca3af'};
     var LEADS = {forest: '#15803d', grass: '#ca8a04'};
     var RANGES = {temperatureC: [0, 45], humidityPct: [0, 100], windSpeedKmh: [0, 80], windGustKmh: [0, 110], ffdi: [0, 100], gfdi: [0, 150], fbi: [0, 100],
-        droughtFactor: [0, 10], kbdiMm: [0, 203], curingPct: [0, 100], ageMinutes: [0, 180], elevationM: [0, 1500]};
+        droughtFactor: [0, 10], kbdiMm: [0, 203], curingPct: [0, 100], ageMinutes: [0, 300], elevationM: [0, 1500], drift: [0, 1.5], drift24h: [0, 1.5]};
     function ramp(t) {
         t = Math.max(0, Math.min(1, t));
         var stops = [[0, [33, 102, 172]], [.5, [247, 247, 190]], [1, [178, 24, 43]]];
@@ -51,7 +51,17 @@
         if (value === 'leads') return LEADS[v] || '#9ca3af';
         var r = RANGES[value] || [0, 100];
         if (value === 'humidityPct') return ramp(1 - (v - r[0]) / (r[1] - r[0]));
+        if (value === 'drift' || value === 'drift24h') return driftColour(v);
         return ramp((v - r[0]) / (r[1] - r[0]));
+    }
+    // The station against the forecast: green agrees, amber is halfway to the tolerance, red is at it
+    // (the forecast was thrown out), dark red beyond.
+    function driftColour(score) {
+        if (score == null) return null;
+        if (score >= 1.25) return '#7f1d1d';
+        if (score >= 1) return '#dc2626';
+        if (score >= .5) return 'rgb(' + Math.round(245 + (220 - 245) * (score - .5) * 2) + ',' + Math.round(158 + (38 - 158) * (score - .5) * 2) + ',11)';
+        return 'rgb(' + Math.round(34 + (245 - 34) * score * 2) + ',' + Math.round(197 + (158 - 197) * score * 2) + ',' + Math.round(94 + (11 - 94) * score * 2) + ')';
     }
     // How much of a forecast's life is left: 1 when just fetched, 0 at its expiry, 0 once stale. The
     // amber fades with it, so a hexagon that has not been asked about lately is visibly going.
@@ -86,6 +96,11 @@
         }
         else if (value === 'ffdi' || value === 'gfdi') ['LOW-MODERATE', 'HIGH', 'VERY HIGH', 'SEVERE', 'EXTREME', 'CATASTROPHIC'].forEach(function (k) { html += '<i style="background:' + RATING[k] + '" title="' + k + '"></i>'; });
         else if (value === 'fbi' || value === 'officialRating') ['No Rating', 'Moderate', 'High', 'Extreme', 'Catastrophic'].forEach(function (k) { html += '<i style="background:' + RATING[k] + '" title="' + k + '"></i>'; });
+        else if (value === 'drift' || value === 'drift24h') {
+            html = '<span class="muted">agrees</span>';
+            [0, .25, .5, .75, 1, 1.25].forEach(function (v) { html += '<i style="background:' + driftColour(v) + '" title="' + v + '"></i>'; });
+            html += '<span class="muted">thrown out</span>';
+        }
         else if (value === 'kind') Object.keys(KIND).forEach(function (k) { html += '<i style="background:' + KIND[k] + '" title="' + k + '"></i><span class="muted me-1">' + k + '</span>'; });
         else if (value === 'leads') Object.keys(LEADS).forEach(function (k) { html += '<i style="background:' + LEADS[k] + '" title="' + k + '"></i><span class="muted me-1">' + k + '</span>'; });
         else { var r = RANGES[value] || [0, 100]; html = '<span class="muted">' + r[0] + '</span>'; for (var i = 0; i <= 8; i++) html += '<i style="background:' + ramp(i / 8) + '"></i>'; html += '<span class="muted">' + r[1] + '</span>'; }
@@ -127,8 +142,11 @@
                 s += '<br>' + esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + esc(fmt(p.windSpeedKmh)) + ' km/h'
                     + (p.windDirectionDeg != null ? ' from ' + p.windDirectionDeg + '°' : '') + (p.windGustKmh != null ? ' gust ' + p.windGustKmh : '');
             }
+            if (p.drift != null) s += '<br>drift ' + esc(p.drift) + (p.drifted ? ' <b>thrown out</b>' : '') + (p.driftWorst ? ' (' + esc(p.driftWorst) + ')' : '')
+                + ' · station−forecast ' + esc(fmt(p.driftTemperatureC, 1)) + ' °C, ' + esc(fmt(p.driftHumidityPct)) + ' pts, ' + esc(fmt(p.driftWindKmh, 1)) + ' km/h, ' + esc(fmt(p.driftRainMm, 1)) + ' mm'
+                + (p.drift24h != null ? ' · 24 h mean ' + esc(p.drift24h) : '');
             if (p.ffdi != null) s += '<br>FFDI ' + esc(p.ffdi) + ' ' + esc(p.ffdiRating || '') + (p.fbi != null ? ' · FBI ' + esc(p.fbi) + ' ' + esc(p.afdrsRating || '') : '') + (p.droughtFactor != null ? ' · DF ' + esc(p.droughtFactor) : '');
-            if (value !== 'activity' && p[value] != null && ['temperatureC', 'humidityPct', 'windSpeedKmh', 'ffdi', 'fbi'].indexOf(value) < 0) s += '<br>' + esc(value) + ': ' + esc(fmt(p[value], 1));
+            if (value !== 'activity' && p[value] != null && ['temperatureC', 'humidityPct', 'windSpeedKmh', 'ffdi', 'fbi', 'drift', 'drift24h'].indexOf(value) < 0) s += '<br>' + esc(value) + ': ' + esc(fmt(p[value], 1));
             if (p.at) s += '<br><span class="muted">' + when(p.at) + ' (' + esc(p.from) + ')' + (p.fireBanDistrict ? ' · ' + esc(p.fireBanDistrict) : '') + '</span>';
             return s;
         }, {sticky: true});
@@ -213,6 +231,13 @@
             html += '<h2>now <span class="muted">' + esc(r.currentFrom || '') + ' · ' + when(r.at) + '</span></h2>';
             html += kv([['temperature', c.temperatureC != null ? c.temperatureC + ' °C' + (c.apparentTemperatureC != null ? ' (feels ' + c.apparentTemperatureC + ')' : '') : null], ['humidity', c.humidityPct != null ? c.humidityPct + ' %' : null], ['dew point', c.dewPointC != null ? c.dewPointC + ' °C' : null],
                 ['wind', c.windSpeedKmh != null ? c.windSpeedKmh + ' km/h from ' + fmt(c.windDirectionDeg) + '° gust ' + fmt(c.windGustKmh) : null], ['pressure', c.pressureMslHpa != null ? c.pressureMslHpa + ' hPa' : null], ['rain', c.precipitationMm != null ? c.precipitationMm + ' mm' : null], ['condition', c.condition]]);
+            var dr = h.drift;
+            if (dr) {
+                html += '<h2>drift <span class="muted">station − forecast at ' + when(dr.at) + '</span></h2>';
+                html += kv([['score', dr.score + (dr.drifted ? ' · thrown out' : '') + (dr.worst ? ' (' + dr.worst + ')' : '')], ['temperature', dr.temperatureC != null ? dr.temperatureC + ' °C (tolerance 3)' : null],
+                    ['humidity', dr.humidityPct != null ? dr.humidityPct + ' points (tolerance 20)' : null], ['wind', dr.windKmh != null ? dr.windKmh + ' km/h (tolerance 15)' : null],
+                    ['rain since 9 am', dr.rainMm != null ? dr.rainMm + ' mm (tolerance 5)' : null], ['station', dr.stationId], ['upstream', dr.upstream]]);
+            }
             html += '<h2>fire</h2>';
             html += kv([['FFDI', f.ffdi != null ? f.ffdi + ' ' + f.ffdiRating + (f.peakFfdi != null ? ' (peak ' + f.peakFfdi + ')' : '') : null], ['drought factor', f.droughtFactor], ['KBDI', f.kbdiMm != null ? f.kbdiMm + ' mm ' + f.kbdiBand : null],
                 ['GFDI', g.gfdi != null ? g.gfdi + ' ' + g.gfdiRating + ' (curing ' + g.curingPct + '%, ' + g.fuelLoadTHa + ' t/ha)' : (f.leads ? 'no curing figure' : null)], ['AFDRS grass', g.fbi != null ? 'FBI ' + g.fbi + ' ' + g.afdrsRating + ' · ' + g.rateOfSpreadKmh + ' km/h · ' + g.intensityKwm + ' kW/m' : null],

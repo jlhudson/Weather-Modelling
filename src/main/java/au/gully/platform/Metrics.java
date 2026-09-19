@@ -37,7 +37,7 @@ public class Metrics {
         Gauge.builder("gully.hexagons", () -> store.all().stream().filter(Hexagon::hasForecast).count()).tags(Tags.of("state", "forecast")).register(registry);
         Gauge.builder("gully.stale.hexagons", () -> {
             Instant now = Instant.now();
-            return store.all().stream().filter(h -> h.hasForecast() && !h.hasStation() && h.forecast().currentExpired(now)).count();
+            return store.all().stream().filter(h -> h.hasForecast() && !h.hasStation() && store.life().expired(h.forecast(), now)).count();
         }).register(registry);
         Gauge.builder("gully.stations", stations::size).register(registry);
         Gauge.builder("gully.station.age.seconds", () -> stations.lastUpdateAt() == null ? -1

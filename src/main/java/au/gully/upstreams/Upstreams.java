@@ -187,6 +187,27 @@ public class Upstreams {
         return out;
     }
 
+    /**
+     * How much of the day's allowance the upstream a fetch would go to has used, 0 to 1: the first
+     * configured upstream in the order whose breaker is closed, else 1 when none is usable (nothing
+     * fetched is the tightest budget there is). Cheap: two ledger sums.
+     */
+    public double dayFraction() {
+        for (String id : order()) {
+            Upstream u = upstream(id).orElse(null);
+            if (u == null || !u.configured() || breaker.status(id).openUntil() != null) {
+                continue;
+            }
+            Upstream.Limits limits = u.spec().limits();
+            Integer perDay = limits == null ? null : limits.perDay();
+            if (perDay == null || perDay <= 0) {
+                return 0;
+            }
+            return Math.min(1.0, ledger.spent(id, Duration.ofDays(1)) / perDay);
+        }
+        return 1;
+    }
+
     public Ledger ledger() {
         return ledger;
     }

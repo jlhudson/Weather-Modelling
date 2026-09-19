@@ -40,8 +40,6 @@ public class GoogleWeather implements Upstream {
      * Google publishes no cadence for its current conditions; half an hour is what it has been
      * observed to refresh at and is the life a fetched "now" is given here.
      */
-    private static final Duration CURRENT_LIFE = Duration.ofMinutes(30);
-    private static final Duration SERIES_LIFE = Duration.ofHours(1);
 
     public static final Spec SPEC = new Spec(ID, "weather.googleapis.com", "google-weather-v1",
             "Weather data from Google Maps Platform", 3.0, new Limits(null, null, null, 10_000), 0.9, 60,
@@ -103,8 +101,7 @@ public class GoogleWeather implements Upstream {
                 daily.add(day(d));
             }
         }
-        return new Forecast(ID, SPEC.model(), SPEC.attribution(), now, now.plus(CURRENT_LIFE), now.plus(SERIES_LIFE),
-                null, zone.getId(), current, hourly, daily);
+        return new Forecast(ID, SPEC.model(), SPEC.attribution(), now, null, zone.getId(), current, hourly, daily);
     }
 
     private JsonNode read(String url) throws UpstreamException {

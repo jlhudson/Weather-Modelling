@@ -53,11 +53,12 @@ public class Readings {
         FirePicture fire = h.fire();
         DroughtIndex drought = h.drought() == null ? null : h.drought().index();
         ZoneId zone = store.zoneOf(h);
+        boolean stale = f != null && !"station".equals(c.from()) && store.life().expired(f, now);
         return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, now),
                 f == null ? null : new Reading.Source(f.upstream(), f.model(), f.attribution(), f.fetchedAt(),
-                        f.currentExpiresAt(), f.forecastExpiresAt(), f.currentExpired(now)),
+                        store.life().expiresAt(f), store.life().forecast().toString(), stale),
                 c.at(), c.conditions(), c.from(), station(h), fire(fire), flood(h, f, drought, zone), drought,
-                warnings(fire), withForecast && f != null ? forecast(f, fire, h, zone) : null, null, Reading.DISCLAIMER);
+                warnings(fire), withForecast && f != null ? forecast(f, fire, h, zone) : null, drift(h), null, Reading.DISCLAIMER);
     }
 
     /**
@@ -77,13 +78,13 @@ public class Readings {
         History.Snapshot s = nearest.get();
         Instant now = Instant.now();
         return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, now), null, s.at(), s.current(), s.currentFrom(),
-                station(h), fire(s.fire()), null, s.drought(), warnings(s.fire()), null,
+                station(h), fire(s.fire()), null, s.drought(), warnings(s.fire()), null, null,
                 new Reading.HistoryBlock(s.at(), s.askedAt(), s.ref(), at), Reading.DISCLAIMER);
     }
 
     public Reading unavailable(Reading.Point point, Hexagon h, String why) {
         return new Reading(Reading.SCHEMA, false, why, point, h == null ? null : hexagon(h, Instant.now()), null, null,
-                null, null, h == null ? null : station(h), null, null, null, List.of(), null, null, Reading.DISCLAIMER);
+                null, null, h == null ? null : station(h), null, null, null, List.of(), null, null, null, Reading.DISCLAIMER);
     }
 
     private static String reason(Hexagon h) {
@@ -100,8 +101,15 @@ public class Readings {
                 h.elevationM(), h.elevationFrom(), h.slopeDeg(), h.zone(), h.fireBanDistrict(), h.bureauDistrict(),
                 land == null ? null : new Reading.LandUseBlock(land.pointClass() == null ? null : land.pointClass().key(),
                         land.byKey(), land.leads(), land.burnablePct()),
-                h.stationId(), h.kind(), h.activatedAt(), f == null ? null : f.fetchedAt(),
-                f == null ? null : (h.hasStation() ? f.forecastExpiresAt() : f.currentExpiresAt()));
+                h.stationId(), h.kind(), h.activatedAt(), f == null ? null : f.fetchedAt(), store.life().expiresAt(f));
+    }
+
+    /**
+     * The station's word on the forecast (W-12), or null where the hexagon has no station or no comparison yet.
+     */
+    Reading.DriftBlock drift(Hexagon h) {
+        return store.drift(h.id()).map(d -> new Reading.DriftBlock(d.at(), d.stationId(), d.upstream(), d.temperatureC(), d.humidityPct(),
+                d.windKmh(), d.rainMm(), d.score(), d.worst(), d.drifted())).orElse(null);
     }
 
     Reading.StationBlock station(Hexagon h) {

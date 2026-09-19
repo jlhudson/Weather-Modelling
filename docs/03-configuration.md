@@ -52,7 +52,7 @@ land use. In the container the files live on the `weather-data` volume at `/data
 
 ## 3.4 The constants
 
-What is not configuration, and where it lives: the hexagon's width and the grid's anchor (`Grid.CELL_KM`, 32 km;
+What is not configuration, and where it lives: the hexagon's width and the grid's anchor (`Grid.CELL_KM`, 25 km;
 `Grid.ANCHOR_LAT` and `ANCHOR_LON`, the Murray Bridge Golf Course — change either and the hexagon-keyed
 tables are reset at the next start, the service says so in the log);
 every upstream's host, model, licence, allowance, cost per fetch, per-minute limit and pause
@@ -60,7 +60,9 @@ every upstream's host, model, licence, allowance, cost per fetch, per-minute lim
 the Bureau's product identifiers and cadences (`StationFile`, `WarningFiles`, `StationReader.EVERY`,
 `WarningsReader.EVERY`); the station ledger's cadence (six hours) and the rain day (9 am); the CFS
 URLs and cadences (`Ratings`, `Districts`); the drought window (365 days), the archive lag (5 days) and the
-station reach (75 km) (`Drought`); the river cells (5 km) (`Rivers`); the history's
+station reach (75 km) (`Drought`); a forecast's life (3 h, 5 h once the day's allowance is 70% spent,
+`Life`), the drift tolerances (3 °C, 20 points, 15 km/h, 5 mm, `Drift`) and the hour before a forecast
+thrown out for drift is fetched again (`HexagonStore.REFETCH_AFTER_DRIFT`); the river cells (5 km) (`Rivers`); the history's
 "current" window (three hours, `History.CURRENT_FOR`); the grassland fuel load (4.5 t/ha,
 `FirePictures`); the wind-change window (48 hours); the refresh executor and the tile cache.
 

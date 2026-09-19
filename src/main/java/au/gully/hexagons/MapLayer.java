@@ -30,8 +30,12 @@ public class MapLayer {
     private final HexagonStore store;
     private final StationRegistry stations;
     private final History history;
+    private final Life life;
+    private final Drifts drifts;
     private final Json json;
     private final AtomicReference<Rendered> rendered = new AtomicReference<>();
+    /** The day's mean drift per hexagon, read once per render rather than once per hexagon. */
+    private Map<String, Double> driftDay = Map.of();
 
     /**
      * The layer as it stands: rebuilt only when a hexagon has been replaced since the last render.
@@ -64,6 +68,7 @@ public class MapLayer {
     private Rendered render(long version, Instant at) {
         Instant now = Instant.now();
         Map<String, History.Snapshot> snapshots = at == null ? Map.of() : history.allAt(at);
+        driftDay = at == null ? drifts.meanScores(Duration.ofHours(24)) : Map.of();
         List<Map<String, Object>> features = new ArrayList<>();
         int active = 0, withStation = 0, withForecast = 0, withDrought = 0;
         for (Hexagon h : store.all()) {
@@ -162,9 +167,20 @@ public class MapLayer {
         fire(p, fire);
         p.put("upstream", fc == null ? null : fc.upstream());
         p.put("refreshedAt", fc == null ? null : fc.fetchedAt().toString());
-        Instant expires = fc == null ? null : (h.hasStation() ? fc.forecastExpiresAt() : fc.currentExpiresAt());
+        Instant expires = life.expiresAt(fc);
         p.put("expiresAt", expires == null ? null : expires.toString());
-        p.put("stale", fc != null && !h.hasStation() && fc.currentExpired(now));
+        p.put("stale", fc != null && !h.hasStation() && life.expired(fc, now));
+        // The station's word on the forecast (W-12), and how the forecasts here have been doing over a day.
+        Drift d = drifts.latest(h.id()).orElse(null);
+        p.put("drift", d == null ? null : d.score());
+        p.put("drifted", d != null && d.drifted());
+        p.put("driftWorst", d == null ? null : d.worst());
+        p.put("driftTemperatureC", d == null ? null : d.temperatureC());
+        p.put("driftHumidityPct", d == null ? null : d.humidityPct());
+        p.put("driftWindKmh", d == null ? null : d.windKmh());
+        p.put("driftRainMm", d == null ? null : d.rainMm());
+        p.put("driftAt", d == null ? null : d.at().toString());
+        p.put("drift24h", driftDay.get(h.id()));
         p.put("warm", h.lastAskedAt() != null && Duration.between(h.lastAskedAt(), now).compareTo(Duration.ofMinutes(15)) < 0);
         p.put("lastAskedAt", h.lastAskedAt() == null ? null : h.lastAskedAt().toString());
         p.put("asks", h.asks());

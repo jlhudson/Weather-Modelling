@@ -9,7 +9,7 @@ the overhaul of 19 September 2026; the sixth is the catalogue that overhaul was 
 | [02-api.md](02-api.md) | Version 1 of the API, with curl. The reading's shape is the contract, written down as a JSON Schema both repositories keep. |
 | [03-configuration.md](03-configuration.md) | Every setting with its default, every environment variable, and where the constants live. |
 | [04-migration-from-the-hub.md](04-migration-from-the-hub.md) | The database migration in place, what the Hub changed, what a second copy would need. |
-| [05-decisions.md](05-decisions.md) | The three Hub decisions that produced this repository, and the eight this service took. |
+| [05-decisions.md](05-decisions.md) | The three Hub decisions that produced this repository, and the nine this service took. |
 | [06-overhaul.md](06-overhaul.md) | **The overhaul catalogue**, ticked: the twenty items, what each changed and why. |
 
 **Where the rest of the reasoning lives.** The science still cites the Hub's docs by number — `docs/09`

@@ -24,6 +24,7 @@ import java.util.Map;
  * @param at          the time {@code current} describes: the station's observation time, or the model's
  * @param currentFrom {@code station} when a Bureau station in the hexagon supplied "now", {@code model} otherwise
  * @param station     the nearest Bureau station's latest values, inside the hexagon or not, with its distance
+ * @param drift       the station in the hexagon against the forecast it holds (W-12); null without both
  * @param history     present when the reading is a snapshot answered for a past time
  */
 public record Reading(
@@ -42,6 +43,7 @@ public record Reading(
         DroughtIndex drought,
         List<WarningBlock> warnings,
         ForecastBlock forecast,
+        DriftBlock drift,
         HistoryBlock history,
         String disclaimer
 ) {
@@ -49,7 +51,7 @@ public record Reading(
     public static final String SCHEMA = "gully/reading/1";
 
     public static final String DISCLAIMER = "Weather from third-party forecast models and the Bureau of Meteorology's "
-            + "published station values, held per 32 km hexagon; the fire indices are computed here and the official "
+            + "published station values, held per 25 km hexagon; the fire indices are computed here and the official "
             + "rating is the CFS's. Not an official Bureau of Meteorology product.";
 
     public record Point(double lat, double lon) {
@@ -58,7 +60,7 @@ public record Reading(
     /**
      * @param kind       {@code station}, {@code forecast}, {@code both} or {@code bare}
      * @param refreshedAt when the forecast was fetched; null without one
-     * @param expiresAt  when the "now" values go stale; null without a forecast
+     * @param expiresAt  when the forecast's life ends under the cap in force now; null without a forecast
      */
     public record HexagonBlock(String id, double lat, double lon, double widthKm, Double elevationM,
                                String elevationFrom, Double slopeDeg, String zone, String fireBanDistrict,
@@ -75,12 +77,23 @@ public record Reading(
     }
 
     /**
-     * Which upstream the forecast came from, and how long it is good for.
+     * Which upstream the forecast came from, and how long it is kept.
      *
-     * @param stale true when the upstream's own expiry has passed and nothing has answered since
+     * @param expiresAt when its life ends under the cap in force now
+     * @param life      the cap in force now, ISO-8601: {@code PT3H}, or {@code PT5H} while the allowance is tight
+     * @param stale     true when its life has ended and nothing has answered since
      */
-    public record Source(String upstream, String model, String attribution, Instant fetchedAt,
-                         Instant currentExpiresAt, Instant forecastExpiresAt, boolean stale) {
+    public record Source(String upstream, String model, String attribution, Instant fetchedAt, Instant expiresAt,
+                         String life, boolean stale) {
+    }
+
+    /**
+     * The station in the hexagon against the forecast, at the station's time: each of the four as
+     * station minus forecast, the worst as a share of its tolerance, and whether that threw the
+     * forecast out.
+     */
+    public record DriftBlock(Instant at, String stationId, String upstream, Double temperatureC, Integer humidityPct,
+                             Double windKmh, Double rainMm, double score, String worst, boolean drifted) {
     }
 
     public record StationBlock(String id, String name, double lat, double lon, Double heightM, Double distanceKm,

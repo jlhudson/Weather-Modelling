@@ -33,9 +33,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * <ul>
  *   <li>A point is answered by the hexagon it falls in. A hexagon nobody has asked about does not
  *       exist; the first ask creates it, works out what it is made of, and fetches its reading.</li>
- *   <li>A reading is kept until the upstream says it is stale. Served close to expiry, it is
- *       refreshed in the background so the next ask is already fresh. Several asks arriving at once
- *       for a hexagon with nothing fetch it once.</li>
+ *   <li>A forecast is kept for its life - three hours, five when the allowance is tight ({@link Life}) -
+ *       and thrown out early when the station in the hexagon says it has drifted ({@link Drift}). Served
+ *       close to the end of its life, it is refreshed in the background so the next ask is already
+ *       fresh. Several asks arriving at once for a hexagon with nothing fetch it once.</li>
  *   <li>A hexagon with a Bureau station in it is always alive: its "now" is the station's, free,
  *       every ten minutes, and the upstream is called for its forecast only, when a forecast is asked for.</li>
  *   <li>A caller that keeps asking keeps its hexagons warm; they go cold on their own when it stops.</li>
@@ -56,6 +57,8 @@ public class HexagonStore {
     private final History history;
     private final Drought drought;
     private final Rivers rivers;
+    private final Life life;
+    private final Drifts drifts;
     private final GullyProperties properties;
 
     private final Map<String, Hexagon> hexagons = new ConcurrentHashMap<>();
@@ -65,10 +68,18 @@ public class HexagonStore {
     private final AtomicLong served = new AtomicLong();
     private final AtomicLong fetched = new AtomicLong();
     private final AtomicLong stale = new AtomicLong();
+    /** When a hexagon's forecast was last thrown out for drift, so a model that is simply wrong is not re-fetched every ten minutes. */
+    private final Map<String, Instant> discarded = new ConcurrentHashMap<>();
+
+    /**
+     * How long after a forecast is thrown out for drift before one is fetched again: the next model
+     * run, roughly, and meanwhile the station is "now" and the days ahead wait.
+     */
+    public static final Duration REFETCH_AFTER_DRIFT = Duration.ofHours(1);
 
     public HexagonStore(Grid grid, HexagonRepository repository, Terrain terrain, StationRegistry stations, Districts districts,
                         Upstreams upstreams, FirePictures pictures, History history, Drought drought, Rivers rivers,
-                        GullyProperties properties) {
+                        Life life, Drifts drifts, GullyProperties properties) {
         this.grid = grid;
         this.repository = repository;
         this.terrain = terrain;
@@ -79,6 +90,8 @@ public class HexagonStore {
         this.history = history;
         this.drought = drought;
         this.rivers = rivers;
+        this.life = life;
+        this.drifts = drifts;
         this.properties = properties;
     }
 
@@ -108,19 +121,20 @@ public class HexagonStore {
         // area spun up or adopted since it was last asked about.
         h = ensureDrought(h, now);
 
+        // The station's word on the forecast, before deciding whether one is needed.
+        h = checkDrift(h, now);
         boolean stationFresh = pictures.now(h, now).map(n -> "station".equals(n.from())).orElse(false);
         Forecast f = h.forecast();
+        Instant discardedAt = discarded.get(h.id());
+        boolean mayFetch = discardedAt == null || Duration.between(discardedAt, now).compareTo(REFETCH_AFTER_DRIFT) >= 0;
         boolean need;
-        Instant nextExpiry;
+        Instant nextExpiry = life.expiresAt(f);
         if (f == null) {
-            need = wantForecast || !stationFresh;
-            nextExpiry = null;
+            need = (wantForecast || !stationFresh) && mayFetch;
         } else if (stationFresh) {
-            need = wantForecast && f.forecastExpired(now);
-            nextExpiry = f.forecastExpiresAt();
+            need = wantForecast && life.expired(f, now);
         } else {
-            need = f.currentExpired(now) || (wantForecast && f.forecastExpired(now));
-            nextExpiry = f.currentExpiresAt();
+            need = life.expired(f, now);
         }
         if (need) {
             h = fetchNow(h);
@@ -131,7 +145,7 @@ public class HexagonStore {
             h = recompute(h.id(), now);
         }
         served.incrementAndGet();
-        if (h.forecast() != null && !stationFresh && h.forecast().currentExpired(now)) {
+        if (h.forecast() != null && !stationFresh && life.expired(h.forecast(), now)) {
             stale.incrementAndGet();
         }
         if (ref != null && !ref.isBlank()) {
@@ -205,8 +219,12 @@ public class HexagonStore {
         try {
             Forecast forecast = upstreams.fetch(before.cell());
             Hexagon after = replace(id, old -> old.withForecast(forecast, now));
-            repository.saveForecast(after);
+            repository.saveForecast(after, life.expiresAt(forecast));
+            discarded.remove(id);
             fetched.incrementAndGet();
+            // Judged the moment it arrives: a fresh forecast that already disagrees with the station is the
+            // comparison most worth having.
+            checkDrift(after, now);
             return recompute(id, now);
         } catch (Upstreams.NoUpstream e) {
             log.debug("no upstream for {}: {}", id, e.getMessage());
@@ -233,6 +251,7 @@ public class HexagonStore {
         for (String id : hexagons.keySet()) {
             Hexagon h = hexagons.get(id);
             if (h != null && (h.active() || h.hasStation())) {
+                checkDrift(h, now);
                 recompute(id, now);
                 n++;
             }
@@ -298,6 +317,32 @@ public class HexagonStore {
             recomputeAll();
         }
         return changed;
+    }
+
+    /**
+     * The station in the hexagon against the forecast it holds (W-12). A forecast that has drifted is
+     * thrown out: the station is "now" regardless, and the days ahead are fetched again after
+     * {@link #REFETCH_AFTER_DRIFT} - the next model run, roughly - rather than at once, so a model
+     * that is simply wrong today is not re-fetched every ten minutes.
+     */
+    private Hexagon checkDrift(Hexagon h, Instant now) {
+        Optional<Drift> drift = drifts.check(h, now);
+        if (drift.isEmpty() || !drift.get().drifted()) {
+            return h;
+        }
+        log.info("forecast for {} thrown out: {} against station {}", h.id(), drift.get().describe(), h.stationId());
+        Hexagon after = replace(h.id(), old -> old.withForecast(null, now));
+        repository.saveForecast(after, null);
+        discarded.put(h.id(), now);
+        return recompute(h.id(), now);
+    }
+
+    public Optional<Drift> drift(String id) {
+        return drifts.latest(id);
+    }
+
+    public Life life() {
+        return life;
     }
 
     // ---------------------------------------------------------------- drought and rivers
@@ -416,7 +461,7 @@ public class HexagonStore {
             }
             if (Duration.between(h.lastAskedAt(), now).compareTo(properties.coldAfter()) > 0) {
                 Hexagon after = replace(id, Hexagon::cold);
-                repository.saveForecast(after);
+                repository.saveForecast(after, null);
                 cooled++;
             }
         }
