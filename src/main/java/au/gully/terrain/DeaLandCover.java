@@ -50,7 +50,7 @@ public class DeaLandCover {
     public static final String MEASUREMENT = "level4";
 
     /**
-     * Pixels across the hexagon's box: 96 across 15-odd kilometres is a pixel every 160 m or so from
+     * Pixels across the hexagon's box: 96 across 17-odd kilometres is a pixel every 180 m or so from
      * a 30 m source, four kilobytes compressed, and enough to count a paddock.
      */
     public static final int PIXELS = 96;

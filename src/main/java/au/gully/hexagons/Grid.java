@@ -18,14 +18,14 @@ import java.util.Set;
  * <p>
  * Hexagons, and only hexagons: they are the tiling whose cells are nearest to round — every point in
  * one is within half a width of its centre. Axial coordinates {@code (q, r)}; a hexagon's id is {@code q_r}. The size is the
- * width across the flats, so a 15 km hexagon is 15 km wide and 17 km tall.
+ * width across the flats, so a 17 km hexagon is 17 km wide and 20 km tall.
  */
 public final class Grid {
 
     /**
      * The width of a hexagon across the flats, in kilometres.
      */
-    public static final double CELL_KM = 15;
+    public static final double CELL_KM = 17;
 
     /**
      * The anchor: hexagon {@code 0_0} is centred here. The Murray Bridge Golf Course, as OpenStreetMap
@@ -35,13 +35,13 @@ public final class Grid {
     public static final double ANCHOR_LON = 139.26558;
 
     /**
-     * How far outside a hexagon a Bureau station still counts as the hexagon's own: a fifth of the
-     * width, 3 km at 15 km. A station a few hundred metres over the line is as much this hexagon's
+     * How far outside a hexagon a Bureau station still counts as the hexagon's own: a quarter of the
+     * width, 4.25 km at 17 km. A station a few hundred metres over the line is as much this hexagon's
      * weather as its neighbour's, and without a reach the hexagon beside a town's station had nothing
      * of its own. A station reaches every hexagon whose edge is within this distance - its own and
      * up to three neighbours at a corner - and each of them takes it as "in it".
      */
-    public static final double STATION_REACH_KM = CELL_KM / 5;
+    public static final double STATION_REACH_KM = CELL_KM / 4;
 
     private static final double SQRT3 = Math.sqrt(3);
 

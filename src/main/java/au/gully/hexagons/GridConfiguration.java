@@ -4,7 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * The reading's grid, as a bean: the default 15 km hexagons from the anchor. A test stands a different one in.
+ * The reading's grid, as a bean: the default 17 km hexagons from the anchor. A test stands a different one in.
  */
 @Configuration
 public class GridConfiguration {

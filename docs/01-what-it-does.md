@@ -14,8 +14,8 @@ Nothing here is pre-warmed. A reading exists because something asked for it.
 
 ## 1.1 Hexagons
 
-Australia is divided into hexagons 15 km across the flats, on the Australian Albers plane so a hexagon
-is 15 km from Cape York to Hobart, laid out from one anchor: hexagon `0_0` is centred on the Murray
+Australia is divided into hexagons 17 km across the flats, on the Australian Albers plane so a hexagon
+is 17 km from Cape York to Hobart, laid out from one anchor: hexagon `0_0` is centred on the Murray
 Bridge Golf Course. The three constants are at the top of `au.gully.hexagons.Grid` — the width, the
 anchor's latitude and longitude — and changing one changes every hexagon's id, which the service
 notices at startup and resets the hexagon-keyed tables for. Hexagons, and only hexagons. The cells
@@ -47,7 +47,7 @@ A reading has two halves, and the service never lets one stand in for the other 
 
 - `station` — the hexagon's Bureau station has fresh values (under seventy minutes old). They are the
   reading's "now" as they are, unmoved: an observation is a fact. A station is the hexagon's when it
-  is inside it **or within a fifth of the width of its edge** (`Grid.STATION_REACH_KM`, 3 km at 15 km):
+  is inside it **or within a quarter of the width of its edge** (`Grid.STATION_REACH_KM`, 4.25 km at 17 km):
   a station a kilometre over the line is as much this hexagon's weather as its neighbour's, so it
   counts for both — for up to three hexagons at a corner. The `station` block says whether it is
   inside and how far from the centre it sits.
@@ -171,7 +171,7 @@ carried on every active hexagon in the district; a hexagon with no curing figure
 
 The fire indices need a drought factor; a drought factor needs a soil moisture deficit; a deficit
 needs a year of daily rain and maximum temperature integrated into a Keetch–Byram index and then a
-Griffiths factor. The drought is the hexagon's, like everything else the hexagon holds — at 15 km a
+Griffiths factor. The drought is the hexagon's, like everything else the hexagon holds — at 17 km a
 hexagon is already the scale a drought factor describes — from the Bureau stations inside it (or the
 nearest within 75 km).
 

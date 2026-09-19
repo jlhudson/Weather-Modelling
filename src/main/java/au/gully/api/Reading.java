@@ -23,7 +23,7 @@ import java.util.Map;
  * @param available   whether there is a reading at all; false with {@code unavailable} saying why
  * @param at          the time {@code current} describes: the station's observation time, or the model's
  * @param currentFrom {@code station} when the hexagon's Bureau station supplied "now" - in it, or within a
- *                    fifth of its width of its edge - {@code stations} when several were blended,
+ *                    quarter of its width of its edge - {@code stations} when several were blended,
  *                    {@code neighbours} when the stations around it were (W-13), {@code model} otherwise
  * @param station     the nearest Bureau station's latest values, inside the hexagon or not, with its distance
  * @param nearby      how the stations' values were blended and brought here, when they were (ring 0 is
@@ -56,7 +56,7 @@ public record Reading(
     public static final String SCHEMA = "gully/reading/1";
 
     public static final String DISCLAIMER = "Weather from third-party forecast models and the Bureau of Meteorology's "
-            + "published station values, held per 15 km hexagon; the fire indices are computed here and the official "
+            + "published station values, held per 17 km hexagon; the fire indices are computed here and the official "
             + "rating is the CFS's. Not an official Bureau of Meteorology product.";
 
     public record Point(double lat, double lon) {

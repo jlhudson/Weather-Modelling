@@ -8,7 +8,7 @@ Gully is the overhaul of the Weather service that was split out of [The Hub Data
 and the values are the values: no confidence scores, no "estimate" or "actual" branching; a missing
 value is missing, never zero; every answer carries its source and its time.
 
-**How it works, in one paragraph.** Australia is divided into 15 km hexagons by arithmetic from one
+**How it works, in one paragraph.** Australia is divided into 17 km hexagons by arithmetic from one
 anchor, the Murray Bridge Golf Course (the constants are at the top of `Grid`); a point is answered by
 the reading held for its hexagon, with "now" and the forecast kept apart. "Now" comes from the
 ground first: the Bureau station in the hexagon, the stations in it blended at its elevation, or the

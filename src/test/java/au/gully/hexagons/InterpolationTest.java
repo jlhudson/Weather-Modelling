@@ -132,7 +132,7 @@ class InterpolationTest {
         Cell centre = GRID.cell(0, 0);
         double[] c0 = Albers.forward(centre.lat(), centre.lon());
         // One station inside, one a kilometre over the northern edge: both the hexagon's, so a blend at ring 0.
-        double[] over = Albers.inverse(c0[0], c0[1] + 8500);
+        double[] over = Albers.inverse(c0[0], c0[1] + 9500);
         List<Station> stations = List.of(
                 new Station("IN", null, "INSIDE", centre.lat(), centre.lon(), 50.0, "Australia/Adelaide", "SA_PW001", "sa"),
                 new Station("OVER", null, "OVER THE EDGE", over[0], over[1], 50.0, "Australia/Adelaide", "SA_PW001", "sa"));

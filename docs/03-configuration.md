@@ -53,7 +53,7 @@ land use. In the container the files live on the `weather-data` volume at `/data
 ## 3.4 The constants
 
 What is not configuration, and where it lives: the hexagon's width, the grid's anchor and a station's
-reach (`Grid.CELL_KM`, 15 km; `Grid.STATION_REACH_KM`, a fifth of it, how far outside a hexagon a
+reach (`Grid.CELL_KM`, 17 km; `Grid.STATION_REACH_KM`, a quarter of it, how far outside a hexagon a
 station still counts as its own;
 `Grid.ANCHOR_LAT` and `ANCHOR_LON`, the Murray Bridge Golf Course — change either and the hexagon-keyed
 tables are reset at the next start, the service says so in the log);
