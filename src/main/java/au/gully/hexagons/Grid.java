@@ -19,14 +19,14 @@ import java.util.Set;
  * Hexagons, and only hexagons: they are the tiling whose cells are nearest to round — every point in
  * one is within half a width of its centre — and a ring of six is the natural district for the
  * drought maths (W-11). Axial coordinates {@code (q, r)}; a hexagon's id is {@code q_r}. The size is the
- * width across the flats, so a 20 km hexagon is 20 km wide and 23.1 km tall.
+ * width across the flats, so a 32 km hexagon is 32 km wide and 37 km tall.
  */
 public final class Grid {
 
     /**
      * The width of a hexagon across the flats, in kilometres.
      */
-    public static final double CELL_KM = 20;
+    public static final double CELL_KM = 32;
 
     /**
      * The anchor: hexagon {@code 0_0} is centred here. The Murray Bridge Golf Course, as OpenStreetMap

@@ -11,7 +11,7 @@ import static au.gully.science.Numbers.round1;
  * <p>
  * This is the one weather quantity that cannot be fetched. It is a running total, so it has to be
  * spun up from history and then carried forward a day at a time (docs/06 item 7). It varies slowly
- * and smoothly, so one of these serves a hexagon and its ring — three across, about 60 km — for a whole day.
+ * and smoothly, so one of these serves a hexagon and its ring — three across, about 100 km — for a whole day.
  * <p>
  * There is no {@code estimated} flag and no {@code basis} sentence: a hexagon either has a drought
  * index or it has none, and a reading with none carries no fire index at all.

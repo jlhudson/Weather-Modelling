@@ -42,7 +42,7 @@ config** — kept in spirit: `gully.upstreams.order` ships `open-meteo, google`,
 
 ### W-4 · Hexagons, not anchors; nothing pre-warmed
 
-**The decision.** Every reading belongs to a 20 km hexagon on the Australian Albers plane, worked out
+**The decision.** Every reading belongs to a 32 km hexagon on the Australian Albers plane, worked out
 by arithmetic from one anchor and never stored until asked about; hexagons and only hexagons. A point is answered by its hexagon's reading; there
 is no search for a nearby reading, no radius, no time tier, and no grid of readings kept warm over
 the state.
@@ -124,15 +124,15 @@ migration.
 ### W-11 · Drought areas are a fixed tiling of seven hexagons, one spin-up each
 
 **The decision.** The plane is tiled into fixed areas — a hexagon and its ring, seven cells, three across,
-about 60 km, on a lattice so the areas never overlap and never move — and the drought state is per area:
+about 100 km, on a lattice so the areas never overlap and never move — and the drought state is per area:
 spun up once at the area's centre by whichever hexagon in it is asked about first, stepped once a day
 for all of them, held in `drought_area` and copied onto each hexagon's row. The radius is one
-constant; 2 would make nineteen-cell areas about 100 km across.
+constant; 2 would make nineteen-cell areas about 160 km across.
 
 **Why.** The inputs were already pooled over the ring, but the state was per asked hexagon, so
 neighbouring asks each paid the year of archive — 51 asked hexagons, 51 archive fetches — for
 what was the same rain. An area anchored to the first hexagon hit would have overlapped its
 neighbours and depended on the order of asks; a lattice does neither. **What it costs.** The rain
-gradient inside 60 km — the Adelaide plains against the Mount Lofty Ranges — is one figure, as it was
+gradient inside 100 km — the Adelaide plains against the Mount Lofty Ranges — is one figure, as it was
 already for the inputs. — James, 19 September 2026.
 
