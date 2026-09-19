@@ -74,7 +74,7 @@ class ReadingContractTest {
         Reading.Hour hour = new Reading.Hour(Instant.parse("2026-09-18T14:00:00Z"), 10.2, 83, 10.1, 205, 18.0, 0.1, 20, "Overcast",
                 new Reading.HourFire(3.1, "LOW-MODERATE", 2.0, "LOW-MODERATE", 1, "No Rating", 6.8));
         return new Reading(Reading.SCHEMA, true, null, new Reading.Point(-34.93, 138.6),
-                new Reading.HexagonBlock("38_-215", -34.9257, 138.5832, 20, 29.3, "station", 1.4, "Australia/Adelaide", "ADELAIDE METROPOLITAN", "SA_PW001",
+                new Reading.HexagonBlock("38_-215", -34.9257, 138.5832, 15, 29.3, "station", 1.4, "Australia/Adelaide", "ADELAIDE METROPOLITAN", "SA_PW001",
                         new Reading.LandUseBlock("built_up", Map.of("built_up", 70, "grassland", 22, "water", 8), "grass", 22, "dea-landcover-2025"), "023000", "both",
                         Instant.parse("2026-09-18T12:00:00Z"), Instant.parse("2026-09-18T13:45:00Z"), Instant.parse("2026-09-18T14:45:00Z")),
                 new Reading.Source("open-meteo", "best_match", "Weather data by Open-Meteo.com, CC BY 4.0", Instant.parse("2026-09-18T13:45:00Z"),

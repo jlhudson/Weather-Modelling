@@ -14,8 +14,8 @@ Nothing here is pre-warmed. A reading exists because something asked for it.
 
 ## 1.1 Hexagons
 
-Australia is divided into hexagons 20 km across the flats, on the Australian Albers plane so a hexagon
-is 20 km from Cape York to Hobart, laid out from one anchor: hexagon `0_0` is centred on the Murray
+Australia is divided into hexagons 15 km across the flats, on the Australian Albers plane so a hexagon
+is 15 km from Cape York to Hobart, laid out from one anchor: hexagon `0_0` is centred on the Murray
 Bridge Golf Course. The three constants are at the top of `au.gully.hexagons.Grid` — the width, the
 anchor's latitude and longitude — and changing one changes every hexagon's id, which the service
 notices at startup and resets the hexagon-keyed tables for. Hexagons, and only hexagons. The cells
@@ -167,7 +167,7 @@ carried on every active hexagon in the district; a hexagon with no curing figure
 
 The fire indices need a drought factor; a drought factor needs a soil moisture deficit; a deficit
 needs a year of daily rain and maximum temperature integrated into a Keetch–Byram index and then a
-Griffiths factor. The drought is the hexagon's, like everything else the hexagon holds — at 20 km a
+Griffiths factor. The drought is the hexagon's, like everything else the hexagon holds — at 15 km a
 hexagon is already the scale a drought factor describes — from the Bureau stations inside it (or the
 nearest within 75 km).
 

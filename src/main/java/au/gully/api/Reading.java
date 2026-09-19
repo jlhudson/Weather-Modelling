@@ -56,7 +56,7 @@ public record Reading(
     public static final String SCHEMA = "gully/reading/1";
 
     public static final String DISCLAIMER = "Weather from third-party forecast models and the Bureau of Meteorology's "
-            + "published station values, held per 20 km hexagon; the fire indices are computed here and the official "
+            + "published station values, held per 15 km hexagon; the fire indices are computed here and the official "
             + "rating is the CFS's. Not an official Bureau of Meteorology product.";
 
     public record Point(double lat, double lon) {
