@@ -1,5 +1,7 @@
 package au.gully.hexagons;
 
+import au.gully.bureau.StationRegistry;
+import au.gully.bureau.WindShift;
 import au.gully.cfs.Ratings;
 import au.gully.platform.Hashing;
 import au.gully.platform.Json;
@@ -35,6 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MapLayer {
 
     private final HexagonStore store;
+    private final StationRegistry stations;
     private final History history;
     private final FirePictures pictures;
     private final Life life;
@@ -83,6 +86,19 @@ public class MapLayer {
         boolean ahead = at != null && at.isAfter(now);
         Map<String, History.Snapshot> snapshots = at == null || ahead ? Map.of() : history.allAt(at);
         Map<String, Double> driftDay = at == null ? drifts.meanScores(Duration.ofHours(24)) : Map.of();
+        // The wind changes the stations have just measured, each against every hexagon its station counts for (W-16).
+        Map<String, WindShift> shifts = new HashMap<>();
+        if (at == null) {
+            stations.windShifts().forEach((id, w) -> {
+                for (String hexagon : stations.hexagonsOf(store.grid(), id)) {
+                    WindShift held = shifts.get(hexagon);
+                    if (held == null || WindShift.rank(w.grade()) > WindShift.rank(held.grade()) || (WindShift.rank(w.grade()) == WindShift.rank(held.grade()) && w.swingDeg() > held.swingDeg())) {
+                        shifts.put(hexagon, w);
+                    }
+                }
+            });
+        }
+        int withShift = 0;
         List<Map<String, Object>> features = new ArrayList<>();
         int active = 0, withStation = 0, withForecast = 0, withDrought = 0, withLandUse = 0;
         Map<String, Integer> nowFrom = new LinkedHashMap<>();
@@ -99,6 +115,16 @@ public class MapLayer {
             if (h.drought() != null) withDrought++;
             if (h.landUse() != null) withLandUse++;
             Map<String, Object> f = feature(h, at, ahead, snapshots.get(h.id()), driftDay, now);
+            WindShift shift = shifts.get(h.id());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> props = (Map<String, Object>) f.get("properties");
+            props.put("windShift", shift == null ? null : shift.grade());
+            props.put("windShiftSwing", shift == null ? null : shift.swingGrade());
+            props.put("windShiftSpeed", shift == null ? null : shift.speedGrade());
+            props.put("windShiftDeg", shift == null ? null : shift.swingDeg());
+            props.put("windShiftKmh", shift == null ? null : shift.deltaKmh());
+            props.put("windShiftText", shift == null ? null : shift.describe());
+            if (shift != null) withShift++;
             @SuppressWarnings("unchecked")
             Object from = ((Map<String, Object>) f.get("properties")).get("from");
             nowFrom.merge(from == null ? "none" : from.toString(), 1, Integer::sum);
@@ -119,6 +145,7 @@ public class MapLayer {
         meta.put("withForecast", withForecast);
         meta.put("withDrought", withDrought);
         meta.put("withLandUse", withLandUse);
+        meta.put("withWindShift", withShift);
         meta.put("nowFrom", nowFrom);
         meta.put("cellKm", store.grid().cellKm());
         meta.put("lifeMinutes", life.forecast().toMinutes());

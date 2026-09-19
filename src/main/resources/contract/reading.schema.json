@@ -114,7 +114,7 @@
     },
     "station": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "name", "lat", "lon", "heightM", "distanceKm", "insideHexagon", "at", "temperatureC", "apparentTemperatureC", "dewPointC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windDirection", "windGustKmh", "pressureMslHpa", "rainSince9amMm", "rain24hMm", "maxTemperatureC", "minTemperatureC", "visibilityKm", "cloud"],
+      "required": ["id", "name", "lat", "lon", "heightM", "distanceKm", "insideHexagon", "at", "temperatureC", "apparentTemperatureC", "dewPointC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windDirection", "windGustKmh", "pressureMslHpa", "rainSince9amMm", "rain24hMm", "maxTemperatureC", "minTemperatureC", "visibilityKm", "cloud", "windShift", "recent"],
       "properties": {
         "id": {"type": "string"}, "name": {"type": "string"}, "lat": {"type": "number"}, "lon": {"type": "number"},
         "heightM": {"$ref": "#/$defs/num"}, "distanceKm": {"$ref": "#/$defs/num"}, "insideHexagon": {"type": "boolean"},
@@ -123,7 +123,29 @@
         "windDirectionDeg": {"$ref": "#/$defs/int"}, "windDirection": {"$ref": "#/$defs/str"}, "windGustKmh": {"$ref": "#/$defs/num"},
         "pressureMslHpa": {"$ref": "#/$defs/num"}, "rainSince9amMm": {"$ref": "#/$defs/num"}, "rain24hMm": {"$ref": "#/$defs/num"},
         "maxTemperatureC": {"$ref": "#/$defs/num"}, "minTemperatureC": {"$ref": "#/$defs/num"}, "visibilityKm": {"$ref": "#/$defs/num"},
-        "cloud": {"$ref": "#/$defs/str"}
+        "cloud": {"$ref": "#/$defs/str"},
+        "windShift": {"oneOf": [{"$ref": "#/$defs/windShift"}, {"type": "null"}]},
+        "recent": {"type": "array", "items": {"$ref": "#/$defs/recentReading"}}
+      }
+    },
+    "windShift": {
+      "type": "object", "additionalProperties": false,
+      "required": ["at", "grade", "swingGrade", "speedGrade", "fromDeg", "toDeg", "swingDeg", "fromKmh", "toKmh", "deltaKmh", "overMinutes", "description"],
+      "properties": {
+        "at": {"$ref": "#/$defs/instant"}, "grade": {"enum": ["slight", "marked", "sharp"]},
+        "swingGrade": {"enum": ["slight", "marked", "sharp", null]}, "speedGrade": {"enum": ["slight", "marked", "sharp", null]},
+        "fromDeg": {"$ref": "#/$defs/int"}, "toDeg": {"$ref": "#/$defs/int"}, "swingDeg": {"type": "integer"},
+        "fromKmh": {"$ref": "#/$defs/num"}, "toKmh": {"$ref": "#/$defs/num"}, "deltaKmh": {"type": "number"},
+        "overMinutes": {"type": "integer"}, "description": {"type": "string"}
+      }
+    },
+    "recentReading": {
+      "type": "object", "additionalProperties": false,
+      "required": ["at", "temperatureC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windGustKmh", "rainSince9amMm"],
+      "properties": {
+        "at": {"$ref": "#/$defs/instant"}, "temperatureC": {"$ref": "#/$defs/num"}, "humidityPct": {"$ref": "#/$defs/int"},
+        "windSpeedKmh": {"$ref": "#/$defs/num"}, "windDirectionDeg": {"$ref": "#/$defs/int"}, "windGustKmh": {"$ref": "#/$defs/num"},
+        "rainSince9amMm": {"$ref": "#/$defs/num"}
       }
     },
     "fire": {

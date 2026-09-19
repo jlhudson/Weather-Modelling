@@ -6,7 +6,9 @@ import au.gully.api.Readings;
 import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
 import au.gully.bureau.StationRegistry;
+import au.gully.bureau.States;
 import au.gully.bureau.WarningsReader;
+import au.gully.bureau.WindShift;
 import au.gully.hexagons.*;
 import au.gully.platform.Json;
 import au.gully.upstreams.Ledger;
@@ -112,7 +114,7 @@ public class MapController {
     public Map<String, Object> stations() {
         Instant now = Instant.now();
         List<Map<String, Object>> features = new ArrayList<>();
-        int fresh = 0;
+        int fresh = 0, shifted = 0;
         for (Station s : stations.all()) {
             Observation o = stations.latest(s.id()).orElse(null);
             Map<String, Object> p = new LinkedHashMap<>();
@@ -136,6 +138,22 @@ public class MapController {
             p.put("windGustKmh", o == null ? null : o.windGustKmh());
             p.put("rainSince9amMm", o == null ? null : o.rainSince9amMm());
             p.put("hexagon", store.grid().cellOf(s.lat(), s.lon()).id());
+            // The wind change in its last readings (W-16), and the readings themselves, newest first.
+            WindShift w = stations.windShift(s.id()).orElse(null);
+            p.put("windShift", w == null ? null : w.grade());
+            p.put("windShiftSwing", w == null ? null : w.swingGrade());
+            p.put("windShiftSpeed", w == null ? null : w.speedGrade());
+            p.put("windShiftDeg", w == null ? null : w.swingDeg());
+            p.put("windShiftKmh", w == null ? null : w.deltaKmh());
+            p.put("windShiftFromDeg", w == null ? null : w.fromDeg());
+            p.put("windShiftMinutes", w == null ? null : w.overMinutes());
+            p.put("windShiftText", w == null ? null : w.describe());
+            if (w != null) shifted++;
+            List<List<Object>> recent = new ArrayList<>();
+            for (Observation r : stations.recent(s.id())) {
+                recent.add(java.util.Arrays.asList(r.at() == null ? null : r.at().toString(), r.temperatureC(), r.humidityPct(), r.windSpeedKmh(), r.windDirectionDeg(), r.windGustKmh()));
+            }
+            p.put("recent", recent);
             Map<String, Object> f = new LinkedHashMap<>();
             f.put("type", "Feature");
             f.put("id", s.id());
@@ -146,7 +164,7 @@ public class MapController {
         Map<String, Object> fc = new LinkedHashMap<>();
         fc.put("type", "FeatureCollection");
         fc.put("features", features);
-        fc.put("meta", Map.of("stations", features.size(), "fresh", fresh));
+        fc.put("meta", Map.of("stations", features.size(), "fresh", fresh, "windShifts", shifted));
         return fc;
     }
 
@@ -217,6 +235,27 @@ public class MapController {
         out.put("historyCount", history.countFor(id));
         out.put("ledger", h.stationId() == null ? List.of() : stations.recentSamples(h.stationId(), 12));
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * A map left open is a request (W-14): every minute it says which states it is looking at, and the
+     * station files and warnings of those states are read when they are due - the same conditional
+     * GETs an ask would make, at the same cadence, and nothing else. Nothing is fetched from a model.
+     */
+    @PostMapping(value = "/watch", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> watch(@RequestParam double south, @RequestParam double west, @RequestParam double north, @RequestParam double east) {
+        java.util.Set<String> states = new java.util.LinkedHashSet<>();
+        for (double[] p : new double[][]{{south, west}, {south, east}, {north, west}, {north, east}, {(south + north) / 2, (west + east) / 2}}) {
+            if (Geo.plausible(p[0], p[1])) {
+                states.addAll(States.covering(p[0], p[1]));
+            }
+        }
+        List<String> read = sources.ensureStates(states, Instant.now(), "the console map");
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("states", states);
+        out.put("read", read);
+        return out;
     }
 
     /**

@@ -25,7 +25,8 @@ import java.util.Map;
  * @param currentFrom {@code station} when the hexagon's Bureau station supplied "now" - in it, or within a
  *                    quarter of its width of its edge - {@code stations} when several were blended,
  *                    {@code neighbours} when the stations around it were (W-13), {@code model} otherwise
- * @param station     the nearest Bureau station's latest values, inside the hexagon or not, with its distance
+ * @param station     the nearest Bureau station's latest values, inside the hexagon or not, with its distance,
+ *                    the wind change it has just measured and its last readings
  * @param nearby      how the stations' values were blended and brought here, when they were (ring 0 is
  *                    the hexagon's own stations); null otherwise
  * @param drift       the station in the hexagon against the forecast it holds (W-12); null without both
@@ -107,7 +108,23 @@ public record Reading(
                                Double dewPointC, Integer humidityPct, Double windSpeedKmh, Integer windDirectionDeg,
                                String windDirection, Double windGustKmh, Double pressureMslHpa, Double rainSince9amMm,
                                Double rain24hMm, Double maxTemperatureC, Double minTemperatureC, Double visibilityKm,
-                               String cloud) {
+                               String cloud, WindShiftBlock windShift, List<RecentReading> recent) {
+    }
+
+    /**
+     * A wind change the station has just measured (W-16): direction and speed each graded
+     * {@code slight}, {@code marked} or {@code sharp} (null where under the threshold), and
+     * {@code grade} the higher of the two. Null when the last hour holds no change worth a word.
+     */
+    public record WindShiftBlock(Instant at, String grade, String swingGrade, String speedGrade, Integer fromDeg, Integer toDeg,
+                                 int swingDeg, Double fromKmh, Double toKmh, double deltaKmh, long overMinutes, String description) {
+    }
+
+    /**
+     * One of the station's last readings, newest first: up to six, an hour of ten-minute files.
+     */
+    public record RecentReading(Instant at, Double temperatureC, Integer humidityPct, Double windSpeedKmh, Integer windDirectionDeg,
+                                Double windGustKmh, Double rainSince9amMm) {
     }
 
     /**

@@ -144,6 +144,16 @@ the hexagon, it *is* the reading's "now", and where several are, their blend is 
 A compact ledger — one row per station every six hours, holding the day's rain to 9 am and the running
 maximum — is kept in `station_sample` for the drought maths (§1.7). Stations never write history.
 
+**The last six readings** of every station — an hour of ten-minute files — are kept in memory and in
+`station_recent`, so a restart does not blind them, and from them a **wind change** is read (W-16):
+the latest reading against each earlier one, the swing of direction graded `slight` from 30°, `marked`
+from 60°, `sharp` from 90° (directions under 8 km/h are not compared: a vane in a calm points
+anywhere), the change of speed graded the same from 10, 20 and 30 km/h, and the two together by the
+higher. On a fire a swing turns a flank into a head — the south-westerly behind a northerly is the
+classic — which is why the map lights it up unasked: the station pulses, the hexagon's outline goes
+yellow, orange or red, and the reading's `station.windShift` says so in words, with the last readings
+beside it.
+
 The same server carries the warnings: one listing per state, read on request at five minutes, and the
 product each item points at, read once per issue. A warning names the public weather districts it covers, a
 station names the district it sits in, and that is the join: a hexagon's warnings are those covering
@@ -249,16 +259,19 @@ A full-bleed map with a few panels floating over it, and one question at a time:
 model, or **Δ**, one against the other — and a variable: for now and the forecast, where the values
 come from (or the forecast's remaining life), temperature, humidity, wind, gust, rain and age; for Δ,
 temperature, humidity and wind as now minus forecast, and the drift score with its 24-hour mean.
-Under it, folded, the fire layers (FFDI, GFDI, FBI in their rating colours, the CFS rating, the
+Under it, the wind change of the last hour by the stations — the swing of direction, the change of
+speed, or the two together — then, folded, the fire layers (FFDI, GFDI, FBI in their rating colours, the CFS rating, the
 drought factor, KBDI, curing), the ground (elevation, land use by its largest share, which index
 leads, the burnable share) and the requests (minutes since a hexagon was last asked about, which is
 what drives every read). Then what to draw on top: the stations as a point cloud, wind arrows, value
-labels, the tessellation, hexagons as points (automatic when zoomed out to the continent), and only
-the hexagons holding a forecast. Keys `1`, `2`, `3` pick the side.
+labels, the hexagons' borders, every hexagon of the tessellation (held or not), hexagons as points
+(automatic when zoomed out to the continent), and only the hexagons holding a forecast. Keys `1`,
+`2`, `3` pick the side.
 
 **The figures** (top right): hexagons held, how many take "now" from the ground (with the split by
 station, blend and neighbours on hover), forecasts held and their life, hexagons where the model is
-standing in, forecasts thrown out, and the share of today's allowance used — and a line to the sources
+standing in, forecasts thrown out, wind changes, stations fresh, and the share of today's allowance
+used — a **live** light that ticks with the last reload — and a line to the sources
 drawer, which shows that nothing is read but on request: each source with its cadence and a bar
 filling towards its next check, when an ask last checked and read it, what it holds (a station file's
 count is the whole file), which hexagon's ask caused that; and the ledger's last reads, each against
@@ -286,8 +299,12 @@ ground's values, amber for the model's. A tooltip carries both halves side by si
 difference, the drift, the fire indices, the height and the land use. A click opens the drawer:
 now against the forecast in one table with the deltas, the drift as a meter against its tolerance,
 the stations that made "now", the land use as a bar, and everything else held. The map never
-fetches; the probe on a point is an ask, and says so. The page is locked to the device: on a phone
-the rail is a sheet at the bottom and the figures fold into the legend.
+fetches a model; the probe on a point is an ask, and says so. **A map left open keeps itself
+current**: the layer and the stations reload every minute, the sources every half minute, and each
+minute the map tells the service which states it is looking at, so their station files and warnings
+are read when due — the same conditional GETs an ask makes, at the same cadence; the open map is the
+request (W-14). Paused while the tab is hidden, caught up the moment it is shown. The page is locked
+to the device: on a phone the rail is a sheet at the bottom and the figures fold into the legend.
 
 ## 1.12 What is deliberately not here
 

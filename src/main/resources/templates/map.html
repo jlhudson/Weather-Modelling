@@ -63,6 +63,10 @@
                     <div class="group-title" id="varsTitle">Colour by</div>
                     <div class="chips" id="varChips"></div>
                 </div>
+                <details class="group" id="moreShift" open>
+                    <summary>Wind change <span class="muted">in the last hour, by the stations</span></summary>
+                    <div class="chips" data-group="shift"></div>
+                </details>
                 <details class="group" id="moreFire">
                     <summary>Fire <span class="muted">indices &amp; rating</span></summary>
                     <div class="chips" data-group="fire"></div>
@@ -81,7 +85,8 @@
                         <button class="tog on" data-tog="stations" title="Bureau stations as points" type="button"><svg class="ico"><use href="#i-station"/></svg><span>Stations</span></button>
                         <button class="tog on" data-tog="wind" title="Wind arrows" type="button"><svg class="ico"><use href="#i-arrow"/></svg><span>Wind</span></button>
                         <button class="tog on" data-tog="labels" title="Temperature, humidity, wind as labels" type="button"><svg class="ico"><use href="#i-label"/></svg><span>Labels</span></button>
-                        <button class="tog" data-tog="grid" title="Every hexagon of the tessellation" type="button"><svg class="ico"><use href="#i-grid"/></svg><span>Grid</span></button>
+                        <button class="tog on" data-tog="borders" title="The hexagons' outlines" type="button"><svg class="ico"><use href="#i-grid"/></svg><span>Borders</span></button>
+                        <button class="tog" data-tog="grid" title="Every hexagon of the tessellation, held or not" type="button"><svg class="ico"><use href="#i-kind"/></svg><span>All hexes</span></button>
                         <button class="tog" data-tog="points" title="Hexagons as points" type="button"><svg class="ico"><use href="#i-points"/></svg><span>Points</span></button>
                         <button class="tog" data-tog="forecasts" title="Only hexagons holding a forecast" type="button"><svg class="ico"><use href="#i-forecast"/></svg><span>Forecasts</span></button>
                     </div>
@@ -94,6 +99,7 @@
             <div class="tiles" id="tiles"></div>
             <div class="stats-foot">
                 <button class="link-btn" id="sourcesToggle" type="button"><svg class="ico"><use href="#i-sources"/></svg> sources <span class="muted" id="sourcesHint"></span></button>
+                <span class="live" id="live" title="The layer every minute, the stations every minute, the sources every half minute; the states in view are read when due"><i></i><span id="liveText">live</span></span>
             </div>
         </aside>
 

@@ -138,7 +138,11 @@ What each block is:
   `elevationM` the values were brought to, `elevationApplied` (false when the hexagon or a station
   had no height, in which case the values are weighted as they are), and the two lapse rates. Null
   otherwise.
-- **`station`** — the nearest station's latest values, inside the hexagon or not, with the distance.
+- **`station`** — the nearest station's latest values, inside the hexagon or not, with the distance;
+  `windShift`, the wind change it has just measured (docs/01 §1.5) — `grade` the higher of
+  `swingGrade` and `speedGrade`, each `slight`, `marked`, `sharp` or null, the directions and speeds
+  it went between, `overMinutes`, and a `description` in words — or null; and `recent`, its last
+  readings newest first, up to six.
 - **`fire`** — the fire picture (docs/01 §1.8). `grass` is null where the district has no curing figure;
   `official` is null outside South Australia; `leads` is null without land use.
 - **`flood`**, **`drought`** — as before; `drought` is null until the area's state exists, and then so is

@@ -68,7 +68,7 @@ class EndToEndTest {
         // The legacy row is still there, with the hash of the plaintext the init script planted.
         String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
         assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift"}) {
+        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent"}) {
             Long n = db.sql("select count(*) from " + table).query(Long.class).single();
             assertThat(n).as(table).isNotNull();
         }
@@ -206,6 +206,26 @@ class EndToEndTest {
         java.time.LocalDate day = java.time.LocalDate.of(2026, 9, 18);
         assertThat(stations.daily(all, day.minusDays(2), day.plusDays(1))).isNotNull();
         assertThat(stations.recentSamples("023000", 5)).hasSize(1);
+        // The last readings (W-16): a second file a moment on with the wind swung round is kept, survives
+        // a reload of the register, and reads as a wind change.
+        java.util.List<au.gully.bureau.StationFile.StationReading> later = new java.util.ArrayList<>();
+        for (au.gully.bureau.StationFile.StationReading r : fresh) {
+            au.gully.bureau.Observation o = r.observation();
+            later.add(new au.gully.bureau.StationFile.StationReading(r.station(), new au.gully.bureau.Observation(o.stationId(), now.plusSeconds(1),
+                    o.temperatureC(), o.apparentTemperatureC(), o.dewPointC(), o.humidityPct(), 30.0, 225, "SW", 40.0, o.pressureMslHpa(),
+                    o.rainSince9amMm(), o.rain24hMm(), o.maxTemperatureC(), o.minTemperatureC(), o.visibilityKm(), o.cloud(), o.cloudOktas(), o.deltaTC())));
+        }
+        stations.accept(later, now.plusSeconds(1));
+        assertThat(stations.recent("023000")).hasSize(2);
+        assertThat(stations.recent("023000").getFirst().windDirectionDeg()).isEqualTo(225);
+        stations.rehydrate();
+        assertThat(stations.recent("023000")).hasSize(2);
+        assertThat(stations.recent("023000").getFirst().windSpeedKmh()).isEqualTo(30.0);
+        au.gully.bureau.Observation first = fresh.getFirst().observation();
+        if (first.windSpeedKmh() != null && first.windSpeedKmh() >= au.gully.bureau.WindShift.CALM_KMH && first.windDirectionDeg() != null
+                && au.gully.bureau.WindShift.angle(first.windDirectionDeg(), 225) >= au.gully.bureau.WindShift.SWING_SLIGHT_DEG) {
+            assertThat(stations.windShift("023000")).isPresent();
+        }
 
         au.gully.cfs.Curing.Entry e = curing.save("Mount Lofty Ranges", 80, day, "CFS map", "test");
         assertThat(e.district()).isEqualTo("MOUNT LOFTY RANGES");

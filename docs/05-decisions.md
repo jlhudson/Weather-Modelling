@@ -229,3 +229,20 @@ from a hundred level-4 codes to seven classes is a judgement, written down in `D
 reasons, and a wetland's class follows its lifeform because reeds and paperbarks both burn dry. —
 James, 19 September 2026.
 
+### W-16 · A station's last hour is kept, and a change of wind in it is called out unasked
+
+**The decision.** Every station's last six readings — an hour of the Bureau's ten-minute files —
+are kept, in memory and in `station_recent` across a restart. From them a wind change is read: the
+swing of direction graded slight, marked or sharp from 30°, 60° and 90°, the change of speed from 10,
+20 and 30 km/h, the two together by the higher; a vane under 8 km/h is not compared. It rides on the
+reading (`station.windShift`, with the readings), on the station point and on the hexagon, and the
+map shows it without being asked: the station pulses and the hexagon's outline takes the grade's
+colour whatever layer is up, with the swing, the speed and the two as layers of their own.
+
+**Why.** A change of wind is the thing on a fireground that kills, and it is measured, not modelled:
+the station saw it happen. The forecast's own wind change (§1.9) says when the model expects one; this
+says the ground has had one, which is the check on that. Six readings because an hour is the window a
+change happens in and the files come every ten minutes; kept in the database because a restart in a
+fire season should not need an hour to see again. **What it costs.** Six small rows per station per
+hour of reading, and a swatch of colour on a map that is otherwise calm. — James, 19 September 2026.
+

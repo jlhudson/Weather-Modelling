@@ -53,6 +53,14 @@ public class StationRegistry {
      * six-hourly ledger and is what the ledger row carries as the day's maximum.
      */
     private final Map<String, DayMax> dayMax = new ConcurrentHashMap<>();
+    /** The last few readings per station, newest first, for the wind change and the console (W-16). */
+    private final Map<String, java.util.ArrayDeque<Observation>> recent = new ConcurrentHashMap<>();
+
+    /**
+     * How many readings are kept per station: six, an hour of the Bureau's ten-minute files, which
+     * is the window a wind change is looked for in.
+     */
+    public static final int RECENT = 6;
     /** Per grid, per station: the hexagon ids it counts for. Cleared when a station's details change. */
     private final Map<String, Map<String, List<String>>> reach = new ConcurrentHashMap<>();
     private volatile Instant lastUpdateAt;
@@ -77,7 +85,20 @@ public class StationRegistry {
                 lastLedgered.put((String) row.get("station_id"), at);
             }
         }
-        log.info("stations rehydrated: {}", stations.size());
+        // The last readings, newest first, so a wind change is seen from the first file after a restart.
+        recent.clear();
+        for (Map<String, Object> row : db.sql("select station_id, at, temperature_c, humidity_pct, wind_kmh, wind_deg, gust_kmh, rain_since_9am_mm"
+                + " from station_recent order by station_id, at desc").query().listOfRows()) {
+            String id = (String) row.get("station_id");
+            java.util.ArrayDeque<Observation> d = recent.computeIfAbsent(id, k -> new java.util.ArrayDeque<>());
+            if (d.size() < RECENT) {
+                d.addLast(new Observation(id, Db.instant(row.get("at")), Db.dbl(row.get("temperature_c")), null, null,
+                        row.get("humidity_pct") == null ? null : ((Number) row.get("humidity_pct")).intValue(),
+                        Db.dbl(row.get("wind_kmh")), row.get("wind_deg") == null ? null : ((Number) row.get("wind_deg")).intValue(),
+                        null, Db.dbl(row.get("gust_kmh")), null, Db.dbl(row.get("rain_since_9am_mm")), null, null, null, null, null, null, null));
+            }
+        }
+        log.info("stations rehydrated: {}, with recent readings for {}", stations.size(), recent.size());
     }
 
     private static Station station(ResultSet rs, int i) throws SQLException {
@@ -125,6 +146,16 @@ public class StationRegistry {
                 continue;
             }
             latest.put(s.id(), o);
+            if (previous == null || o.at().isAfter(previous.at())) {
+                java.util.ArrayDeque<Observation> d = recent.computeIfAbsent(s.id(), k -> new java.util.ArrayDeque<>());
+                synchronized (d) {
+                    d.addFirst(o);
+                    while (d.size() > RECENT) {
+                        d.removeLast();
+                    }
+                }
+                keepRecent(s, o);
+            }
             trackDayMax(s, o);
             Instant last = lastLedgered.get(s.id());
             if (last == null || Duration.between(last, o.at()).compareTo(LEDGER_EVERY) >= 0) {
@@ -147,6 +178,20 @@ public class StationRegistry {
         }
         dayMax.merge(s.id(), new DayMax(day, candidate), (old, fresh) ->
                 old.day().equals(fresh.day()) ? new DayMax(day, Math.max(old.maxC(), fresh.maxC())) : fresh);
+    }
+
+    /**
+     * One of the last readings, written, and the ones beyond the sixth dropped.
+     */
+    private void keepRecent(Station s, Observation o) {
+        db.sql("""
+                insert into station_recent (station_id, at, temperature_c, humidity_pct, wind_kmh, wind_deg, gust_kmh, rain_since_9am_mm)
+                values (:id, :at, :t, :rh, :w, :dir, :g, :rain) on conflict (station_id, at) do nothing""")
+                .param("id", s.id()).param("at", Db.ts(o.at())).param("t", o.temperatureC()).param("rh", o.humidityPct())
+                .param("w", o.windSpeedKmh()).param("dir", o.windDirectionDeg()).param("g", o.windGustKmh()).param("rain", o.rainSince9amMm())
+                .update();
+        db.sql("delete from station_recent where station_id = :id and at < (select at from station_recent where station_id = :id order by at desc offset :keep limit 1)")
+                .param("id", s.id()).param("keep", RECENT - 1).update();
     }
 
     private void ledger(Station s, Observation o) {
@@ -180,6 +225,26 @@ public class StationRegistry {
 
     public Optional<Station> station(String id) {
         return Optional.ofNullable(id == null ? null : stations.get(id));
+    }
+
+    /**
+     * A station's last readings, newest first: up to {@link #RECENT}, as many as have arrived since the start.
+     */
+    public List<Observation> recent(String stationId) {
+        java.util.ArrayDeque<Observation> d = recent.get(stationId);
+        if (d == null) {
+            return List.of();
+        }
+        synchronized (d) {
+            return List.copyOf(d);
+        }
+    }
+
+    /**
+     * The wind change a station has just measured, if any, from its last readings.
+     */
+    public Optional<WindShift> windShift(String stationId) {
+        return WindShift.of(recent(stationId));
     }
 
     public Optional<Observation> latest(String stationId) {
@@ -227,6 +292,25 @@ public class StationRegistry {
                 .filter(s -> { for (String id : reaches(grid, s)) { if (ids.contains(id)) return true; } return false; })
                 .sorted(Comparator.comparing(Station::id))
                 .toList();
+    }
+
+    /**
+     * The ids of the hexagons a station counts for: the one it is in and any within its reach.
+     */
+    public List<String> hexagonsOf(Grid grid, String stationId) {
+        Station s = stations.get(stationId);
+        return s == null ? List.of() : reaches(grid, s);
+    }
+
+    /**
+     * Every station with a wind change in its last readings, with the change.
+     */
+    public Map<String, WindShift> windShifts() {
+        Map<String, WindShift> out = new java.util.HashMap<>();
+        for (String id : recent.keySet()) {
+            windShift(id).ifPresent(w -> out.put(id, w));
+        }
+        return out;
     }
 
     /**

@@ -63,13 +63,19 @@
             {id: 'leads', name: 'Leads', hint: 'which index', icon: 'leads', kind: 'category', palette: 'LEADS'},
             {id: 'burnablePct', name: 'Burnable', unit: '%', icon: 'grass', range: [0, 100]}
         ],
+        shift: [
+            {id: 'shift', name: 'Both', hint: 'the higher grade', icon: 'wind', kind: 'category', palette: 'SHIFT'},
+            {id: 'shiftDeg', name: 'Direction', hint: 'swing, degrees', unit: '°', icon: 'arrow', range: [0, 180]},
+            {id: 'shiftKmh', name: 'Speed', hint: 'now − then', unit: 'km/h', icon: 'gust', lim: 30, diverging: true}
+        ],
         asks: [
             {id: 'asked', name: 'Last asked', unit: 'min ago', icon: 'ask', range: [0, 120], reverse: true},
             {id: 'asks', name: 'Asks', hint: 'this run', icon: 'count', range: [0, 50]},
             {id: 'kind', name: 'Kind', icon: 'kind', kind: 'category', palette: 'KIND'}
         ]
     };
-    var GROUP_NAMES = {now: 'Now · from the ground', fc: 'Forecast · the model', diff: 'Compare · now minus forecast', fire: 'Fire', ground: 'Ground', asks: 'Requests'};
+    var GROUP_NAMES = {now: 'Now · from the ground', fc: 'Forecast · the model', diff: 'Compare · now minus forecast', shift: 'Wind change · last hour', fire: 'Fire', ground: 'Ground', asks: 'Requests'};
+    var SHIFT = {slight: '#eab308', marked: '#f97316', sharp: '#ef4444'};
     var SIDE_CAPTIONS = {
         now: '<b>Now</b> is what the ground says: the station in each hexagon, several blended, or the neighbours brought to its height. Blue.',
         fc: '<b>Forecast</b> is what the model says for this hour, for the hexagons holding one. Amber. Drag the timeline to see the hours ahead.',
@@ -85,7 +91,8 @@
             'No Rating': '#dddddd', 'Moderate': '#7fc47f', 'High': '#f7e463', 'Extreme': '#f0a04b', 'Catastrophic': '#c1272d'},
         KIND: {station: '#3b82f6', forecast: '#f59e0b', both: '#a855f7', bare: '#9ca3af'},
         LEADS: {forest: '#15803d', grass: '#ca8a04'},
-        LAND: {forest: '#14532d', scrub: '#4d7c0f', grassland: '#ca8a04', cropland: '#eab308', built_up: '#6b7280', water: '#2563eb', bare: '#a16207', unknown: '#9ca3af'}
+        LAND: {forest: '#14532d', scrub: '#4d7c0f', grassland: '#ca8a04', cropland: '#eab308', built_up: '#6b7280', water: '#2563eb', bare: '#a16207', unknown: '#9ca3af'},
+        SHIFT: {slight: '#eab308', marked: '#f97316', sharp: '#ef4444'}
     };
     var DROUGHT = '#a855f7';
     function ramp(t) {
@@ -127,7 +134,7 @@
     var stationLayer = L.layerGroup().addTo(map);
     var glyphLayer = L.layerGroup().addTo(map);
     var state = {side: 'now', group: 'now', id: 'from', hours: 0, mode: 'now', playing: null};
-    var togs = {stations: true, wind: true, labels: true, grid: false, points: false, forecasts: false};
+    var togs = {stations: true, wind: true, labels: true, borders: true, grid: false, points: false, forecasts: false};
     var inView = true;
     var etag = null, lastFc = null, lastStations = null, lastSources = null;
 
@@ -143,11 +150,13 @@
         if (state.mode === 'history') return g === 'now' || g === 'fire' || g === 'ground' || g === 'asks';
         return true;
     }
+    function shiftColour(grade) { return grade ? SHIFT[grade] : null; }
     function valueOf(p, v, g) {
         v = v || current(); g = g || state.group;
         if (g === 'now') return v.id === 'from' ? (p.from || 'none') : v.id === 'age' ? p.nowAgeMinutes : p['now' + cap(v.id)];
         if (g === 'fc') return v.id === 'life' ? (p.hasForecast ? freshness(p) : null) : v.id === 'age' ? p.fcAgeMinutes : p['fc' + cap(v.id)];
         if (g === 'diff') return v.kind === 'drift' ? p[v.id] : p['diff' + cap(v.id)];
+        if (g === 'shift') return v.id === 'shift' ? p.windShift : v.id === 'shiftDeg' ? (p.windShiftSwing ? p.windShiftDeg : null) : (p.windShiftSpeed ? p.windShiftKmh : null);
         if (v.id === 'asked') return p.askedMinutesAgo;
         return p[v.id];
     }
@@ -159,7 +168,7 @@
         if (v.kind === 'drift') return driftColour(x);
         if (v.kind === 'category') return PALETTES[v.palette][x] || '#9ca3af';
         if (v.kind === 'rating') { var r = p[v.ratingOf]; return (r && PALETTES.RATING[r]) || ramp(x / v.range[1]); }
-        if (state.group === 'diff') return ramp(.5 + Math.max(-1, Math.min(1, x / v.lim)) / 2);
+        if (state.group === 'diff' || v.diverging) return ramp(.5 + Math.max(-1, Math.min(1, x / v.lim)) / 2);
         var t = (x - v.range[0]) / (v.range[1] - v.range[0]);
         return ramp(v.reverse ? 1 - t : t);
     }
@@ -174,8 +183,11 @@
     function styleOf(f) {
         var p = f.properties, c = colourOf(p);
         if (current().kind === 'from' && valueOf(p) === 'none' && p.hasStation) c = FROM.station;
-        return {color: p.hasDrought ? DROUGHT : (p.warm ? '#111' : '#777'), weight: p.hasDrought ? 1.6 : (p.warm ? 1.2 : .6), opacity: p.hasDrought ? .9 : .5,
-            dashArray: p.stale && state.mode === 'now' ? '4 3' : null, fillColor: c || '#000', fillOpacity: opacityOf(p, c)};
+        // A wind change at the hexagon's station lights its outline whatever the layer; the drought ring after that.
+        var shift = state.mode === 'now' ? shiftColour(p.windShift) : null;
+        var line = shift ? {color: shift, weight: 2.4, opacity: 1} : {color: p.hasDrought ? DROUGHT : (p.warm ? '#111' : '#777'), weight: p.hasDrought ? 1.6 : (p.warm ? 1.2 : .6), opacity: p.hasDrought ? .9 : .5};
+        if (!togs.borders && !shift) line = {color: '#000', weight: 0, opacity: 0};
+        return {color: line.color, weight: line.weight, opacity: line.opacity, dashArray: p.stale && state.mode === 'now' && togs.borders ? '4 3' : null, fillColor: c || '#000', fillOpacity: opacityOf(p, c)};
     }
 
     // ---- the rail
@@ -184,7 +196,7 @@
         vars.innerHTML = '';
         $('varsTitle').textContent = GROUP_NAMES[state.side];
         VARS[state.side].forEach(function (x) { vars.appendChild(chip(x, state.side)); });
-        ['fire', 'ground', 'asks'].forEach(function (g) {
+        ['shift', 'fire', 'ground', 'asks'].forEach(function (g) {
             var el = document.querySelector('.chips[data-group=' + g + ']');
             el.innerHTML = '';
             VARS[g].forEach(function (x) { el.appendChild(chip(x, g)); });
@@ -283,7 +295,7 @@
             return;
         }
         // A number: its distribution as bars over the ramp, the range under it.
-        var lo, hi, div = state.group === 'diff';
+        var lo, hi, div = state.group === 'diff' || !!v.diverging;
         if (div) { lo = -v.lim; hi = v.lim; } else { lo = v.range[0]; hi = v.range[1]; }
         var hist = new Array(bins).fill(0), hot = -1;
         binOf = function (x) { return Math.max(0, Math.min(bins - 1, Math.floor((x - lo) / (hi - lo) * bins))); };
@@ -296,7 +308,7 @@
         for (var i = 0; i <= 10; i++) grad += ',' + ramp(v.reverse ? 1 - i / 10 : i / 10);
         grad += ')';
         var mean = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
-        body.innerHTML = svg + '<div class="ramp" style="background:' + grad + '"></div><div class="ramp-labels"><span>' + (div ? 'now −' + v.lim : lo) + '</span><span>' + (mean == null ? '' : 'mean ' + mean.toFixed(1)) + (v.unit ? ' ' + esc(v.unit) : '') + '</span><span>' + (div ? 'now +' + v.lim : hi) + '</span></div>';
+        body.innerHTML = svg + '<div class="ramp" style="background:' + grad + '"></div><div class="ramp-labels"><span>' + (div ? (state.group === 'diff' ? 'now −' : '−') + v.lim : lo) + '</span><span>' + (mean == null ? '' : 'mean ' + mean.toFixed(1)) + (v.unit ? ' ' + esc(v.unit) : '') + '</span><span>' + (div ? (state.group === 'diff' ? 'now +' : '+') + v.lim : hi) + '</span></div>';
     }
 
     // ---- the figures
@@ -311,6 +323,8 @@
             {v: m.withForecast || 0, k: 'forecasts held' + (m.lifeMinutes ? ' · ' + m.lifeMinutes + ' min life' : ''), cls: 'forecast', t: 'each fetched on an ask, kept for its life'},
             {v: nf.model || 0, k: 'model standing in', cls: 'forecast', t: 'hexagons whose "now" is the series read at this moment'},
             {v: drifted, k: 'thrown out', cls: drifted ? 'bad' : '', t: 'forecasts the stations disagreed with'},
+            {v: m.withWindShift || 0, k: 'wind changes', cls: m.withWindShift ? 'shift' : '', t: 'hexagons whose station measured a change of wind in the last hour'},
+            {v: lastStations && lastStations.meta ? lastStations.meta.fresh : '—', k: 'stations fresh', cls: 'ground', t: 'stations with an observation under seventy minutes old'},
             {v: a ? Math.round((a.dayFraction || 0) * 100) : '—', sub: a ? '%' : '', k: 'allowance today', t: 'Open-Meteo units used of the day\'s'}
         ];
         $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '"><div class="v">' + esc(x.v) + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
@@ -338,6 +352,7 @@
         }).then(function (fc) {
             loading = false;
             if (fc) { lastFc = fc; draw(); legend(); tiles(); }
+            lastLoadAt = new Date().toISOString();
             if (wanted !== null && wanted !== at) { wanted = null; load(); } else wanted = null;
         }).catch(function (e) { loading = false; note('layer failed: ' + e); });
     }
@@ -387,6 +402,7 @@
         if (fc) s += '<br><span class="row-fc"><b>forecast</b></span> ' + fc + ' <span class="muted">' + esc(p.upstream || '') + ' · fetched ' + clock(p.fcFetchedAt) + (p.ahead ? '' : p.stale ? ' · <b>past its life</b>' : p.fcMinutesLeft != null ? ' · ' + p.fcMinutesLeft + ' min left' : '') + '</span>';
         else if (p.hasForecast && !p.ahead) s += '<br><span class="row-fc"><b>forecast</b></span> <span class="muted">held, nothing for this hour</span>';
         if (p.diffTemperatureC != null || p.diffHumidityPct != null || p.diffWindKmh != null) s += '<br>Δ now − forecast: ' + esc(fmt(p.diffTemperatureC, 1)) + ' °C, ' + esc(fmt(p.diffHumidityPct)) + ' pts, ' + esc(fmt(p.diffWindKmh, 1)) + ' km/h';
+        if (p.windShift) s += '<br><span class="shift-line ' + esc(p.windShift) + '"><b>wind change</b> ' + esc(p.windShiftText || p.windShift) + '</span>';
         if (p.drift != null) s += '<br>drift ' + esc(p.drift) + (p.drifted ? ' <b>thrown out</b>' : '') + (p.driftWorst ? ' (' + esc(p.driftWorst) + ')' : '') + ' <span class="muted">at ' + clock(p.driftAt) + (p.drift24h != null ? ' · 24 h mean ' + esc(p.drift24h) : '') + '</span>';
         if (p.ffdi != null) s += '<br>FFDI ' + esc(p.ffdi) + ' ' + esc(p.ffdiRating || '') + (p.fbi != null ? ' · FBI ' + esc(p.fbi) + ' ' + esc(p.afdrsRating || '') : '') + (p.droughtFactor != null ? ' · DF ' + esc(p.droughtFactor) : '') + (p.officialRating ? ' · CFS ' + esc(p.officialRating) : '');
         var ground = [];
@@ -446,15 +462,24 @@
         stationLayer.clearLayers();
         if (!togs.stations) return;
         if (!lastStations) {
-            fetch('/console/map/stations.geojson').then(function (r) { return r.json(); }).then(function (fc) { lastStations = fc; stations(); });
+            fetch('/console/map/stations.geojson').then(function (r) { return r.json(); }).then(function (fc) { lastStations = fc; stations(); tiles(); });
             return;
         }
         var v = current(), field = isSide(state.group) && state.group !== 'diff' ? STATION_FIELD[v.id] : null, z = map.getZoom();
+        var byShift = state.group === 'shift';
         var r = Math.max(2, Math.min(4.5, z * .55));
         lastStations.features.forEach(function (f) {
             var p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
             var c = FROM.station;
             if (field && p.fresh && p[field] != null) { var t = (p[field] - v.range[0]) / (v.range[1] - v.range[0]); c = ramp(v.reverse ? 1 - t : t); }
+            if (byShift) {
+                var sv = v.id === 'shift' ? p.windShift : v.id === 'shiftDeg' ? (p.windShiftSwing ? p.windShiftDeg : null) : (p.windShiftSpeed ? p.windShiftKmh : null);
+                c = sv == null ? '#6b7280' : v.id === 'shift' ? SHIFT[sv] : v.diverging ? ramp(.5 + Math.max(-1, Math.min(1, sv / v.lim)) / 2) : ramp(sv / v.range[1]);
+            }
+            if (p.windShift && p.fresh) {
+                var px = Math.round(r * 7);
+                L.marker(ll, {icon: L.divIcon({className: 'st-shift ' + p.windShift, html: '<i></i>', iconSize: [px, px], iconAnchor: [px / 2, px / 2]}), interactive: false, keyboard: false}).addTo(stationLayer);
+            }
             if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
             L.circleMarker(ll, {renderer: canvas, radius: r, color: c, weight: p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0})
                 .bindTooltip(function () {
@@ -529,6 +554,7 @@
                 html += '<div class="meter-row"><span class="muted">drift</span><div class="bar"><i style="width:' + pct + '%;background:' + driftColour(dr.score) + '"></i><b style="left:66.7%"></b></div><span class="mono">' + esc(dr.score) + '</span><span class="muted">' + (dr.drifted ? 'thrown out' : 'holds') + (dr.worst ? ' · ' + esc(dr.worst) : '') + '</span></div>';
                 html += '<div class="muted" style="font-size:.74rem">' + esc(fmt(dr.temperatureC, 1)) + ' °C of 3 · ' + esc(fmt(dr.humidityPct)) + ' pts of 20 · ' + esc(fmt(dr.windKmh, 1)) + ' km/h of 15 · ' + esc(fmt(dr.rainMm, 1)) + ' mm of 5 · judged by ' + esc(dr.stationId) + ' at ' + clock(dr.at) + '</div>';
             }
+            if (st.windShift) html += '<div class="shift-note ' + esc(st.windShift.grade) + '"><b>Wind change at ' + esc(st.id) + '</b> · ' + esc(st.windShift.description) + '</div>';
             if (nb && nb.stations) {
                 html += '<h2>' + (nb.ring === 0 ? 'Stations in it, blended' : 'Neighbours') + ' <span class="muted">' + (nb.ring === 0 ? 'inside the hexagon' : 'ring ' + nb.ring) + ' · ' + (nb.elevationApplied ? 'brought to ' + Math.round(nb.elevationM) + ' m at ' + nb.lapseTemperatureCPerKm + ' °C/km (dew point ' + nb.lapseDewPointCPerKm + ')' : 'not moved for height') + '</span></h2><table class="table table-sm"><thead><tr><th>station</th><th class="num">km</th><th class="num">height</th><th class="num">weight</th></tr></thead><tbody>';
                 nb.stations.forEach(function (x) { html += '<tr><td>' + esc(x.id) + ' <span class="muted">' + esc(x.name || '') + '</span></td><td class="num">' + fmt(x.distanceKm, 1) + '</td><td class="num">' + fmt(x.heightM) + '</td><td class="num">' + fmt(x.weight, 2) + '</td></tr>'; });
@@ -551,6 +577,11 @@
             if (r.warnings && r.warnings.length) { html += '<h2>Warnings</h2><ul class="small mb-1">'; r.warnings.forEach(function (x) { html += '<li>' + esc(x.title) + ' ' + esc(x.phenomena || '') + (x.headline ? ' — ' + esc(x.headline) : '') + ' <span class="muted">until ' + when(x.until) + '</span></li>'; }); html += '</ul>'; }
             if (d.kbdiMm != null) { html += '<h2>Drought</h2>' + kv([['KBDI', d.kbdiMm + ' mm ' + d.kbdiBand], ['drought factor', d.droughtFactor], ['mean annual rain', d.meanAnnualRainfallMm + ' mm'], ['computed for', d.computedFor], ['spun up from', d.spunUpFrom + ' (' + d.days + ' days)'], ['inputs', h.drought && h.drought.from]]); }
             if (st.id) { html += '<h2>Station ' + esc(st.id) + ' <span class="muted">' + esc(st.name) + (st.insideHexagon ? '' : ' · ' + fmt(st.distanceKm, 1) + ' km away') + '</span></h2>'; html += kv([['at', when(st.at)], ['temperature', st.temperatureC != null ? st.temperatureC + ' °C' : null], ['humidity', st.humidityPct != null ? st.humidityPct + ' %' : null], ['wind', st.windSpeedKmh != null ? st.windSpeedKmh + ' km/h ' + (st.windDirection || '') + ' gust ' + fmt(st.windGustKmh) : null], ['rain since 9am', st.rainSince9amMm != null ? st.rainSince9amMm + ' mm' : null], ['rain to 9am', st.rain24hMm != null ? st.rain24hMm + ' mm' : null], ['max / min', (st.maxTemperatureC != null || st.minTemperatureC != null) ? fmt(st.maxTemperatureC) + ' / ' + fmt(st.minTemperatureC) : null]]); }
+            if (st.recent && st.recent.length) {
+                html += '<h2>Last readings <span class="muted">' + esc(st.id) + ' · newest first</span></h2><table class="table table-sm recent"><thead><tr><th>at</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th>from</th><th class="num">gust</th></tr></thead><tbody>';
+                st.recent.forEach(function (x) { html += '<tr><td class="mono">' + clock(x.at) + '</td><td class="num">' + fmt(x.temperatureC, 1) + '</td><td class="num">' + fmt(x.humidityPct) + '</td><td class="num">' + fmt(x.windSpeedKmh) + '</td><td class="dir">' + (x.windDirectionDeg != null ? '<span class="arrow" style="transform:rotate(' + ((x.windDirectionDeg + 180) % 360) + 'deg)">↑</span> ' + x.windDirectionDeg + '°' : '—') + '</td><td class="num">' + fmt(x.windGustKmh) + '</td></tr>'; });
+                html += '</tbody></table>';
+            }
             if (fl.rain1dMm != null || fl.forecastRain24hMm != null || fl.riverDischargeCumecs != null) { html += '<h2>Flood</h2>' + kv([['rain 1/2/3/7 d', fmt(fl.rain1dMm) + ' / ' + fmt(fl.rain2dMm) + ' / ' + fmt(fl.rain3dMm) + ' / ' + fmt(fl.rain7dMm) + ' mm'], ['ahead 24/48/72 h', fmt(fl.forecastRain24hMm) + ' / ' + fmt(fl.forecastRain48hMm) + ' / ' + fmt(fl.forecastRain72hMm) + ' mm'], ['river', fl.riverDischargeCumecs != null ? fl.riverDischargeCumecs + ' m³/s, ' + fmt(fl.dischargeRatioToMean) + '× the 92-day mean, ' + fmt(fl.riverTrend) : null]]); }
             if (r.forecast && r.forecast.days && r.forecast.days.length) {
                 html += '<h2>Days ahead <span class="muted">' + esc(src.upstream || '') + '</span></h2><table class="table table-sm"><thead><tr><th>day</th><th class="num">min/max</th><th class="num">RH</th><th class="num">wind</th><th class="num">rain</th><th>FFDI</th><th>FBI</th></tr></thead><tbody>';
@@ -633,7 +664,7 @@
     document.querySelectorAll('.tog').forEach(function (b) {
         b.addEventListener('click', function () {
             var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]);
-            if (k === 'grid') grid(); else if (k === 'stations') stations(); else if (k === 'points' || k === 'forecasts') { draw(); legend(); tiles(); } else glyphs();
+            if (k === 'grid') grid(); else if (k === 'stations') stations(); else if (k === 'borders') restyle(); else if (k === 'points' || k === 'forecasts') { draw(); legend(); tiles(); } else glyphs();
         });
     });
     $('railFold').addEventListener('click', function () { $('rail').classList.toggle('folded'); });
@@ -674,8 +705,27 @@
     load();
     stations();
     sourcesPanel(false);
-    // The layer every minute, the sources every half minute; between reloads the fades keep fading.
-    setInterval(function () { if (!document.hidden && state.hours === 0) load(); }, 60000);
+    // Live: the layer and the stations every minute, the sources every half minute, and the states in view
+    // told to the service so their files are read when due (W-14: the open map is the request). Paused
+    // while the tab is hidden; caught up the moment it is shown again.
+    var lastLoadAt = null;
+    function watch() {
+        if (document.hidden || !window.gullyCsrf) return;
+        var b = map.getBounds(), headers = window.gullyCsrf();
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        fetch('/console/map/watch', {method: 'POST', headers: headers, body: 'south=' + b.getSouth() + '&west=' + b.getWest() + '&north=' + b.getNorth() + '&east=' + b.getEast()})
+            .then(function (r) { return r.json(); }).then(function (w) { if (w.read && w.read.length) { lastStations = null; stations(); etag = null; load(); } }).catch(function () {});
+    }
+    function liveTick() {
+        var el = $('live');
+        el.classList.toggle('paused', document.hidden);
+        $('liveText').textContent = document.hidden ? 'paused' : (lastLoadAt ? 'live · ' + clock(lastLoadAt) : 'live');
+    }
+    document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); lastStations = null; stations(); sourcesPanel(); watch(); } });
+    setInterval(liveTick, 1000);
+    setInterval(watch, 60000);
+    watch();
+    setInterval(function () { if (!document.hidden && state.hours === 0) { load(); lastStations = null; stations(); } }, 60000);
     setInterval(function () { if (!document.hidden && (current().kind === 'life' || current().kind === 'from' || state.group === 'fc')) restyle(); }, 20000);
     setInterval(function () { if (!document.hidden) sourcesPanel(); }, 30000);
     setInterval(ticks, 600000);

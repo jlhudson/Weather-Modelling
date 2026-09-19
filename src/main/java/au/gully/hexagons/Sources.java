@@ -78,12 +78,41 @@ public class Sources {
         }
     }
 
+    /**
+     * The station files and warnings of some states, read when due, for a console map that is
+     * looking at them: the request is the operator's open map, and the ledger says so.
+     *
+     * @return the sources that were read whole
+     */
+    public List<String> ensureStates(java.util.Collection<String> states, Instant now, String why) {
+        List<String> read = new ArrayList<>();
+        if (!properties.enabled() || !properties.sources().bureau()) {
+            return read;
+        }
+        for (String state : states) {
+            long started = System.nanoTime();
+            ReadOutcome r = stations.ensure(state, now);
+            StationReader.FileState fs = stations.files().get(state);
+            noteFor("bureau-" + state, r, started, now, why, r == ReadOutcome.READ && fs != null ? "stations file, whole: " + fs.stations + " stations" : "stations file");
+            if (r == ReadOutcome.READ) read.add("bureau-" + state);
+            started = System.nanoTime();
+            ReadOutcome w = warnings.ensure(state, now);
+            noteFor("warnings-" + state, w, started, now, why, "warnings feed");
+            if (w == ReadOutcome.READ) read.add("warnings-" + state);
+        }
+        return read;
+    }
+
     private void note(String source, ReadOutcome outcome, long started, Instant now, Cell cell, String what) {
+        noteFor(source, outcome, started, now, "hexagon " + cell.id(), what);
+    }
+
+    private void noteFor(String source, ReadOutcome outcome, long started, Instant now, String who, String what) {
         if (!outcome.touched()) {
             return;
         }
-        triggers.put(source, new Trigger(cell.id(), now, outcome));
-        String detail = what + " for hexagon " + cell.id() + ": " + outcome.name().toLowerCase();
+        triggers.put(source, new Trigger(who, now, outcome));
+        String detail = what + " for " + who + ": " + outcome.name().toLowerCase();
         ledger.record(source, 0, outcome != ReadOutcome.FAILED, Duration.ofNanos(System.nanoTime() - started), detail);
     }
 

@@ -140,7 +140,11 @@ public class Readings {
                 o == null ? null : o.windDirectionDeg(), o == null ? null : o.windDirection(), o == null ? null : o.windGustKmh(),
                 o == null ? null : o.pressureMslHpa(), o == null ? null : o.rainSince9amMm(), o == null ? null : o.rain24hMm(),
                 o == null ? null : o.maxTemperatureC(), o == null ? null : o.minTemperatureC(),
-                o == null ? null : o.visibilityKm(), o == null ? null : o.cloud());
+                o == null ? null : o.visibilityKm(), o == null ? null : o.cloud(),
+                stations.windShift(id).map(w -> new Reading.WindShiftBlock(w.at(), w.grade(), w.swingGrade(), w.speedGrade(), w.fromDeg(), w.toDeg(),
+                        w.swingDeg(), w.fromKmh(), w.toKmh(), w.deltaKmh(), w.overMinutes(), w.describe())).orElse(null),
+                stations.recent(id).stream().map(r -> new Reading.RecentReading(r.at(), r.temperatureC(), r.humidityPct(), r.windSpeedKmh(),
+                        r.windDirectionDeg(), r.windGustKmh(), r.rainSince9amMm())).toList());
     }
 
     static Reading.FireBlock fire(FirePicture p) {
