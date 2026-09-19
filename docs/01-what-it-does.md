@@ -119,19 +119,16 @@ carried on every active hexagon in the district; a hexagon with no curing figure
 
 The fire indices need a drought factor; a drought factor needs a soil moisture deficit; a deficit
 needs a year of daily rain and maximum temperature integrated into a Keetch–Byram index and then a
-Griffiths factor. Drought is a property of a district, not a 32 km cell, so the plane is tiled into
-fixed **drought areas** of seven hexagons — a hexagon and its ring, three across, about 100 km (W-11) — and one
-state serves every hexagon in the area, from the Bureau stations inside those seven hexagons (or the
-nearest within 75 km). The areas never move and never overlap, so it does not matter which hexagon in
-one is asked about first: the first spins the area up, the rest share it.
+Griffiths factor. The drought is the hexagon's, like everything else the hexagon holds — at 32 km a
+hexagon is already the scale a drought factor describes — from the Bureau stations inside it (or the
+nearest within 75 km).
 
-Starting an area fetches only the days the stations do not cover: running for 30 days and needing 365,
-it asks Open-Meteo's archive at the area's centre for the year behind the ledger and nothing else —
-one fetch, about six units, for all seven hexagons. After that it is free: every day after 9:10 am
-in the area's zone, each area whose last complete day is behind the calendar is stepped forward from
-the ledger, exactly once, and every hexagon carrying a copy takes the new state. The state lives in
-`drought_area`; each hexagon's row carries its copy, and the reading says which area it came from
-(`drought.area`, `drought.areaHexagons`). A reading with no drought state has no fire index.
+Starting a hexagon's drought fetches only the days the stations do not cover: running for 30 days and
+needing 365, it asks Open-Meteo's archive at the hexagon's centre for the year behind the ledger and
+nothing else — one fetch, about six units, once per hexagon. After that it is free: every day after
+9:10 am in the hexagon's zone, each hexagon whose last complete day is behind the calendar is stepped
+forward from the ledger, exactly once. The state is kept on the hexagon's row so a quiet hexagon picks
+up where it left off. A reading with no drought state has no fire index.
 
 River discharge stays keyed on the river model's own smaller cells — 5 km, because a river is a line —
 from GloFAS, once a day per cell while a hexagon in it is active. Antecedent rain comes from the same

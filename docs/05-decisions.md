@@ -121,18 +121,15 @@ there is no Hibernate. The four platform tables the old service's Hibernate buil
 nothing that silently alters a table. The end-to-end test boots against the old schema to prove the
 migration.
 
-### W-11 · Drought areas are a fixed tiling of seven hexagons, one spin-up each
+### W-11 · The drought is the hexagon's (reversed the same day)
 
-**The decision.** The plane is tiled into fixed areas — a hexagon and its ring, seven cells, three across,
-about 100 km, on a lattice so the areas never overlap and never move — and the drought state is per area:
-spun up once at the area's centre by whichever hexagon in it is asked about first, stepped once a day
-for all of them, held in `drought_area` and copied onto each hexagon's row. The radius is one
-constant; 2 would make nineteen-cell areas about 160 km across.
+**The decision, as taken.** The plane was tiled into fixed areas of seven hexagons — a hexagon and its
+ring — and the drought state was per area, spun up once at the area's centre and shared, so that
+neighbouring asks did not each pay the year of archive for the same rain (at 15 km, 51 asked hexagons
+had meant 51 archive fetches).
 
-**Why.** The inputs were already pooled over the ring, but the state was per asked hexagon, so
-neighbouring asks each paid the year of archive — 51 asked hexagons, 51 archive fetches — for
-what was the same rain. An area anchored to the first hexagon hit would have overlapped its
-neighbours and depended on the order of asks; a lattice does neither. **What it costs.** The rain
-gradient inside 100 km — the Adelaide plains against the Mount Lofty Ranges — is one figure, as it was
-already for the inputs. — James, 19 September 2026.
+**Reversed, 19 September 2026.** The hexagons went to 32 km the same day, which is already the scale a
+drought factor describes, and the areas were complexity for nothing: the drought is the hexagon's, like
+everything else the hexagon holds — spun up once per hexagon at its centre, about six units, stepped
+daily from the station ledger for free, kept on the hexagon's row. `V4` dropped the areas' table. — James.
 

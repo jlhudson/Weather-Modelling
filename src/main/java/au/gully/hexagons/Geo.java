@@ -4,7 +4,7 @@ import lombok.experimental.UtilityClass;
 
 /**
  * The little spatial arithmetic left after the overhaul: distances, for the nearest station and the
- * drought area, and the one validation of a point. The cells themselves are {@link Grid}'s.
+ * drought maths, and the one validation of a point. The cells themselves are {@link Grid}'s.
  */
 @UtilityClass
 public class Geo {

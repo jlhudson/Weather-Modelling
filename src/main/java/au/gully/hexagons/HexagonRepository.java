@@ -33,7 +33,7 @@ public class HexagonRepository {
     /**
      * The grid the hexagon-keyed tables were written with, against the grid the code has. A change to
      * the width or the anchor ({@code Grid}'s constants) changes every hexagon's id, so the hexagons,
-     * the history, the drought areas and the river cells are reset — they are rebuilt from the sources
+     * the history and the river cells are reset — they are rebuilt from the sources
      * as they are asked about; the history is the one real loss, and re-gridding accepts it. Called
      * before anything is rehydrated.
      *
@@ -50,11 +50,11 @@ public class HexagonRepository {
         if (held.equals(spec)) {
             return false;
         }
-        long hexagons = count("hexagon"), snapshots = count("reading_snapshot"), areas = count("drought_area"), rivers = count("river_discharge");
-        db.sql("truncate table hexagon, reading_snapshot, drought_area, river_discharge").update();
+        long hexagons = count("hexagon"), snapshots = count("reading_snapshot"), rivers = count("river_discharge");
+        db.sql("truncate table hexagon, reading_snapshot, river_discharge").update();
         db.sql("update grid_spec set spec = :spec, since = :at where id = 1").param("spec", spec).param("at", Db.ts(Instant.now())).update();
-        log.warn("grid changed from [{}] to [{}]: every hexagon id changed, so {} hexagons, {} snapshots, {} drought areas and {} river cells were reset",
-                held, spec, hexagons, snapshots, areas, rivers);
+        log.warn("grid changed from [{}] to [{}]: every hexagon id changed, so {} hexagons, {} snapshots and {} river cells were reset",
+                held, spec, hexagons, snapshots, rivers);
         return true;
     }
 

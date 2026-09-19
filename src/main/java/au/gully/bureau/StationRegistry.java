@@ -206,7 +206,7 @@ public class StationRegistry {
     }
 
     /**
-     * The stations inside any of the cells, for the drought area.
+     * The stations inside any of the cells, for the drought maths.
      */
     public List<Station> inCells(Grid grid, Collection<Cell> cells) {
         Set<String> ids = new HashSet<>();

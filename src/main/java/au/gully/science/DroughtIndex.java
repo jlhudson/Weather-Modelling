@@ -11,7 +11,7 @@ import static au.gully.science.Numbers.round1;
  * <p>
  * This is the one weather quantity that cannot be fetched. It is a running total, so it has to be
  * spun up from history and then carried forward a day at a time (docs/06 item 7). It varies slowly
- * and smoothly, so one of these serves a hexagon and its ring — three across, about 100 km — for a whole day.
+ * and smoothly, so one of these serves a hexagon for a whole day.
  * <p>
  * There is no {@code estimated} flag and no {@code basis} sentence: a hexagon either has a drought
  * index or it has none, and a reading with none carries no fire index at all.
@@ -23,8 +23,6 @@ import static au.gully.science.Numbers.round1;
  * @param computedFor          the day the values describe
  * @param days                 how many days the integration has run over
  * @param recentRainMm         the daily rain that fed the drought factor, oldest first, today last
- * @param area                 the id of the area's centre hexagon, which every hexagon of the area shares
- * @param areaHexagons         how many hexagons the area has
  */
 public record DroughtIndex(
         double kbdiMm,
@@ -34,9 +32,7 @@ public record DroughtIndex(
         LocalDate spunUpFrom,
         LocalDate computedFor,
         int days,
-        List<Double> recentRainMm,
-        String area,
-        Integer areaHexagons
+        List<Double> recentRainMm
 ) {
 
     public DroughtIndex {

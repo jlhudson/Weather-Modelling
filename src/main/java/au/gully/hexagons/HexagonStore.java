@@ -3,7 +3,7 @@ package au.gully.hexagons;
 import au.gully.bureau.Station;
 import au.gully.bureau.StationRegistry;
 import au.gully.cfs.Districts;
-import au.gully.drought.DroughtAreas;
+import au.gully.drought.Drought;
 import au.gully.drought.Rivers;
 import au.gully.platform.GullyProperties;
 import au.gully.terrain.Terrain;
@@ -54,7 +54,7 @@ public class HexagonStore {
     private final Upstreams upstreams;
     private final FirePictures pictures;
     private final History history;
-    private final DroughtAreas droughtAreas;
+    private final Drought drought;
     private final Rivers rivers;
     private final GullyProperties properties;
 
@@ -67,7 +67,7 @@ public class HexagonStore {
     private final AtomicLong stale = new AtomicLong();
 
     public HexagonStore(Grid grid, HexagonRepository repository, Terrain terrain, StationRegistry stations, Districts districts,
-                        Upstreams upstreams, FirePictures pictures, History history, DroughtAreas droughtAreas, Rivers rivers,
+                        Upstreams upstreams, FirePictures pictures, History history, Drought drought, Rivers rivers,
                         GullyProperties properties) {
         this.grid = grid;
         this.repository = repository;
@@ -77,7 +77,7 @@ public class HexagonStore {
         this.upstreams = upstreams;
         this.pictures = pictures;
         this.history = history;
-        this.droughtAreas = droughtAreas;
+        this.drought = drought;
         this.rivers = rivers;
         this.properties = properties;
     }
@@ -303,34 +303,24 @@ public class HexagonStore {
     // ---------------------------------------------------------------- drought and rivers
 
     /**
-     * The hexagon carries a copy of its area's state (W-11): the area is spun up once, by whichever
-     * hexagon in it is asked about first, and stepped once a day for all of them; the copy is
-     * refreshed here whenever the area has moved on.
+     * The hexagon's drought: spun up on the first ask that can feed it, stepped to yesterday when it is
+     * behind, and otherwise left alone. Cheap when current.
      */
     private Hexagon ensureDrought(Hexagon h, Instant now) {
         ZoneId zone = zoneOf(h);
         DroughtState state;
         try {
-            state = droughtAreas.stateFor(h.cell(), zone, LocalDate.now(zone)).orElse(null);
+            state = drought.ensure(h.cell(), h.drought(), zone, LocalDate.now(zone)).orElse(null);
         } catch (RuntimeException e) {
             log.warn("drought for {} not computed: {}", h.id(), e.getMessage());
             return h;
         }
-        if (state == null || sameDrought(h.drought(), state)) {
+        if (state == null || state == h.drought()) {
             return h;
         }
         Hexagon after = replace(h.id(), old -> old.withDrought(state));
         repository.saveDrought(after);
         return after;
-    }
-
-    private static boolean sameDrought(DroughtState held, DroughtState area) {
-        return held != null && held.computedFor() != null && held.computedFor().equals(area.computedFor())
-                && Objects.equals(held.area(), area.area());
-    }
-
-    public int droughtAreaCount() {
-        return droughtAreas.size();
     }
 
     private Hexagon ensureRiver(Hexagon h, double lat, double lon, Instant now) {
@@ -351,35 +341,36 @@ public class HexagonStore {
     }
 
     /**
-     * The daily step (docs/06 item 7): every area whose last complete day is behind the calendar is
-     * stepped forward from the station ledger, exactly once per area per day, after 9:10 am in the
-     * area's zone when the rain day has closed; then every hexagon carrying a copy that the area
-     * has moved past takes the new state and has its picture recomputed. Runs on a short timer.
+     * The daily step (docs/06 item 7): every hexagon whose last complete day is behind the calendar is
+     * stepped forward from the station ledger, exactly once per hexagon per day, after 9:10 am in its
+     * zone when the rain day has closed, and has its picture recomputed. Runs on a short timer.
      *
-     * @return how many areas were stepped
+     * @return how many hexagons were stepped
      */
     public int stepDrought() {
         Instant now = Instant.now();
-        Set<String> stepped = droughtAreas.stepAll(now);
-        int copied = 0;
+        int stepped = 0;
         for (String id : hexagons.keySet()) {
             Hexagon h = hexagons.get(id);
             if (h == null || h.drought() == null) {
                 continue;
             }
-            DroughtState area = droughtAreas.held(h.cell()).orElse(null);
-            if (area == null || sameDrought(h.drought(), area)) {
-                continue;
+            try {
+                DroughtState next = drought.stepDaily(h.cell(), h.drought(), zoneOf(h), now).orElse(null);
+                if (next != null) {
+                    Hexagon after = replace(id, old -> old.withDrought(next));
+                    repository.saveDrought(after);
+                    recompute(id, now);
+                    stepped++;
+                }
+            } catch (RuntimeException e) {
+                log.warn("drought step for {} failed: {}", id, e.getMessage());
             }
-            Hexagon after = replace(id, old -> old.withDrought(area));
-            repository.saveDrought(after);
-            recompute(id, now);
-            copied++;
         }
-        if (!stepped.isEmpty() || copied > 0) {
-            log.info("drought: {} areas stepped, {} hexagons took their area's state", stepped.size(), copied);
+        if (stepped > 0) {
+            log.info("drought: {} hexagons stepped", stepped);
         }
-        return stepped.size();
+        return stepped;
     }
 
     /**
@@ -446,19 +437,6 @@ public class HexagonStore {
         log.info("hexagons rehydrated: {} ({} active, {} with a forecast)", hexagons.size(),
                 hexagons.values().stream().filter(Hexagon::active).count(),
                 hexagons.values().stream().filter(Hexagon::hasForecast).count());
-        // States computed per hexagon before the areas existed become their area's state, the most
-        // recently computed first, so nothing already spun up is spent again (W-11).
-        int adopted = 0;
-        List<Hexagon> withDrought = hexagons.values().stream().filter(h -> h.drought() != null && h.drought().area() == null)
-                .sorted(Comparator.comparing((Hexagon h) -> h.drought().computedFor()).reversed()).toList();
-        for (Hexagon h : withDrought) {
-            if (droughtAreas.adopt(h.cell(), zoneOf(h).getId(), h.drought())) {
-                adopted++;
-            }
-        }
-        if (adopted > 0) {
-            log.info("drought areas: {} adopted from hexagons computed before the areas", adopted);
-        }
     }
 
     private Hexagon replace(String id, java.util.function.UnaryOperator<Hexagon> change) {

@@ -66,7 +66,7 @@ class ReadingContractTest {
         FloodWeather flood = new FloodWeather(0.0, 0.0, 2.4, 11.2, 0.0, 0.2, 0.4, 2.8, 2.8, 60, 0.21, 0.28, 12.0, 20.0, 0.6, "STEADY",
                 List.of(new FloodOutlook(LocalDate.of(2026, 9, 19), 2.4, 60, 12.0, 0.6)));
         DroughtIndex drought = new DroughtIndex(88.0, "DRYING", 6.8, 612.0, LocalDate.of(2025, 9, 18), LocalDate.of(2026, 9, 17), 365,
-                List.of(0.0, 0.0, 2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), "46_-280", 7);
+                List.of(0.0, 0.0, 2.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
         Reading.Day day = new Reading.Day(LocalDate.of(2026, 9, 19), 19.0, 9.2, 17.0, 60, 31.0, 55.0, 240, 2.4, 60, 4.1,
                 Instant.parse("2026-09-18T20:40:00Z"), Instant.parse("2026-09-19T08:40:00Z"), "Light rain",
                 new Reading.DayFire(8.0, "LOW-MODERATE", 7.5, "LOW-MODERATE", 6, "No Rating", 87.0, 6.6, 19.0, 60, 31.0, 55.0, 2.4),

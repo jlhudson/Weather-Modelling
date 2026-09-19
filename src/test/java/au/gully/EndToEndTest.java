@@ -66,7 +66,7 @@ class EndToEndTest {
         // The legacy row is still there, with the hash of the plaintext the init script planted.
         String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
         assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "drought_area", "grid_spec"}) {
+        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec"}) {
             Long n = db.sql("select count(*) from " + table).query(Long.class).single();
             assertThat(n).as(table).isNotNull();
         }
@@ -168,8 +168,6 @@ class EndToEndTest {
     au.gully.hexagons.History history;
     @Autowired
     au.gully.hexagons.HexagonStore store;
-    @Autowired
-    au.gully.drought.DroughtAreas droughtAreas;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -220,31 +218,7 @@ class EndToEndTest {
         assertThat(ledger.hourly("open-meteo", now.minus(java.time.Duration.ofHours(2)))).isNotEmpty();
         assertThat(ledger.recent(10)).hasSize(2);
 
-        // The drought areas (W-11): a state adopted for one hexagon is the state of its whole area - the
-        // centre and its ring share it - and it is read back from the table.
-        java.time.ZoneId adelaideZone = java.time.ZoneId.of("Australia/Adelaide");
-        java.time.LocalDate yesterday = java.time.LocalDate.now(adelaideZone).minusDays(1);
-        au.gully.hexagons.Cell adelaide = store.grid().cellOf(-34.93, 138.6);
-        au.gully.hexagons.Cell centre = droughtAreas.centreOf(adelaide);
-        au.gully.hexagons.DroughtState legacy = new au.gully.hexagons.DroughtState(42.0, 550.0, yesterday.minusDays(364), yesterday, 365,
-                java.util.Collections.nCopies(20, 0.0), "archive", null, null);
-        assertThat(droughtAreas.adopt(adelaide, adelaideZone.getId(), legacy)).isTrue();
-        assertThat(droughtAreas.adopt(adelaide, adelaideZone.getId(), legacy)).as("an area is adopted once").isFalse();
-        assertThat(droughtAreas.cellsPerArea()).isEqualTo(7);
-        for (au.gully.hexagons.Cell member : store.grid().area(centre, au.gully.drought.DroughtAreas.RADIUS)) {
-            assertThat(droughtAreas.held(member)).as(member.id() + " shares the area").isPresent();
-            assertThat(droughtAreas.held(member).get().area()).isEqualTo(centre.id());
-            assertThat(droughtAreas.held(member).get().areaCells()).isEqualTo(7);
-        }
-        // Up to date for yesterday, so asking for it asks nothing upstream and answers the held state.
-        assertThat(droughtAreas.stateFor(adelaide, adelaideZone, yesterday.plusDays(1)).get().kbdiMm()).isEqualTo(42.0);
-        droughtAreas.rehydrate();
-        assertThat(droughtAreas.size()).isEqualTo(1);
-        assertThat(droughtAreas.held(adelaide).get().index().areaHexagons()).isEqualTo(7);
-
         au.gully.hexagons.Hexagon h = store.ask(-34.93, 138.6, false, "INC0001");
-        assertThat(h.drought()).as("the hexagon carries its area's state").isNotNull();
-        assertThat(h.drought().area()).isEqualTo(centre.id());
         assertThat(h.active()).isTrue();
         assertThat(h.stationId()).as("Adelaide West Terrace is inside this hexagon").isEqualTo("023000");
         assertThat(hexagons.loadAll(store.grid())).extracting(au.gully.hexagons.Hexagon::id).contains(h.id());

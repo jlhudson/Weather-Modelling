@@ -92,8 +92,7 @@ curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&at=2026
             "riverDischargeCumecs": 12.0, "riverDischargeMeanCumecs": 20.0, "dischargeRatioToMean": 0.6, "riverTrend": "STEADY",
             "outlook": [{"date": "2026-09-19", "rainMm": 2.4, "rainProbabilityPct": 60, "riverDischargeCumecs": 12.0, "dischargeRatioToMean": 0.6}]},
   "drought": {"kbdiMm": 88.0, "kbdiBand": "DRYING", "droughtFactor": 6.8, "meanAnnualRainfallMm": 612.0,
-              "spunUpFrom": "2025-09-18", "computedFor": "2026-09-17", "days": 365, "recentRainMm": [ "20 numbers" ],
-              "area": "46_-280", "areaHexagons": 7},
+              "spunUpFrom": "2025-09-18", "computedFor": "2026-09-17", "days": 365, "recentRainMm": [ "20 numbers" ]},
   "warnings": [{"id": "IDS21037", "title": "Severe Weather Warning", "phenomena": "for DAMAGING WINDS", "headline": "...",
                 "hazard": "SWW", "severity": "STD", "issuedAt": "...", "from": "...", "until": "...", "link": "..."}],
   "forecast": {"days": [{"date": "2026-09-19", "maxTemperatureC": 19.0, "minTemperatureC": 9.2, "...": "...",
@@ -122,7 +121,7 @@ What each block is:
 - **`fire`** — the fire picture (docs/01 §1.8). `grass` is null where the district has no curing figure;
   `official` is null outside South Australia; `leads` is null without land use.
 - **`flood`**, **`drought`** — as before; `drought` is null until the area's state exists, and then so is
-  every index. `drought.area` names the seven-hexagon area the state is shared across (W-11).
+  every index.
 - **`warnings`** — the Bureau warnings in force for the hexagon's district.
 - **`forecast`** — only with `forecast=true`. A day arrives whole with its own `fire` and `flood`; an
   hour carries the eight fields anyone reads and its own indices.

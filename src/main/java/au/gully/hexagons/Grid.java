@@ -14,11 +14,10 @@ import java.util.Set;
  * <p>
  * <strong>The three constants at the top are the whole design</strong>, and changing one changes every
  * hexagon's id: {@code HexagonRepository} notices at startup and resets the hexagon-keyed tables
- * (hexagons, history, drought areas, river cells), which is the deal a re-gridding makes.
+ * (hexagons, history, river cells), which is the deal a re-gridding makes.
  * <p>
  * Hexagons, and only hexagons: they are the tiling whose cells are nearest to round — every point in
- * one is within half a width of its centre — and a ring of six is the natural district for the
- * drought maths (W-11). Axial coordinates {@code (q, r)}; a hexagon's id is {@code q_r}. The size is the
+ * one is within half a width of its centre. Axial coordinates {@code (q, r)}; a hexagon's id is {@code q_r}. The size is the
  * width across the flats, so a 32 km hexagon is 32 km wide and 37 km tall.
  */
 public final class Grid {
@@ -125,67 +124,6 @@ public final class Grid {
             out.add(cell(c.q() + v[0], c.r() + v[1]));
         }
         return out;
-    }
-
-    /**
-     * How many steps apart two hexagons are.
-     */
-    public int distance(Cell a, Cell b) {
-        int dq = a.q() - b.q(), dr = a.r() - b.r();
-        return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
-    }
-
-    /**
-     * The hexagon and every hexagon within {@code radius} steps of it: radius 1 is the hexagon and its
-     * ring (seven, three across), radius 2 is nineteen, and so on ({@code 3r² + 3r + 1}).
-     */
-    public List<Cell> area(Cell centre, int radius) {
-        List<Cell> out = new ArrayList<>();
-        for (int dq = -radius; dq <= radius; dq++) {
-            for (int dr = -radius; dr <= radius; dr++) {
-                Cell c = cell(centre.q() + dq, centre.r() + dr);
-                if (distance(centre, c) <= radius) {
-                    out.add(c);
-                }
-            }
-        }
-        return out;
-    }
-
-    /**
-     * The centre of the area of {@code radius} that a hexagon belongs to, in a fixed tiling of the
-     * plane by such areas: every hexagon is within {@code radius} of exactly one centre, and the
-     * centres never move, so the areas neither overlap nor depend on which hexagon was asked about
-     * first (docs/06 item 7, W-11).
-     * <p>
-     * The centres are the lattice spanned by {@code (r+1, r)} and {@code (-r, 2r+1)} in axial
-     * coordinates, whose index is {@code 3r² + 3r + 1} — the size of the area, which is what makes the
-     * areas tile exactly (radius 1 is the seven-cell flower). A hexagon's lattice coordinates are solved
-     * for, rounded, and the neighbouring lattice points checked for the one within reach.
-     */
-    public Cell areaCentre(Cell c, int radius) {
-        if (radius <= 0) {
-            return c;
-        }
-        int uq = radius + 1, ur = radius, vq = -radius, vr = 2 * radius + 1;
-        double det = (double) uq * vr - (double) vq * ur;
-        double a = (c.q() * vr - c.r() * vq) / det;
-        double b = (c.r() * uq - c.q() * ur) / det;
-        long a0 = Math.round(a), b0 = Math.round(b);
-        Cell best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (long da = -1; da <= 1; da++) {
-            for (long db = -1; db <= 1; db++) {
-                long la = a0 + da, lb = b0 + db;
-                Cell centre = cell((int) (la * uq + lb * vq), (int) (la * ur + lb * vr));
-                int d = distance(c, centre);
-                if (d < bestDistance) {
-                    bestDistance = d;
-                    best = centre;
-                }
-            }
-        }
-        return best;
     }
 
     /**
