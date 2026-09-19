@@ -54,40 +54,7 @@ h2 { font-size: .85rem; font-weight: 600; margin: 1rem 0 .35rem; color: var(--bs
 .wrap { white-space: pre-wrap; word-break: break-word; }
 details > summary { cursor: pointer; }
 
-/* The map takes what the bar and the tools leave; the detail panel sits over its right edge. */
-.map-page { display: flex; flex-direction: column; height: 100%; }
-.map-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
-#map { position: absolute; inset: 0; }
-.map-tools { display: flex; flex-wrap: wrap; gap: .3rem .8rem; align-items: center; margin-bottom: .35rem; flex: 0 0 auto; }
-.map-tools label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; white-space: nowrap; }
-.map-tools select, .map-tools input[type=range] { max-width: 14rem; }
-#detail, #sources { position: absolute; top: .5rem; right: .5rem; width: 30rem; max-width: calc(100% - 1rem); max-height: calc(100% - 1rem); overflow: auto; z-index: 1000;
-  background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .3rem; padding: .5rem .6rem; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
-#detail.hidden, #sources.hidden { display: none; }
-#detail h3, #sources h3 { font-size: .95rem; margin: 0 0 .25rem; }
-#detail .table, #sources .table { font-size: .85rem; }
-/* The sources panel sits on the left, so a hexagon's detail and the sources can be read together. */
-#sources { right: auto; left: .5rem; width: 34rem; font-size: .85rem; }
-#sources .reads { max-height: 16rem; overflow: auto; }
-#sources .src { border-top: 1px solid var(--bs-border-color); padding: .25rem 0; }
-#sources .src:first-of-type { border-top: 0; }
-#sources .glyph-arrow { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; margin-right: .3rem; }
-.hx-arrow.fc line, .hx-arrow.fc polyline, .hx-arrow.fc circle { stroke: #b45309; }
-.hx-arrow.fc circle { fill: #b45309; }
-.hx-label.fc { color: #b45309; }
-.legend { display: inline-flex; gap: .15rem; align-items: center; }
-.legend i { display: inline-block; width: 1.1rem; height: .7rem; box-sizing: border-box; }
-/* On a phone the swatches alone: the words are on their titles, and the map wants the rows back. */
-@media (max-width: 575.98px) { .legend span { display: none; } .legend i { margin-right: .35rem; } .map-tools { gap: .25rem .6rem; } }
-
-/* The weather a hexagon knows, drawn on it: the arrow the way the wind blows, the values under it. */
-.hx-glyph { pointer-events: none; background: none; border: 0; }
-.hx-arrow { display: block; overflow: visible; }
-.hx-arrow line, .hx-arrow polyline, .hx-arrow circle { stroke: var(--bs-body-color); stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round;
-  filter: drop-shadow(0 0 1.5px var(--bs-body-bg)) drop-shadow(0 0 1.5px var(--bs-body-bg)); }
-.hx-arrow circle { fill: var(--bs-body-color); }
-.hx-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font: 500 10px/1.15 var(--g-mono); white-space: nowrap;
-  color: var(--bs-body-color); background: color-mix(in srgb, var(--bs-body-bg) 75%, transparent); padding: 0 3px; border-radius: 2px; }
+/* The map page has its own sheet, css/map.css, linked from the page. */
 
 /* Leaflet under the theme. */
 [data-bs-theme=dark] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.85); }

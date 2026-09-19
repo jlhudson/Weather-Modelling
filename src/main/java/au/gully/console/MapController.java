@@ -20,6 +20,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
@@ -109,15 +110,25 @@ public class MapController {
     @GetMapping(value = "/stations.geojson", produces = "application/geo+json")
     @ResponseBody
     public Map<String, Object> stations() {
+        Instant now = Instant.now();
         List<Map<String, Object>> features = new ArrayList<>();
+        int fresh = 0;
         for (Station s : stations.all()) {
             Observation o = stations.latest(s.id()).orElse(null);
             Map<String, Object> p = new LinkedHashMap<>();
             p.put("id", s.id());
             p.put("name", s.name());
+            p.put("state", s.state());
             p.put("district", s.district());
             p.put("heightM", s.heightM());
             p.put("at", o == null || o.at() == null ? null : o.at().toString());
+            // Fresh as the hexagons judge it: an observation under seventy minutes old is "now"; older, or
+            // none because the state's file has not been asked for lately, and the dot is drawn hollow.
+            Long age = o == null || o.at() == null ? null : Duration.between(o.at(), now).toMinutes();
+            p.put("ageMinutes", age);
+            boolean isFresh = age != null && age < FirePictures.STATION_STALE.toMinutes();
+            p.put("fresh", isFresh);
+            if (isFresh) fresh++;
             p.put("temperatureC", o == null ? null : o.temperatureC());
             p.put("humidityPct", o == null ? null : o.humidityPct());
             p.put("windSpeedKmh", o == null ? null : o.windSpeedKmh());
@@ -135,6 +146,7 @@ public class MapController {
         Map<String, Object> fc = new LinkedHashMap<>();
         fc.put("type", "FeatureCollection");
         fc.put("features", features);
+        fc.put("meta", Map.of("stations", features.size(), "fresh", fresh));
         return fc;
     }
 

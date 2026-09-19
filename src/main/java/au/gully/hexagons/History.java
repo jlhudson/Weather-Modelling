@@ -32,6 +32,13 @@ public class History {
      */
     public static final Duration CURRENT_FOR = Duration.ofHours(3);
 
+    /**
+     * How long a snapshot stands for the hexagon when the map asks for a past instant: twice the
+     * writing interval, so a hexagon asked about every three hours is continuous and one asked
+     * about once is a point.
+     */
+    public static final Duration STANDS_FOR = Duration.ofHours(6);
+
     private final JdbcClient db;
     private final Json json;
 
@@ -85,9 +92,11 @@ public class History {
      */
     public Map<String, Snapshot> allAt(Instant at) {
         Map<String, Snapshot> out = new java.util.HashMap<>();
-        db.sql("select distinct on (hexagon_id) hexagon_id, payload from reading_snapshot where at <= :at"
+        // The latest snapshot at or before the instant, and only one taken inside the window: a snapshot
+        // from last week does not stand for yesterday afternoon.
+        db.sql("select distinct on (hexagon_id) hexagon_id, payload from reading_snapshot where at <= :at and at > :since"
                         + " order by hexagon_id, at desc")
-                .param("at", Db.ts(at)).query().listOfRows()
+                .param("at", Db.ts(at)).param("since", Db.ts(at.minus(STANDS_FOR))).query().listOfRows()
                 .forEach(row -> out.put((String) row.get("hexagon_id"), json.read(row.get("payload").toString(), Snapshot.class)));
         return out;
     }

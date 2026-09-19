@@ -2,73 +2,113 @@
 <html th:replace="~{layout :: page('Map', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
 <body>
 <section class="map-page">
-    <div class="map-tools">
-        <label>Show
-            <select class="form-select form-select-sm" id="value">
-                <optgroup label="Now · from the ground">
-                    <option value="now:from" selected>where "now" comes from</option>
-                    <option value="now:temperatureC">temperature °C</option>
-                    <option value="now:humidityPct">humidity %</option>
-                    <option value="now:windKmh">wind km/h</option>
-                    <option value="now:gustKmh">gust km/h</option>
-                    <option value="now:rainMm">rain since 9 am mm</option>
-                    <option value="now:age">age of the observation min</option>
-                </optgroup>
-                <optgroup label="Forecast · the model">
-                    <option value="fc:life">forecasts held · fading as their life runs out</option>
-                    <option value="fc:temperatureC">temperature °C</option>
-                    <option value="fc:humidityPct">humidity %</option>
-                    <option value="fc:windKmh">wind km/h</option>
-                    <option value="fc:gustKmh">gust km/h</option>
-                    <option value="fc:rainMm">rain this hour mm</option>
-                    <option value="fc:age">age of the fetch min</option>
-                </optgroup>
-                <optgroup label="Now against the forecast">
-                    <option value="diff:temperatureC">temperature · now − forecast</option>
-                    <option value="diff:humidityPct">humidity · now − forecast</option>
-                    <option value="diff:windKmh">wind · now − forecast</option>
-                    <option value="drift">drift score · stations against the forecast</option>
-                    <option value="drift24h">drift score · 24 h mean</option>
-                </optgroup>
-                <optgroup label="Fire">
-                    <option value="ffdi">FFDI</option>
-                    <option value="gfdi">GFDI</option>
-                    <option value="fbi">FBI (AFDRS grass)</option>
-                    <option value="officialRating">official rating</option>
-                    <option value="droughtFactor">drought factor</option>
-                    <option value="kbdiMm">KBDI mm</option>
-                    <option value="curingPct">curing %</option>
-                </optgroup>
-                <optgroup label="Ground">
-                    <option value="elevationM">elevation m</option>
-                    <option value="landDominant">land use · largest share</option>
-                    <option value="leads">land use · which index leads</option>
-                    <option value="burnablePct">burnable %</option>
-                </optgroup>
-                <optgroup label="Requests">
-                    <option value="asked">minutes since last asked · what drives every read</option>
-                    <option value="asks">asks this run</option>
-                    <option value="kind">kind</option>
-                </optgroup>
-            </select>
-        </label>
-        <label><input class="form-check-input" id="forecasts" type="checkbox"> forecasts only</label>
-        <label><input class="form-check-input" id="weather" type="checkbox" checked> wind &amp; values</label>
-        <label><input class="form-check-input" id="stations" type="checkbox" checked> stations</label>
-        <label><input class="form-check-input" id="grid" type="checkbox"> every hexagon</label>
-        <label>Time
-            <input id="time" max="0" min="-168" step="1" type="range" value="0">
-            <span class="mono" id="timeLabel">now</span>
-        </label>
-        <button class="btn btn-sm btn-outline-secondary py-0" id="now" type="button">now</button>
-        <button class="btn btn-sm btn-outline-secondary py-0" id="sourcesToggle" type="button">sources</button>
-        <span class="muted" id="status" th:text="${hexagons} + ' hexagons held (' + ${cellKm} + ' km) · ' + ${stations} + ' stations · ' + ${warnings} + ' warnings'"></span>
-        <span class="legend ms-auto" id="legend"></span>
-    </div>
+    <!-- The icons, once, as symbols. Strokes only, so they take the text colour. -->
+    <svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+        <symbol id="i-source" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9" stroke-dasharray="2 3"/></symbol>
+        <symbol id="i-temp" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 9v6"/></symbol>
+        <symbol id="i-humidity" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></symbol>
+        <symbol id="i-wind" viewBox="0 0 24 24"><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h7a2 2 0 1 1-2 2"/></symbol>
+        <symbol id="i-gust" viewBox="0 0 24 24"><path d="M2 7h12a3 3 0 1 0-3-3"/><path d="M2 12h17a3 3 0 1 1-3 3"/><path d="M2 17h9"/><path d="M14 17h2"/></symbol>
+        <symbol id="i-rain" viewBox="0 0 24 24"><path d="M7 15a4 4 0 0 1-.5-8A6 6 0 0 1 18 8a4 4 0 0 1-1 7"/><path d="M8 18l-1 3"/><path d="M12 18l-1 3"/><path d="M16 18l-1 3"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+        <symbol id="i-delta" viewBox="0 0 24 24"><path d="M12 4 20 19H4L12 4Z"/></symbol>
+        <symbol id="i-drift" viewBox="0 0 24 24"><path d="M3 17c3-6 6-6 9 0s6 6 9 0"/><path d="M3 9h18" stroke-dasharray="2 3"/></symbol>
+        <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 1-6 1-9Z"/></symbol>
+        <symbol id="i-badge" viewBox="0 0 24 24"><path d="M12 3l2.6 5.3 5.9.8-4.3 4.1 1 5.8L12 16.3 6.8 19l1-5.8L3.5 9.1l5.9-.8L12 3Z"/></symbol>
+        <symbol id="i-drought" viewBox="0 0 24 24"><path d="M3 18h18"/><path d="M6 18c0-5 2-8 6-11 4 3 6 6 6 11"/><path d="M12 7v11"/></symbol>
+        <symbol id="i-grass" viewBox="0 0 24 24"><path d="M4 20c0-6 2-10 5-12"/><path d="M12 20c0-8 1-12 4-15"/><path d="M20 20c0-5-2-9-5-11"/><path d="M8 20c0-4 1-7 3-9"/><path d="M16 20c0-4-1-7-3-9"/></symbol>
+        <symbol id="i-elevation" viewBox="0 0 24 24"><path d="M3 20 10 7l4 7 2-3 5 9H3Z"/></symbol>
+        <symbol id="i-land" viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 3-2 6 4"/><rect x="3" y="4" width="18" height="16" rx="2"/></symbol>
+        <symbol id="i-leads" viewBox="0 0 24 24"><path d="M6 20V9a3 3 0 0 1 6 0v11"/><path d="M12 20V12"/><path d="M15 20c0-6 2-8 5-8-1 4-2 6-5 8Z"/></symbol>
+        <symbol id="i-ask" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/><path d="M8 3l-3 2"/><path d="M16 3l3 2"/></symbol>
+        <symbol id="i-count" viewBox="0 0 24 24"><path d="M4 19V10"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/></symbol>
+        <symbol id="i-kind" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="M12 12l8-4.5"/><path d="M12 12v9"/><path d="M12 12 4 7.5"/></symbol>
+        <symbol id="i-station" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M7 7a7 7 0 0 0 0 10"/><path d="M17 7a7 7 0 0 1 0 10"/><path d="M4.5 4.5a10.5 10.5 0 0 0 0 15"/><path d="M19.5 4.5a10.5 10.5 0 0 1 0 15"/></symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 20V4"/><path d="M6 10l6-6 6 6"/></symbol>
+        <symbol id="i-label" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h13"/></symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24"><path d="M8 3 4 10l4 7h8l4-7-4-7H8Z"/><path d="M8 17l-4 7"/><path d="M16 17l4 7"/></symbol>
+        <symbol id="i-points" viewBox="0 0 24 24"><circle cx="6" cy="7" r="1.6"/><circle cx="13" cy="5" r="1.6"/><circle cx="18" cy="11" r="1.6"/><circle cx="8" cy="15" r="1.6"/><circle cx="15" cy="18" r="1.6"/></symbol>
+        <symbol id="i-forecast" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8L7 4Z"/></symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h4v16H7z"/><path d="M13 4h4v16h-4z"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+        <symbol id="i-sources" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+        <symbol id="i-probe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/></symbol>
+    </svg>
+
     <div class="map-wrap">
         <div id="map"></div>
-        <div class="hidden" id="detail"></div>
-        <div class="hidden" id="sources"></div>
+
+        <!-- The rail: what to colour by. One choice, three sides. -->
+        <aside class="panel rail" id="rail">
+            <div class="rail-head">
+                <div class="seg" id="side" role="tablist" aria-label="Side">
+                    <button class="on" data-side="now" role="tab" type="button">Now</button>
+                    <button data-side="fc" role="tab" type="button">Forecast</button>
+                    <button data-side="diff" role="tab" title="Now against the forecast" type="button">Δ</button>
+                </div>
+                <button class="icon-btn rail-fold" id="railFold" title="Collapse" type="button"><svg class="ico"><use href="#i-chevron"/></svg></button>
+            </div>
+            <div class="rail-body">
+                <div class="group" id="vars">
+                    <div class="group-title" id="varsTitle">Colour by</div>
+                    <div class="chips" id="varChips"></div>
+                </div>
+                <details class="group" id="moreFire">
+                    <summary>Fire <span class="muted">indices &amp; rating</span></summary>
+                    <div class="chips" data-group="fire"></div>
+                </details>
+                <details class="group" id="moreGround">
+                    <summary>Ground <span class="muted">what the hexagon is</span></summary>
+                    <div class="chips" data-group="ground"></div>
+                </details>
+                <details class="group" id="moreAsks">
+                    <summary>Requests <span class="muted">what drives every read</span></summary>
+                    <div class="chips" data-group="asks"></div>
+                </details>
+                <div class="group show">
+                    <div class="group-title">Show</div>
+                    <div class="toggles" id="toggles">
+                        <button class="tog on" data-tog="stations" title="Bureau stations as points" type="button"><svg class="ico"><use href="#i-station"/></svg><span>Stations</span></button>
+                        <button class="tog on" data-tog="wind" title="Wind arrows" type="button"><svg class="ico"><use href="#i-arrow"/></svg><span>Wind</span></button>
+                        <button class="tog on" data-tog="labels" title="Temperature, humidity, wind as labels" type="button"><svg class="ico"><use href="#i-label"/></svg><span>Labels</span></button>
+                        <button class="tog" data-tog="grid" title="Every hexagon of the tessellation" type="button"><svg class="ico"><use href="#i-grid"/></svg><span>Grid</span></button>
+                        <button class="tog" data-tog="points" title="Hexagons as points" type="button"><svg class="ico"><use href="#i-points"/></svg><span>Points</span></button>
+                        <button class="tog" data-tog="forecasts" title="Only hexagons holding a forecast" type="button"><svg class="ico"><use href="#i-forecast"/></svg><span>Forecasts</span></button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- The figures: what is held, and where "now" is coming from. -->
+        <aside class="panel stats" id="stats">
+            <div class="tiles" id="tiles"></div>
+            <div class="stats-foot">
+                <button class="link-btn" id="sourcesToggle" type="button"><svg class="ico"><use href="#i-sources"/></svg> sources <span class="muted" id="sourcesHint"></span></button>
+            </div>
+        </aside>
+
+        <!-- The legend: the scale the colours mean, with the distribution of the hexagons drawn on it. -->
+        <div class="panel legend" id="legend">
+            <div class="legend-head"><span class="legend-title" id="legendTitle"></span><span class="muted" id="legendCount"></span></div>
+            <div class="legend-body" id="legendBody"></div>
+        </div>
+
+        <!-- The timeline: a week back over the history, three days ahead over the forecasts. -->
+        <div class="panel timeline" id="timeline">
+            <button class="icon-btn" id="play" title="Play ahead, hour by hour" type="button"><svg class="ico"><use href="#i-play"/></svg></button>
+            <div class="track">
+                <div class="ticks" id="ticks"></div>
+                <input aria-label="Time" id="time" max="72" min="-168" step="1" type="range" value="0">
+                <div class="thumb-label" id="timeLabel">now</div>
+            </div>
+            <button class="pill" id="now" type="button">now</button>
+        </div>
+
+        <div class="panel drawer hidden" id="detail"></div>
+        <div class="panel drawer left hidden" id="sources"></div>
+        <div class="toast-line hidden" id="note"></div>
     </div>
     <script defer th:src="@{/js/map.js}"></script>
 </section>

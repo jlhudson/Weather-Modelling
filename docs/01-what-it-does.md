@@ -239,33 +239,49 @@ there is none.
 
 ## 1.11 The console map
 
-The map draws every hexagon held, with "now" and the forecast kept apart, as the reading keeps them.
-The layers are in groups. **Now, from the ground:** by default where "now" comes from — blues for the
-ground (one station, several blended, the neighbours brought to its height), amber where the model is
-standing in, fading as its life runs out, a faint outline where there is nothing yet — or by the
-ground's temperature, humidity, wind, gust, rain or the age of the observation. **Forecast, the
-model:** the forecasts held, fading as their life runs out (dashed once past it), or the model's
-temperature, humidity, wind, gust, rain this hour or the age of the fetch. **Now against the
-forecast:** temperature, humidity or wind as now minus forecast on a diverging ramp, and the drift
-score — green agrees, red was thrown out — with the day's mean. Then the fire indices in their rating
-colours, the ground (elevation, land use by its largest share, which index leads, the burnable share)
-and the requests (minutes since a hexagon was last asked about, which is what drives every read). A
-purple ring marks the drought stepped; a switch shows the forecasts alone.
+A full-bleed map with a few panels floating over it, and one question at a time: what to colour by.
+
+**The rail** (top left) asks it in two steps. A side — **Now** from the ground, **Forecast** from the
+model, or **Δ**, one against the other — and a variable: for now and the forecast, where the values
+come from (or the forecast's remaining life), temperature, humidity, wind, gust, rain and age; for Δ,
+temperature, humidity and wind as now minus forecast, and the drift score with its 24-hour mean.
+Under it, folded, the fire layers (FFDI, GFDI, FBI in their rating colours, the CFS rating, the
+drought factor, KBDI, curing), the ground (elevation, land use by its largest share, which index
+leads, the burnable share) and the requests (minutes since a hexagon was last asked about, which is
+what drives every read). Then what to draw on top: the stations as a point cloud, wind arrows, value
+labels, the tessellation, hexagons as points (automatic when zoomed out to the continent), and only
+the hexagons holding a forecast. Keys `1`, `2`, `3` pick the side.
+
+**The figures** (top right): hexagons held, how many take "now" from the ground (with the split by
+station, blend and neighbours on hover), forecasts held and their life, hexagons where the model is
+standing in, forecasts thrown out, and the share of today's allowance used — and a line to the sources
+drawer, which shows that nothing is read but on request: each source with its cadence and a bar
+filling towards its next check, when an ask last checked and read it, what it holds (a station file's
+count is the whole file), which hexagon's ask caused that; and the ledger's last reads, each against
+the hexagon it was read for.
+
+**The legend** (bottom centre) is the scale the colours mean, with the distribution of the hexagons
+drawn on it: a histogram over the ramp and the mean for a number, swatches with counts for a category.
+The stations are coloured on the same scale where they measure the variable shown, filled where the
+observation is fresh and hollow where the file for their state has not been asked for lately — so a
+station that disagrees with its hexagon is visible as a dot of a different colour.
+
+**The timeline** (bottom) runs a week back and three days ahead, with a tick at each local midnight.
+Behind now the layer is what the snapshots say was "now" then; ahead of now it is the forecast series
+read at that hour, with that hour's fire indices and that day's CFS rating, for every hexagon holding
+a forecast — and the rail follows, because the future has no "now": the Now and Δ sides grey out and
+the forecast side takes over. Play steps an hour at a time; the arrow keys nudge, space plays,
+`0` returns to now. Dragging asks the service for the layer at that hour (not cached; a few
+milliseconds each).
 
 On every hexagon that knows its weather, an arrow the way the wind blows, its length by the speed
 (from zoom 7), and the temperature, humidity and speed as a label (from zoom 9): black for the
-ground's values, amber for the model's when a forecast layer is shown. A tooltip carries both halves
-side by side, the difference, the drift, the fire indices, the height and the land use, and when the
-hexagon was last asked about; a click opens everything held.
-
-The **sources panel** shows that nothing is read but on request: each source — the Bureau's station
-file and warnings per state, the CFS ratings and shapes — with its cadence, when an ask last checked
-it and last read it, what it holds (a station file's count is the whole file), which hexagon's ask
-caused that, and when the next ask will check again; Open-Meteo's share of the day's allowance and
-the forecast life in force; and the ledger's last reads, newest first, each against the hexagon it was
-read for. The time slider shows the layer as it was, from the snapshots. The map never fetches; the
-probe on a point is an ask, and says so. The page is locked to the device: the bar collapses on a
-phone, and only the map zooms.
+ground's values, amber for the model's. A tooltip carries both halves side by side with the
+difference, the drift, the fire indices, the height and the land use. A click opens the drawer:
+now against the forecast in one table with the deltas, the drift as a meter against its tolerance,
+the stations that made "now", the land use as a bar, and everything else held. The map never
+fetches; the probe on a point is an ask, and says so. The page is locked to the device: on a phone
+the rail is a sheet at the bottom and the figures fold into the legend.
 
 ## 1.12 What is deliberately not here
 

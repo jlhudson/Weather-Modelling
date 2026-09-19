@@ -1,46 +1,87 @@
-// The map: every hexagon held, with "now" and the forecast kept apart. "Now" is what the ground
-// says - the station in the hexagon, the stations in it blended, or the neighbours brought to its
-// elevation - and is coloured by where it came from or by a value; the forecast is the model's
-// series read at this moment, coloured by a value or fading as its life runs out; and the two can
-// be shown against each other, value by value, or as the drift score. The weather is drawn on each
-// hexagon as a wind arrow and a label, in black for now and in amber for the forecast. A sources
-// panel shows that nothing is read but on request: each source's cadence, when an ask last checked
-// it, what it holds, which hexagon asked, and the last reads the ledger saw. A time slider goes
-// over the history; a click opens everything held for a hexagon. Deferred, so it runs after Leaflet
-// and console.js.
+// The map: every hexagon held, "now" and the forecast kept apart, and one question at a time.
+//
+// The rail picks what to colour by - a side (now from the ground, the forecast, or one against the
+// other) and a variable, or one of the fire, ground and request layers - and what to draw on top:
+// the stations as points, wind arrows, labels, the tessellation, hexagons as points. The figures
+// say what is held and where "now" is coming from. The legend is the scale the colours mean, with
+// the distribution of the hexagons drawn on it. The timeline runs a week back over the history and
+// three days ahead over the forecasts: behind now the layer is what was "now" then, ahead it is the
+// series read at that hour, and the rail follows (the future has no "now"). A click opens
+// everything held for a hexagon; the sources drawer shows that nothing is read but on request.
+// Deferred, so it runs after Leaflet and console.js.
 (function () {
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); };
     var fmt = function (v, d) { return v == null ? '—' : (typeof v === 'number' ? (d == null ? v : v.toFixed(d)) : String(v)); };
-    var when = function (iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleString(undefined, {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}); };
-    var clock = function (iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit', second: '2-digit'}); };
-    var ago = function (iso) { if (!iso) return '—'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 120 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; };
+    var when = function (iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleString(undefined, {weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'}); };
+    var clock = function (iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}); };
+    var ago = function (iso) { if (!iso) return '—'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 120 ? m + ' min ago' : m < 2880 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
     var in_ = function (iso) { if (!iso) return '—'; var m = Math.round((Date.parse(iso) - Date.now()) / 60000); return m <= 0 ? 'on the next ask' : m < 120 ? 'in ' + m + ' min' : 'in ' + Math.round(m / 60) + ' h'; };
+    var icon = function (id) { return '<svg class="ico"><use href="#i-' + id + '"/></svg>'; };
+    var cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1); };
 
-    var map = L.map('map').setView([-34.93, 138.6], 7);
-    window.gullyBaseLayer(map);
-    var hexLayer = L.geoJSON(null, {style: styleOf, onEachFeature: onHexagon, filter: shown}).addTo(map);
-    var gridLayer = L.geoJSON(null, {style: {color: '#888', weight: .6, fill: false, opacity: .6}, interactive: false});
-    var stationLayer = L.layerGroup().addTo(map);
-    var glyphLayer = L.layerGroup().addTo(map);
-    var etag = null, value = 'now:from', at = null, lastFc = null;
+    // ---- the catalogue: every layer, by group. A side group's variables read now*, fc* or diff* properties.
+    var VARS = {
+        now: [
+            {id: 'from', name: 'Source', hint: 'where "now" comes from', icon: 'source', kind: 'from'},
+            {id: 'temperatureC', name: 'Temperature', unit: '°C', icon: 'temp', range: [0, 45]},
+            {id: 'humidityPct', name: 'Humidity', unit: '%', icon: 'humidity', range: [0, 100], reverse: true},
+            {id: 'windKmh', name: 'Wind', unit: 'km/h', icon: 'wind', range: [0, 80]},
+            {id: 'gustKmh', name: 'Gust', unit: 'km/h', icon: 'gust', range: [0, 110]},
+            {id: 'rainMm', name: 'Rain', hint: 'since 9 am', unit: 'mm', icon: 'rain', range: [0, 25]},
+            {id: 'age', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 180], reverse: true}
+        ],
+        fc: [
+            {id: 'life', name: 'Life', hint: 'fading to expiry', icon: 'clock', kind: 'life'},
+            {id: 'temperatureC', name: 'Temperature', unit: '°C', icon: 'temp', range: [0, 45]},
+            {id: 'humidityPct', name: 'Humidity', unit: '%', icon: 'humidity', range: [0, 100], reverse: true},
+            {id: 'windKmh', name: 'Wind', unit: 'km/h', icon: 'wind', range: [0, 80]},
+            {id: 'gustKmh', name: 'Gust', unit: 'km/h', icon: 'gust', range: [0, 110]},
+            {id: 'rainMm', name: 'Rain', hint: 'this hour', unit: 'mm', icon: 'rain', range: [0, 10]},
+            {id: 'age', name: 'Age', hint: 'of the fetch', unit: 'min', icon: 'clock', range: [0, 300], reverse: true}
+        ],
+        diff: [
+            {id: 'temperatureC', name: 'Temperature', hint: 'now − forecast', unit: '°C', icon: 'temp', lim: 5},
+            {id: 'humidityPct', name: 'Humidity', hint: 'now − forecast', unit: 'pts', icon: 'humidity', lim: 25},
+            {id: 'windKmh', name: 'Wind', hint: 'now − forecast', unit: 'km/h', icon: 'wind', lim: 20},
+            {id: 'drift', name: 'Drift', hint: 'stations vs forecast', icon: 'drift', kind: 'drift'},
+            {id: 'drift24h', name: 'Drift', hint: '24 h mean', icon: 'drift', kind: 'drift'}
+        ],
+        fire: [
+            {id: 'ffdi', name: 'FFDI', hint: 'forest', icon: 'fire', kind: 'rating', ratingOf: 'ffdiRating', range: [0, 100]},
+            {id: 'gfdi', name: 'GFDI', hint: 'grass', icon: 'grass', kind: 'rating', ratingOf: 'gfdiRating', range: [0, 150]},
+            {id: 'fbi', name: 'FBI', hint: 'AFDRS grass', icon: 'fire', kind: 'rating', ratingOf: 'afdrsRating', range: [0, 100]},
+            {id: 'officialRating', name: 'Official', hint: 'CFS rating', icon: 'badge', kind: 'category', palette: 'RATING'},
+            {id: 'droughtFactor', name: 'Drought factor', icon: 'drought', range: [0, 10]},
+            {id: 'kbdiMm', name: 'KBDI', unit: 'mm', icon: 'drought', range: [0, 203]},
+            {id: 'curingPct', name: 'Curing', unit: '%', icon: 'grass', range: [0, 100]}
+        ],
+        ground: [
+            {id: 'elevationM', name: 'Elevation', unit: 'm', icon: 'elevation', range: [0, 1500]},
+            {id: 'landDominant', name: 'Land use', hint: 'largest share', icon: 'land', kind: 'category', palette: 'LAND'},
+            {id: 'leads', name: 'Leads', hint: 'which index', icon: 'leads', kind: 'category', palette: 'LEADS'},
+            {id: 'burnablePct', name: 'Burnable', unit: '%', icon: 'grass', range: [0, 100]}
+        ],
+        asks: [
+            {id: 'asked', name: 'Last asked', unit: 'min ago', icon: 'ask', range: [0, 120], reverse: true},
+            {id: 'asks', name: 'Asks', hint: 'this run', icon: 'count', range: [0, 50]},
+            {id: 'kind', name: 'Kind', icon: 'kind', kind: 'category', palette: 'KIND'}
+        ]
+    };
+    var GROUP_NAMES = {now: 'Now · from the ground', fc: 'Forecast · the model', diff: 'Now against the forecast', fire: 'Fire', ground: 'Ground', asks: 'Requests'};
 
-    // ---- colouring
-    // Where "now" comes from: blues for the ground - one station, several blended, the neighbours
-    // brought here - amber for the model standing in, faded as its life runs out; nothing is a faint outline.
+    // ---- colour: the ground in blues, the model in amber, ratings as published, categories fixed, numbers on a ramp.
     var FROM = {station: '#2563eb', stations: '#1e3a8a', neighbours: '#0d9488', model: '#f59e0b', none: '#9ca3af'};
     var FROM_WORDS = {station: 'station in it', stations: 'stations in it, blended', neighbours: 'neighbours, brought to its height', model: 'model standing in', none: 'nothing yet'};
-    var ACT = {forecast: '#f59e0b', drought: '#a855f7'};
-    var RATING = {'LOW-MODERATE': '#9bc466', 'HIGH': '#f7e463', 'VERY HIGH': '#f0a04b', 'SEVERE': '#e35d3c', 'EXTREME': '#c1272d', 'CATASTROPHIC': '#6d2077',
-        'No Rating': '#dddddd', 'Moderate': '#7fc47f', 'High': '#f7e463', 'Extreme': '#f0a04b', 'Catastrophic': '#c1272d'};
-    var KIND = {station: '#3b82f6', forecast: '#f59e0b', both: '#a855f7', bare: '#9ca3af'};
-    var LEADS = {forest: '#15803d', grass: '#ca8a04'};
-    var LAND = {forest: '#14532d', scrub: '#4d7c0f', grassland: '#ca8a04', cropland: '#eab308', built_up: '#6b7280', water: '#2563eb', bare: '#a16207', unknown: '#9ca3af'};
-    var RANGES = {temperatureC: [0, 45], humidityPct: [0, 100], windKmh: [0, 80], gustKmh: [0, 110], rainMm: [0, 25], age: [0, 180],
-        ffdi: [0, 100], gfdi: [0, 150], fbi: [0, 100], droughtFactor: [0, 10], kbdiMm: [0, 203], curingPct: [0, 100], elevationM: [0, 1500],
-        burnablePct: [0, 100], asked: [0, 120], asks: [0, 50], drift: [0, 1.5], drift24h: [0, 1.5]};
-    var DIFF = {temperatureC: 5, humidityPct: 25, windKmh: 20};
+    var PALETTES = {
+        RATING: {'LOW-MODERATE': '#9bc466', 'HIGH': '#f7e463', 'VERY HIGH': '#f0a04b', 'SEVERE': '#e35d3c', 'EXTREME': '#c1272d', 'CATASTROPHIC': '#6d2077',
+            'No Rating': '#dddddd', 'Moderate': '#7fc47f', 'High': '#f7e463', 'Extreme': '#f0a04b', 'Catastrophic': '#c1272d'},
+        KIND: {station: '#3b82f6', forecast: '#f59e0b', both: '#a855f7', bare: '#9ca3af'},
+        LEADS: {forest: '#15803d', grass: '#ca8a04'},
+        LAND: {forest: '#14532d', scrub: '#4d7c0f', grassland: '#ca8a04', cropland: '#eab308', built_up: '#6b7280', water: '#2563eb', bare: '#a16207', unknown: '#9ca3af'}
+    };
+    var DROUGHT = '#a855f7';
     function ramp(t) {
         t = Math.max(0, Math.min(1, t));
         var stops = [[0, [33, 102, 172]], [.5, [247, 247, 190]], [1, [178, 24, 43]]];
@@ -52,8 +93,7 @@
         }
         return 'rgb(178,24,43)';
     }
-    // The stations against the forecast: green agrees, amber is halfway to the tolerance, red is at it
-    // (the forecast was thrown out), dark red beyond.
+    // The stations against the forecast: green agrees, amber halfway to the tolerance, red at it (thrown out), dark red beyond.
     function driftColour(score) {
         if (score == null) return null;
         if (score >= 1.25) return '#7f1d1d';
@@ -61,7 +101,7 @@
         if (score >= .5) return 'rgb(' + Math.round(245 + (220 - 245) * (score - .5) * 2) + ',' + Math.round(158 + (38 - 158) * (score - .5) * 2) + ',11)';
         return 'rgb(' + Math.round(34 + (245 - 34) * score * 2) + ',' + Math.round(197 + (158 - 197) * score * 2) + ',' + Math.round(94 + (11 - 94) * score * 2) + ')';
     }
-    // How much of a forecast's life is left: 1 when just fetched, 0 at its expiry, 0 once stale.
+    // How much of a forecast's life is left: 1 just fetched, 0 at expiry or once stale.
     function freshness(p) {
         if (p.stale) return 0;
         if (!p.fcFetchedAt || !p.fcExpiresAt) return 1;
@@ -69,132 +109,268 @@
         if (isNaN(from) || isNaN(to) || to <= from) return 1;
         return Math.max(0, Math.min(1, (to - Date.now()) / (to - from)));
     }
-    // The layer's side and field: "now:temperatureC" is the ground's temperature, "fc:temperatureC" the model's,
-    // "diff:temperatureC" one against the other; everything else is a field of the hexagon itself.
-    function side() { var i = value.indexOf(':'); return i < 0 ? '' : value.substring(0, i); }
-    function field() { var i = value.indexOf(':'); return i < 0 ? value : value.substring(i + 1); }
-    function read(p) {
-        var s = side(), f = field();
-        if (s === 'now') return f === 'age' ? p.nowAgeMinutes : p['now' + f.charAt(0).toUpperCase() + f.slice(1)];
-        if (s === 'fc') return f === 'age' ? p.fcAgeMinutes : p['fc' + f.charAt(0).toUpperCase() + f.slice(1)];
-        if (s === 'diff') return p['diff' + f.charAt(0).toUpperCase() + f.slice(1)];
-        if (f === 'asked') return p.askedMinutesAgo;
-        return p[f];
+
+    // ---- state
+    var map = L.map('map', {zoomControl: false}).setView([-34.93, 138.6], 7);
+    L.control.zoom({position: 'bottomright'}).addTo(map);
+    window.gullyBaseLayer(map);
+    var canvas = L.canvas({padding: .3});
+    var hexLayer = L.geoJSON(null, {style: styleOf, onEachFeature: onHexagon, filter: shown}).addTo(map);
+    var pointLayer = L.layerGroup().addTo(map);
+    var gridLayer = L.geoJSON(null, {style: {color: '#888', weight: .6, fill: false, opacity: .6}, interactive: false});
+    var stationLayer = L.layerGroup().addTo(map);
+    var glyphLayer = L.layerGroup().addTo(map);
+    var state = {side: 'now', group: 'now', id: 'from', hours: 0, mode: 'now', playing: null};
+    var togs = {stations: true, wind: true, labels: true, grid: false, points: false, forecasts: false};
+    var etag = null, lastFc = null, lastStations = null, lastSources = null;
+
+    function current() {
+        var list = VARS[state.group] || [];
+        for (var i = 0; i < list.length; i++) if (list[i].id === state.id) return list[i];
+        return list[0];
     }
-    function colour(p) {
-        var v = read(p), f = field(), s = side();
-        if (v == null) return null;
-        if (s === 'diff') { var lim = DIFF[f] || 10; return ramp(.5 + Math.max(-1, Math.min(1, v / lim)) / 2); }
-        if (f === 'ffdi' && p.ffdiRating) return RATING[p.ffdiRating] || ramp(v / 100);
-        if (f === 'gfdi' && p.gfdiRating) return RATING[p.gfdiRating] || ramp(v / 150);
-        if (f === 'fbi' && p.afdrsRating) return RATING[p.afdrsRating] || ramp(v / 100);
-        if (f === 'officialRating') return RATING[v] || '#9ca3af';
-        if (f === 'kind') return KIND[v] || '#9ca3af';
-        if (f === 'leads') return LEADS[v] || '#9ca3af';
-        if (f === 'landDominant') return LAND[v] || '#9ca3af';
-        if (f === 'drift' || f === 'drift24h') return driftColour(v);
-        var r = RANGES[f] || [0, 100];
-        if (f === 'humidityPct' || f === 'age' || f === 'asked') return ramp(1 - (v - r[0]) / (r[1] - r[0]));
-        return ramp((v - r[0]) / (r[1] - r[0]));
+    function isSide(g) { return g === 'now' || g === 'fc' || g === 'diff'; }
+    // Which groups the timeline allows: behind now the snapshots hold "now" and the fire picture; ahead only the forecast.
+    function allowed(g) {
+        if (state.mode === 'ahead') return g === 'fc' || g === 'fire' || g === 'ground';
+        if (state.mode === 'history') return g === 'now' || g === 'fire' || g === 'ground' || g === 'asks';
+        return true;
     }
-    // The forecasts-only switch: without a forecast, a hexagon is not drawn at all.
-    function shown(f) { return !$('forecasts').checked || f.properties.hasForecast; }
+    function valueOf(p, v, g) {
+        v = v || current(); g = g || state.group;
+        if (g === 'now') return v.id === 'from' ? (p.from || 'none') : v.id === 'age' ? p.nowAgeMinutes : p['now' + cap(v.id)];
+        if (g === 'fc') return v.id === 'life' ? (p.hasForecast ? freshness(p) : null) : v.id === 'age' ? p.fcAgeMinutes : p['fc' + cap(v.id)];
+        if (g === 'diff') return v.kind === 'drift' ? p[v.id] : p['diff' + cap(v.id)];
+        if (v.id === 'asked') return p.askedMinutesAgo;
+        return p[v.id];
+    }
+    function colourOf(p) {
+        var v = current(), x = valueOf(p, v);
+        if (x == null) return null;
+        if (v.kind === 'from') return FROM[x] || FROM.none;
+        if (v.kind === 'life') return '#f59e0b';
+        if (v.kind === 'drift') return driftColour(x);
+        if (v.kind === 'category') return PALETTES[v.palette][x] || '#9ca3af';
+        if (v.kind === 'rating') { var r = p[v.ratingOf]; return (r && PALETTES.RATING[r]) || ramp(x / v.range[1]); }
+        if (state.group === 'diff') return ramp(.5 + Math.max(-1, Math.min(1, x / v.lim)) / 2);
+        var t = (x - v.range[0]) / (v.range[1] - v.range[0]);
+        return ramp(v.reverse ? 1 - t : t);
+    }
+    function opacityOf(p, c) {
+        var v = current();
+        if (v.kind === 'from') return valueOf(p, v) === 'none' ? (p.hasStation ? .12 : .03) : valueOf(p, v) === 'model' ? .1 + .4 * freshness(p) : .5;
+        if (v.kind === 'life') return p.hasForecast ? .1 + .5 * freshness(p) : .03;
+        if (!c) return .04;
+        return state.group === 'fc' && state.mode !== 'ahead' ? .25 + .35 * freshness(p) : .55;
+    }
+    function shown(f) { return !togs.forecasts || f.properties.hasForecast; }
     function styleOf(f) {
-        var p = f.properties;
-        var outline = {color: p.hasDrought ? ACT.drought : (p.warm ? '#111' : '#777'), weight: p.hasDrought ? 1.6 : (p.warm ? 1.2 : .6), opacity: p.hasDrought ? .9 : .5,
-            dashArray: p.stale ? '4 3' : null};
-        if (value === 'now:from') {
-            var from = p.from || 'none', fill = FROM[from];
-            // A station hexagon whose state has not been asked about lately has no fresh values: the blue, faintly.
-            if (from === 'none' && p.hasStation) fill = FROM.station;
-            var op = from === 'none' ? (p.hasStation ? .12 : .03) : from === 'model' ? .1 + .4 * freshness(p) : .45;
-            return Object.assign(outline, {fillColor: fill, fillOpacity: op});
+        var p = f.properties, c = colourOf(p);
+        if (current().kind === 'from' && valueOf(p) === 'none' && p.hasStation) c = FROM.station;
+        return {color: p.hasDrought ? DROUGHT : (p.warm ? '#111' : '#777'), weight: p.hasDrought ? 1.6 : (p.warm ? 1.2 : .6), opacity: p.hasDrought ? .9 : .5,
+            dashArray: p.stale && state.mode === 'now' ? '4 3' : null, fillColor: c || '#000', fillOpacity: opacityOf(p, c)};
+    }
+
+    // ---- the rail
+    function buildRail() {
+        var vars = $('varChips'), v = current();
+        vars.innerHTML = '';
+        $('varsTitle').textContent = GROUP_NAMES[state.side];
+        VARS[state.side].forEach(function (x) { vars.appendChild(chip(x, state.side)); });
+        ['fire', 'ground', 'asks'].forEach(function (g) {
+            var el = document.querySelector('.chips[data-group=' + g + ']');
+            el.innerHTML = '';
+            VARS[g].forEach(function (x) { el.appendChild(chip(x, g)); });
+        });
+        document.querySelectorAll('#side button').forEach(function (b) {
+            b.classList.toggle('on', b.dataset.side === state.side && isSide(state.group));
+            b.disabled = !allowed(b.dataset.side);
+        });
+        $('rail').dataset.side = isSide(state.group) ? state.group : 'other';
+        Object.keys(togs).forEach(function (k) { var b = document.querySelector('.tog[data-tog=' + k + ']'); if (b) b.classList.toggle('on', togs[k]); });
+    }
+    function chip(x, g) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip' + (g === state.group && x.id === state.id ? ' on' : '');
+        b.disabled = !allowed(g);
+        b.innerHTML = icon(x.icon) + '<span>' + esc(x.name) + (x.hint ? '<small>' + esc(x.hint) + '</small>' : x.unit ? '<small>' + esc(x.unit) + '</small>' : '') + '</span>';
+        b.addEventListener('click', function () { choose(g, x.id); });
+        return b;
+    }
+    function choose(g, id) {
+        state.group = g; state.id = id;
+        if (isSide(g)) state.side = g;
+        buildRail(); legend(); restyle(); glyphs(); stations(); tiles();
+    }
+    function pickSide(side) {
+        if (!allowed(side)) return;
+        state.side = side;
+        // The same variable on the other side where it exists, else the side's first.
+        var same = VARS[side].some(function (x) { return x.id === state.id; });
+        choose(side, same ? state.id : VARS[side][0].id);
+    }
+    // The timeline moved: the rail follows what the layer can show then.
+    function reconcile() {
+        if (!allowed(state.group)) {
+            if (state.mode === 'ahead') {
+                var id = state.group === 'now' || state.group === 'diff' ? (VARS.fc.some(function (x) { return x.id === state.id; }) ? state.id : 'temperatureC') : 'temperatureC';
+                note('the future has no "now": showing the forecast');
+                state.side = 'fc'; state.group = 'fc'; state.id = id;
+            } else {
+                var id2 = VARS.now.some(function (x) { return x.id === state.id; }) ? state.id : 'from';
+                note('behind now the layer is what was observed then');
+                state.side = 'now'; state.group = 'now'; state.id = id2;
+            }
         }
-        if (value === 'fc:life') {
-            return Object.assign(outline, {fillColor: p.hasForecast ? ACT.forecast : '#000', fillOpacity: p.hasForecast ? .1 + .5 * freshness(p) : .03});
-        }
-        var c = colour(p);
-        return Object.assign(outline, {fillColor: c || '#000', fillOpacity: c ? (side() === 'fc' ? .25 + .35 * freshness(p) : .55) : .04});
+        buildRail();
+    }
+
+    // ---- the legend: the scale, with the distribution of what is drawn
+    function drawnProps() {
+        var out = [];
+        if (!lastFc) return out;
+        lastFc.features.forEach(function (f) { if (shown(f)) out.push(f.properties); });
+        return out;
     }
     function legend() {
-        var el = $('legend'), html = '', f = field(), s = side();
-        if (value === 'now:from') {
-            Object.keys(FROM).forEach(function (k) { html += '<i style="background:' + FROM[k] + (k === 'none' ? ';opacity:.3' : '') + '" title="' + FROM_WORDS[k] + '"></i><span class="muted me-2">' + FROM_WORDS[k] + '</span>'; });
-            html += '<i style="background:' + FROM.station + ';opacity:.25" title="station in it, its state not asked about lately"></i><span class="muted me-2">station in it, state not asked about lately</span>';
-            html += '<i style="background:transparent;border:2px solid ' + ACT.drought + '" title="drought stepped"></i><span class="muted">drought stepped</span>';
+        var v = current(), props = drawnProps(), title = $('legendTitle'), body = $('legendBody'), count = $('legendCount');
+        title.innerHTML = icon(v.icon) + ' ' + esc(v.name) + (v.hint ? ' <span class="muted">' + esc(v.hint) + '</span>' : '') + ' <span class="muted">· ' + esc(GROUP_NAMES[state.group].split(' · ')[0].toLowerCase()) + '</span>';
+        var vals = [], counts = {};
+        props.forEach(function (p) { var x = valueOf(p, v); if (x != null) { vals.push(x); counts[x] = (counts[x] || 0) + 1; } });
+        count.textContent = vals.length + ' of ' + props.length + ' hexagons';
+        if (v.kind === 'from') {
+            var html = '<div class="swatches">';
+            Object.keys(FROM).forEach(function (k) { html += '<span class="swatch"><i style="background:' + FROM[k] + (k === 'none' ? ';opacity:.35' : '') + '"></i>' + esc(FROM_WORDS[k]) + ' <b>' + (counts[k] || 0) + '</b></span>'; });
+            html += '<span class="swatch"><i style="border:2px solid ' + DROUGHT + ';background:transparent"></i>drought stepped <b>' + props.filter(function (p) { return p.hasDrought; }).length + '</b></span></div>';
+            body.innerHTML = html;
+            return;
         }
-        else if (value === 'fc:life') html = '<i style="background:' + ACT.forecast + '" title="forecast held · fades as its life runs out"></i><span class="muted me-2">forecast held · fades as its life runs out</span><i style="background:transparent;border:1px dashed #777" title="stale"></i><span class="muted">past its life</span>';
-        else if (s === 'diff') { var lim = DIFF[f] || 10; html = '<span class="muted">now −' + lim + '</span>'; for (var j = 0; j <= 8; j++) html += '<i style="background:' + ramp(j / 8) + '"></i>'; html += '<span class="muted">now +' + lim + '</span>'; }
-        else if (f === 'ffdi' || f === 'gfdi') ['LOW-MODERATE', 'HIGH', 'VERY HIGH', 'SEVERE', 'EXTREME', 'CATASTROPHIC'].forEach(function (k) { html += '<i style="background:' + RATING[k] + '" title="' + k + '"></i>'; });
-        else if (f === 'fbi' || f === 'officialRating') ['No Rating', 'Moderate', 'High', 'Extreme', 'Catastrophic'].forEach(function (k) { html += '<i style="background:' + RATING[k] + '" title="' + k + '"></i>'; });
-        else if (f === 'drift' || f === 'drift24h') {
-            html = '<span class="muted">agrees</span>';
-            [0, .25, .5, .75, 1, 1.25].forEach(function (v) { html += '<i style="background:' + driftColour(v) + '" title="' + v + '"></i>'; });
-            html += '<span class="muted">thrown out</span>';
+        if (v.kind === 'life') {
+            body.innerHTML = '<div class="ramp" style="background:linear-gradient(to right, rgba(245,158,11,.1), rgba(245,158,11,.6))"></div><div class="ramp-labels"><span>past its life</span><span>' + props.filter(function (p) { return p.hasForecast; }).length + ' held</span><span>just fetched</span></div>';
+            return;
         }
-        else if (f === 'kind') Object.keys(KIND).forEach(function (k) { html += '<i style="background:' + KIND[k] + '" title="' + k + '"></i><span class="muted me-1">' + k + '</span>'; });
-        else if (f === 'leads') Object.keys(LEADS).forEach(function (k) { html += '<i style="background:' + LEADS[k] + '" title="' + k + '"></i><span class="muted me-1">' + k + '</span>'; });
-        else if (f === 'landDominant') Object.keys(LAND).forEach(function (k) { html += '<i style="background:' + LAND[k] + '" title="' + k + '"></i><span class="muted me-1">' + k.replace('_', ' ') + '</span>'; });
-        else { var r = RANGES[f] || [0, 100], rev = f === 'humidityPct' || f === 'age' || f === 'asked'; html = '<span class="muted">' + r[0] + '</span>'; for (var i = 0; i <= 8; i++) html += '<i style="background:' + ramp(rev ? 1 - i / 8 : i / 8) + '"></i>'; html += '<span class="muted">' + r[1] + '</span>'; }
-        el.innerHTML = html;
+        if (v.kind === 'category' || v.kind === 'rating') {
+            var pal = v.kind === 'rating' ? PALETTES.RATING : PALETTES[v.palette], keys = Object.keys(pal), h2 = '<div class="swatches">';
+            if (v.kind === 'rating') { counts = {}; props.forEach(function (p) { var r = p[v.ratingOf]; if (r) counts[r] = (counts[r] || 0) + 1; }); keys = v.id === 'fbi' ? ['No Rating', 'Moderate', 'High', 'Extreme', 'Catastrophic'] : ['LOW-MODERATE', 'HIGH', 'VERY HIGH', 'SEVERE', 'EXTREME', 'CATASTROPHIC']; }
+            keys.forEach(function (k) { h2 += '<span class="swatch"><i style="background:' + pal[k] + '"></i>' + esc(k.replace('_', ' ').toLowerCase()) + ' <b>' + (counts[k] || 0) + '</b></span>'; });
+            body.innerHTML = h2 + '</div>';
+            return;
+        }
+        // A number: its distribution as bars over the ramp, the range under it.
+        var lo, hi, div = state.group === 'diff';
+        if (div) { lo = -v.lim; hi = v.lim; } else { lo = v.range[0]; hi = v.range[1]; }
+        var bins = 28, hist = new Array(bins).fill(0), hot = -1;
+        vals.forEach(function (x) { var i = Math.max(0, Math.min(bins - 1, Math.floor((x - lo) / (hi - lo) * bins))); hist[i]++; });
+        var max = Math.max.apply(null, hist.concat([1]));
+        var svg = '<svg class="hist" viewBox="0 0 ' + bins * 10 + ' 30" preserveAspectRatio="none">';
+        hist.forEach(function (n, i) { var h = n ? Math.max(2, n / max * 30) : 0; svg += '<rect x="' + (i * 10 + 1) + '" y="' + (30 - h) + '" width="8" height="' + h + '"' + (i === hot ? ' class="hot"' : '') + '><title>' + n + '</title></rect>'; });
+        svg += '</svg>';
+        var grad = 'linear-gradient(to right';
+        for (var i = 0; i <= 10; i++) grad += ',' + ramp(v.reverse ? 1 - i / 10 : i / 10);
+        grad += ')';
+        var mean = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
+        body.innerHTML = svg + '<div class="ramp" style="background:' + grad + '"></div><div class="ramp-labels"><span>' + (div ? 'now −' + v.lim : lo) + '</span><span>' + (mean == null ? '' : 'mean ' + mean.toFixed(1)) + (v.unit ? ' ' + esc(v.unit) : '') + '</span><span>' + (div ? 'now +' + v.lim : hi) + '</span></div>';
+    }
+
+    // ---- the figures
+    function tiles() {
+        var m = (lastFc && lastFc.meta) || {}, nf = m.nowFrom || {}, props = drawnProps();
+        var ground = (nf.station || 0) + (nf.stations || 0) + (nf.neighbours || 0);
+        var drifted = props.filter(function (p) { return p.drifted; }).length;
+        var a = lastSources && lastSources.allowance;
+        var t = [
+            {v: m.hexagons || 0, k: 'hexagons held', t: 'created by asks; ' + (m.active || 0) + ' asked about'},
+            {v: ground, k: 'now from the ground', cls: 'ground', t: (nf.station || 0) + ' station · ' + (nf.stations || 0) + ' blended · ' + (nf.neighbours || 0) + ' neighbours'},
+            {v: m.withForecast || 0, k: 'forecasts held' + (m.lifeMinutes ? ' · ' + m.lifeMinutes + ' min life' : ''), cls: 'forecast', t: 'each fetched on an ask, kept for its life'},
+            {v: nf.model || 0, k: 'model standing in', cls: 'forecast', t: 'hexagons whose "now" is the series read at this moment'},
+            {v: drifted, k: 'thrown out', cls: drifted ? 'bad' : '', t: 'forecasts the stations disagreed with'},
+            {v: a ? Math.round((a.dayFraction || 0) * 100) : '—', sub: a ? '%' : '', k: 'allowance today', t: 'Open-Meteo units used of the day\'s'}
+        ];
+        $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '"><div class="v">' + esc(x.v) + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
+        if (lastSources) {
+            var last = lastSources.reads && lastSources.reads[0];
+            $('sourcesHint').textContent = last ? '· last read ' + ago(last.at) : '';
+        }
     }
 
     // ---- the layer
+    var loadTimer = null, loading = false, wanted = null;
+    function atIso() { return state.hours === 0 ? null : new Date(Date.now() + state.hours * 3600000).toISOString(); }
     function load() {
+        var at = atIso();
+        state.mode = state.hours === 0 ? 'now' : state.hours > 0 ? 'ahead' : 'history';
+        $('timeline').classList.toggle('ahead', state.mode === 'ahead');
+        reconcile();
+        if (loading) { wanted = at; return; }
+        loading = true;
         var url = '/console/map/layer.geojson' + (at ? '?at=' + encodeURIComponent(at) : '');
         fetch(url, {headers: etag && !at ? {'If-None-Match': etag} : {}}).then(function (r) {
             if (r.status === 304) return null;
             if (!at) etag = r.headers.get('ETag');
             return r.json();
         }).then(function (fc) {
-            if (!fc) return;
-            lastFc = fc;
-            draw();
-            var m = fc.meta || {}, nf = m.nowFrom || {};
-            $('status').textContent = (m.hexagons || 0) + ' hexagons' + (at ? ' at ' + when(at) : '')
-                + (m.active != null ? ' · now from the ground in ' + ((nf.station || 0) + (nf.stations || 0) + (nf.neighbours || 0)) + ' (' + (nf.station || 0) + ' station, ' + (nf.stations || 0) + ' blended, ' + (nf.neighbours || 0) + ' neighbours), the model in ' + (nf.model || 0)
-                    + ' · ' + m.withForecast + ' forecasts held, ' + m.lifeMinutes + ' min life' + (m.withDrought == null ? '' : ' · ' + m.withDrought + ' drought stepped') + ' · ' + (m.withLandUse || 0) + ' with land use' : '');
-        }).catch(function (e) { $('status').textContent = 'layer failed: ' + e; });
+            loading = false;
+            if (fc) { lastFc = fc; draw(); legend(); tiles(); }
+            if (wanted !== null && wanted !== at) { wanted = null; load(); } else wanted = null;
+        }).catch(function (e) { loading = false; note('layer failed: ' + e); });
     }
-    // The held layer drawn again: the filter and the styles are read at draw time, so a switch redraws.
     function draw() {
         hexLayer.clearLayers();
-        if (lastFc) hexLayer.addData(lastFc);
+        pointLayer.clearLayers();
+        if (!lastFc) return;
+        if (pointsMode()) points(); else hexLayer.addData(lastFc);
         glyphs();
+    }
+    function pointsMode() { return togs.points || map.getZoom() <= 5; }
+    function restyle() { if (pointsMode()) { pointLayer.clearLayers(); points(); } else hexLayer.setStyle(styleOf); }
+    // Hexagons as points: one dot at each centre, the fill colour, sized by zoom. What a continent looks like.
+    function points() {
+        var z = map.getZoom(), r = Math.max(2.5, Math.min(9, z * 1.1));
+        lastFc.features.forEach(function (f) {
+            if (!shown(f)) return;
+            var p = f.properties, s = styleOf(f);
+            L.circleMarker([p.lat, p.lon], {renderer: canvas, radius: r, color: s.color, weight: p.hasDrought ? 1.5 : .6, opacity: s.opacity, fillColor: s.fillColor, fillOpacity: Math.min(.95, s.fillOpacity * 1.6)})
+                .bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
+                .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
+                .addTo(pointLayer);
+        });
+    }
+    function onHexagon(f, layer) {
+        var p = f.properties;
+        layer.bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'});
+        layer.on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); });
     }
     function line(t, rh, w, dir, gust) {
         if (t == null && rh == null && w == null) return null;
         return esc(fmt(t, 1)) + ' °C · ' + esc(fmt(rh)) + ' % · ' + esc(fmt(w == null ? null : Math.round(w))) + ' km/h' + (dir != null ? ' from ' + dir + '°' : '') + (gust != null ? ' gust ' + Math.round(gust) : '');
     }
-    function onHexagon(f, layer) {
-        var p = f.properties;
-        layer.bindTooltip(function () {
-            var s = '<b>' + esc(p.id) + '</b> <span class="muted">' + esc(p.kind) + (p.hasDrought ? ' · drought stepped' : '') + (p.fireBanDistrict ? ' · ' + esc(p.fireBanDistrict) : '') + '</span>';
-            var now = line(p.nowTemperatureC, p.nowHumidityPct, p.nowWindKmh, p.nowWindDeg, p.nowGustKmh);
-            if (now) s += '<br><b>now</b> ' + now + ' <span class="muted">' + esc(FROM_WORDS[p.from] || p.from) + (p.nowStations > 1 ? ' (' + p.nowStations + (p.nowRing === 0 ? ' in it' : p.nowRing != null ? ', ring ' + p.nowRing : '') + ')' : '') + (p.stationId && p.from === 'station' ? ' ' + esc(p.stationId) : '') + ' · ' + clock(p.nowAt) + '</span>';
-            else if (p.hasStation) s += '<br><b>now</b> <span class="muted">station ' + esc(p.stationId) + ' in it, no fresh values: the file for its state has not been asked for lately</span>';
-            else s += '<br><b>now</b> <span class="muted">nothing from the ground' + (p.nearestStationId ? ' · nearest station ' + esc(p.nearestStationId) : '') + '</span>';
-            var fc = line(p.fcTemperatureC, p.fcHumidityPct, p.fcWindKmh, p.fcWindDeg, p.fcGustKmh);
-            if (fc) s += '<br><b>forecast</b> ' + fc + ' <span class="muted">' + esc(p.upstream || '') + ' · fetched ' + clock(p.fcFetchedAt) + (p.stale ? ' · <b>past its life</b>' : p.fcMinutesLeft != null ? ' · ' + p.fcMinutesLeft + ' min left' : '') + '</span>';
-            else if (p.hasForecast) s += '<br><b>forecast</b> <span class="muted">held, nothing for this hour</span>';
-            if (p.diffTemperatureC != null || p.diffHumidityPct != null || p.diffWindKmh != null) s += '<br>now − forecast: ' + esc(fmt(p.diffTemperatureC, 1)) + ' °C, ' + esc(fmt(p.diffHumidityPct)) + ' pts, ' + esc(fmt(p.diffWindKmh, 1)) + ' km/h';
-            if (p.drift != null) s += '<br>drift ' + esc(p.drift) + (p.drifted ? ' <b>thrown out</b>' : '') + (p.driftWorst ? ' (' + esc(p.driftWorst) + ')' : '') + ' <span class="muted">stations against the forecast at ' + clock(p.driftAt) + (p.drift24h != null ? ' · 24 h mean ' + esc(p.drift24h) : '') + '</span>';
-            if (p.ffdi != null) s += '<br>FFDI ' + esc(p.ffdi) + ' ' + esc(p.ffdiRating || '') + (p.fbi != null ? ' · FBI ' + esc(p.fbi) + ' ' + esc(p.afdrsRating || '') : '') + (p.droughtFactor != null ? ' · DF ' + esc(p.droughtFactor) : '');
-            var ground = [];
-            if (p.elevationM != null) ground.push(Math.round(p.elevationM) + ' m' + (p.elevationFrom ? ' (' + esc(p.elevationFrom) + ')' : ''));
-            if (p.landUse) ground.push(Object.keys(p.landUse).map(function (k) { return k.replace('_', ' ') + ' ' + p.landUse[k] + '%'; }).join(', ') + (p.leads ? ' → ' + p.leads : ''));
-            if (ground.length) s += '<br><span class="muted">' + ground.join(' · ') + '</span>';
-            if (side() === '' && read(p) != null && ['ffdi', 'fbi', 'drift', 'drift24h', 'elevationM'].indexOf(field()) < 0) s += '<br>' + esc(field()) + ': ' + esc(fmt(read(p), 1));
-            s += '<br><span class="muted">' + (p.lastAskedAt ? 'last asked ' + ago(p.lastAskedAt) + ' · ' + p.asks + ' asks this run' : 'never asked') + '</span>';
-            return s;
-        }, {sticky: true});
-        layer.on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); });
+    function tip(p) {
+        var s = '<b>' + esc(p.id) + '</b> <span class="muted">' + esc(p.kind) + (p.hasDrought ? ' · drought stepped' : '') + (p.fireBanDistrict ? ' · ' + esc(p.fireBanDistrict) : '') + '</span>';
+        if (p.ahead) s += '<br><span class="muted">+' + p.aheadHours + ' h · ' + when(p.fcAt) + '</span>';
+        var now = line(p.nowTemperatureC, p.nowHumidityPct, p.nowWindKmh, p.nowWindDeg, p.nowGustKmh);
+        if (now) s += '<br><span class="row-now"><b>now</b></span> ' + now + ' <span class="muted">' + esc(FROM_WORDS[p.from] || p.from) + (p.nowStations > 1 ? ' (' + p.nowStations + (p.nowRing === 0 ? ' in it' : p.nowRing != null ? ', ring ' + p.nowRing : '') + ')' : '') + (p.stationId && p.from === 'station' ? ' ' + esc(p.stationId) : '') + ' · ' + clock(p.nowAt) + '</span>';
+        else if (p.ahead) s += '';
+        else if (p.hasStation) s += '<br><span class="row-now"><b>now</b></span> <span class="muted">station ' + esc(p.stationId) + ' in it, no fresh values: the file for its state has not been asked for lately</span>';
+        else s += '<br><span class="row-now"><b>now</b></span> <span class="muted">nothing from the ground' + (p.nearestStationId ? ' · nearest station ' + esc(p.nearestStationId) : '') + '</span>';
+        var fc = line(p.fcTemperatureC, p.fcHumidityPct, p.fcWindKmh, p.fcWindDeg, p.fcGustKmh);
+        if (fc) s += '<br><span class="row-fc"><b>forecast</b></span> ' + fc + ' <span class="muted">' + esc(p.upstream || '') + ' · fetched ' + clock(p.fcFetchedAt) + (p.ahead ? '' : p.stale ? ' · <b>past its life</b>' : p.fcMinutesLeft != null ? ' · ' + p.fcMinutesLeft + ' min left' : '') + '</span>';
+        else if (p.hasForecast && !p.ahead) s += '<br><span class="row-fc"><b>forecast</b></span> <span class="muted">held, nothing for this hour</span>';
+        if (p.diffTemperatureC != null || p.diffHumidityPct != null || p.diffWindKmh != null) s += '<br>Δ now − forecast: ' + esc(fmt(p.diffTemperatureC, 1)) + ' °C, ' + esc(fmt(p.diffHumidityPct)) + ' pts, ' + esc(fmt(p.diffWindKmh, 1)) + ' km/h';
+        if (p.drift != null) s += '<br>drift ' + esc(p.drift) + (p.drifted ? ' <b>thrown out</b>' : '') + (p.driftWorst ? ' (' + esc(p.driftWorst) + ')' : '') + ' <span class="muted">at ' + clock(p.driftAt) + (p.drift24h != null ? ' · 24 h mean ' + esc(p.drift24h) : '') + '</span>';
+        if (p.ffdi != null) s += '<br>FFDI ' + esc(p.ffdi) + ' ' + esc(p.ffdiRating || '') + (p.fbi != null ? ' · FBI ' + esc(p.fbi) + ' ' + esc(p.afdrsRating || '') : '') + (p.droughtFactor != null ? ' · DF ' + esc(p.droughtFactor) : '') + (p.officialRating ? ' · CFS ' + esc(p.officialRating) : '');
+        var ground = [];
+        if (p.elevationM != null) ground.push(Math.round(p.elevationM) + ' m' + (p.elevationFrom ? ' (' + esc(p.elevationFrom) + ')' : ''));
+        if (p.landUse) ground.push(Object.keys(p.landUse).map(function (k) { return k.replace('_', ' ') + ' ' + p.landUse[k] + '%'; }).join(', ') + (p.leads ? ' → ' + p.leads : ''));
+        if (ground.length) s += '<br><span class="muted">' + ground.join(' · ') + '</span>';
+        var v = current(), x = valueOf(p, v);
+        if (!isSide(state.group) && x != null && v.id !== 'ffdi' && v.id !== 'fbi' && v.id !== 'elevationM') s += '<br>' + esc(v.name.toLowerCase()) + ': ' + esc(fmt(x, 1)) + (v.unit ? ' ' + esc(v.unit) : '');
+        s += '<br><span class="muted">' + (p.lastAskedAt ? 'last asked ' + ago(p.lastAskedAt) + ' · ' + p.asks + ' asks this run' : 'never asked') + '</span>';
+        return s;
     }
 
-    // ---- the weather each hexagon knows, drawn on it: an arrow the way the wind blows, its length by
-    // the speed, from zoom 7 where a hexagon is about fifteen pixels; the temperature, humidity and
-    // speed as a label from zoom 9 where there is room. Black for now, amber for the forecast, whichever
-    // side the layer shows. Never interactive: the hexagon under it is.
+    // ---- the weather on each hexagon: an arrow the way the wind blows, its length by the speed (from zoom 7);
+    // the values as a label (from zoom 9). Black for the ground, amber for the model.
     function arrow(fromDeg, speed, cls) {
         if (speed < 1) return '<svg class="hx-arrow ' + cls + '" width="24" height="24" viewBox="-12 -12 24 24"><circle r="2"/></svg>';
         var len = 7 + Math.min(1, speed / 60) * 13, to = (fromDeg + 180) % 360, h = len / 2;
@@ -204,18 +380,17 @@
     function glyphs() {
         glyphLayer.clearLayers();
         var z = map.getZoom();
-        if (!$('weather').checked || z < 7) return;
-        var fc = side() === 'fc', cls = fc ? 'fc' : 'now';
-        hexLayer.eachLayer(function (layer) {
-            var p = layer.feature.properties;
+        if ((!togs.wind && !togs.labels) || z < 7 || !lastFc) return;
+        var fc = state.side === 'fc' || state.mode === 'ahead', cls = fc ? 'fc' : 'now';
+        lastFc.features.forEach(function (f) {
+            if (!shown(f)) return;
+            var p = f.properties;
             if (p.lat == null) return;
             var t = fc ? p.fcTemperatureC : p.nowTemperatureC, rh = fc ? p.fcHumidityPct : p.nowHumidityPct, w = fc ? p.fcWindKmh : p.nowWindKmh, dir = fc ? p.fcWindDeg : p.nowWindDeg;
-            if (!fc && p.from === 'model') return; // the model is not "now": its values are on the forecast layers
+            if (!fc && p.from === 'model') return;
             var html = '';
-            if (dir != null && w != null) html += arrow(dir, w, cls);
-            if (z >= 9 && (t != null || rh != null)) {
-                html += '<span class="hx-label ' + cls + '">' + (t != null ? Math.round(t) + '°' : '') + (rh != null ? ' ' + rh + '%' : '') + (w != null ? ' ' + Math.round(w) : '') + '</span>';
-            }
+            if (togs.wind && dir != null && w != null) html += arrow(dir, w, cls);
+            if (togs.labels && z >= 9 && (t != null || rh != null)) html += '<span class="hx-label ' + cls + '">' + (t != null ? Math.round(t) + '°' : '') + (rh != null ? ' ' + rh + '%' : '') + (w != null ? ' ' + Math.round(w) : '') + '</span>';
             if (!html) return;
             L.marker([p.lat, p.lon], {icon: L.divIcon({className: 'hx-glyph', html: html, iconSize: [24, 24], iconAnchor: [12, 12]}), interactive: false, keyboard: false}).addTo(glyphLayer);
         });
@@ -223,58 +398,72 @@
 
     // ---- the tessellation
     function grid() {
-        if (!$('grid').checked) { map.removeLayer(gridLayer); return; }
+        if (!togs.grid) { map.removeLayer(gridLayer); return; }
         var b = map.getBounds();
         fetch('/console/map/grid.geojson?south=' + b.getSouth() + '&west=' + b.getWest() + '&north=' + b.getNorth() + '&east=' + b.getEast())
             .then(function (r) { return r.json(); }).then(function (fc) {
                 gridLayer.clearLayers();
-                if (fc.meta && fc.meta.tooMany) { $('status').textContent = 'zoom in to draw the tessellation'; return; }
+                if (fc.meta && fc.meta.tooMany) { note('zoom in to draw the tessellation'); return; }
                 gridLayer.addData(fc).addTo(map);
                 gridLayer.bringToBack();
             });
     }
 
-    // ---- the stations
+    // ---- the stations: a point cloud. Filled where the observation is fresh, hollow where its state's
+    // file has not been asked for lately; coloured by the variable shown where the station measures it.
+    var STATION_FIELD = {temperatureC: 'temperatureC', humidityPct: 'humidityPct', windKmh: 'windSpeedKmh', gustKmh: 'windGustKmh', rainMm: 'rainSince9amMm'};
     function stations() {
         stationLayer.clearLayers();
-        if (!$('stations').checked) return;
-        fetch('/console/map/stations.geojson').then(function (r) { return r.json(); }).then(function (fc) {
-            fc.features.forEach(function (f) {
-                var p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
-                L.circleMarker(ll, {radius: 3, color: '#2563eb', weight: 1, fillColor: '#2563eb', fillOpacity: .9})
-                    .bindTooltip(function () {
-                        return '<b>' + esc(p.name) + '</b> ' + esc(p.id) + '<br>' + esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + esc(fmt(p.windSpeedKmh)) + ' km/h'
-                            + (p.windDirectionDeg != null ? ' from ' + p.windDirectionDeg + '°' : '') + (p.windGustKmh != null ? ' gust ' + p.windGustKmh : '') + '<br>' + when(p.at) + ' · ' + esc(p.district) + (p.heightM != null ? ' · ' + p.heightM + ' m' : '');
-                    }, {sticky: true})
-                    .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.hexagon); })
-                    .addTo(stationLayer);
-            });
+        if (!togs.stations) return;
+        if (!lastStations) {
+            fetch('/console/map/stations.geojson').then(function (r) { return r.json(); }).then(function (fc) { lastStations = fc; stations(); });
+            return;
+        }
+        var v = current(), field = isSide(state.group) && state.group !== 'diff' ? STATION_FIELD[v.id] : null, z = map.getZoom();
+        var r = Math.max(2, Math.min(4.5, z * .55));
+        lastStations.features.forEach(function (f) {
+            var p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+            var c = FROM.station;
+            if (field && p.fresh && p[field] != null) { var t = (p[field] - v.range[0]) / (v.range[1] - v.range[0]); c = ramp(v.reverse ? 1 - t : t); }
+            if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
+            L.circleMarker(ll, {renderer: canvas, radius: r, color: c, weight: p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0})
+                .bindTooltip(function () {
+                    return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + ' · ' + esc((p.state || '').toUpperCase()) + (p.heightM != null ? ' · ' + p.heightM + ' m' : '') + '</span><br>'
+                        + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + esc(fmt(p.windSpeedKmh)) + ' km/h' + (p.windDirectionDeg != null ? ' from ' + p.windDirectionDeg + '°' : '') + (p.windGustKmh != null ? ' gust ' + p.windGustKmh : '') + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + '<br><span class="muted">' + when(p.at) + '</span>'
+                            : '<span class="muted">' + (p.at ? 'last read ' + ago(p.at) + ': ' : '') + 'the file for its state has not been asked for lately</span>');
+                }, {sticky: true, className: 'hx-tip'})
+                .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.hexagon); })
+                .addTo(stationLayer);
         });
     }
 
-    // ---- the sources: read on request only, and the panel says by whom
-    function sourcesPanel() {
+    // ---- the sources drawer: read on request only, and by whom
+    function sourcesPanel(open) {
         var el = $('sources');
-        if (el.classList.contains('hidden')) return;
         fetch('/console/map/sources.json').then(function (r) { return r.json(); }).then(function (s) {
-            var html = '<div class="d-flex justify-content-between align-items-start"><h3>sources <span class="muted">read on request, never on a timer</span></h3><button class="btn btn-sm btn-outline-secondary py-0" id="sourcesClose" type="button">×</button></div>';
+            lastSources = s;
+            tiles();
+            if (open === false || (open == null && el.classList.contains('hidden'))) return;
+            var html = '<div class="drawer-head"><h3>Sources <span class="muted">read on request, never on a timer</span></h3><button class="icon-btn" id="sourcesClose" type="button">' + icon('close') + '</button></div>';
             if (!s.sources.length) html += '<p class="muted mb-1">nothing has been asked for since the service started: no source has been read.</p>';
             s.sources.forEach(function (x) {
-                html += '<div class="src"><b>' + esc(x.name) + '</b> <span class="muted">every ' + (x.cadenceMinutes >= 1440 ? Math.round(x.cadenceMinutes / 1440) + ' d' : x.cadenceMinutes >= 60 ? Math.round(x.cadenceMinutes / 60) + ' h' : x.cadenceMinutes + ' min') + '</span>'
-                    + (x.failure ? ' <span class="text-warning">' + esc(x.failure) + '</span>' : '')
-                    + '<br><span class="muted">checked</span> ' + esc(ago(x.checkedAt)) + ' <span class="muted">· read</span> ' + esc(ago(x.readAt)) + (x.items != null ? ' <span class="muted">(' + x.items + (x.id.indexOf('bureau-') === 0 ? ' stations, the whole file' : x.id.indexOf('warnings-') === 0 ? ' warnings held' : x.id === 'cfs-ratings' ? ' districts' : ' shapes') + ')</span>' : '')
+                var cadMs = x.cadenceMinutes * 60000, since = x.checkedAt ? Date.now() - Date.parse(x.checkedAt) : cadMs, share = Math.max(0, Math.min(1, since / cadMs)), due = share >= 1;
+                var cad = x.cadenceMinutes >= 1440 ? Math.round(x.cadenceMinutes / 1440) + ' d' : x.cadenceMinutes >= 60 ? Math.round(x.cadenceMinutes / 60) + ' h' : x.cadenceMinutes + ' min';
+                html += '<div class="src"><div class="name"><b>' + esc(x.name) + '</b><span class="muted">every ' + cad + (x.failure ? ' · <span class="text-warning">' + esc(x.failure) + '</span>' : '') + '</span></div>'
+                    + '<div class="fresh" title="' + (due ? 'due: the next ask reads it' : 'next check ' + esc(in_(x.dueAt))) + '"><i class="' + (due ? 'due' : '') + '" style="width:' + Math.round(share * 100) + '%"></i></div>'
+                    + '<span class="muted">checked</span> ' + esc(ago(x.checkedAt)) + ' <span class="muted">· read</span> ' + esc(ago(x.readAt))
+                    + (x.items != null ? ' <span class="muted">(' + x.items + (x.id.indexOf('bureau-') === 0 ? ' stations, the whole file' : x.id.indexOf('warnings-') === 0 ? ' warnings held' : x.id === 'cfs-ratings' ? ' districts' : ' shapes') + ')</span>' : '')
                     + (x.triggeredBy ? ' <span class="muted">· by an ask for</span> ' + esc(x.triggeredBy) + ' <span class="muted">' + esc(ago(x.triggeredAt)) + '</span>' : '')
-                    + ' <span class="muted">· next check</span> ' + esc(in_(x.dueAt)) + '</div>';
+                    + ' <span class="muted">· next</span> ' + esc(in_(x.dueAt)) + '</div>';
             });
-            html += '<div class="src"><b>Open-Meteo</b> <span class="muted">forecasts, elevation, drought archive, rivers · fetched when an ask needs them · ' + Math.round((s.allowance.dayFraction || 0) * 100) + ' % of today\'s allowance used · a forecast lives ' + s.allowance.lifeMinutes + ' min</span></div>';
-            html += '<h3 class="mt-2">last reads <span class="muted">newest first · each against the hexagon that asked</span></h3><div class="reads"><table class="table table-sm mb-0"><tbody>';
-            s.reads.forEach(function (r) {
-                html += '<tr><td class="mono">' + esc(clock(r.at)) + '</td><td class="mono">' + esc(r.source) + '</td><td>' + (r.ok ? '' : '<span class="text-warning">failed · </span>') + esc(r.detail || '') + '</td><td class="num muted">' + (r.ms != null ? r.ms + ' ms' : '') + '</td></tr>';
-            });
+            html += '<div class="src"><div class="name"><b>Open-Meteo</b><span class="muted">' + Math.round((s.allowance.dayFraction || 0) * 100) + ' % of today\'s allowance · a forecast lives ' + s.allowance.lifeMinutes + ' min</span></div><span class="muted">forecasts, elevation, drought archive, rivers: fetched when an ask needs them</span></div>';
+            html += '<h2>Last reads <span class="muted">newest first · each against the hexagon that asked</span></h2><div class="reads"><table><tbody>';
+            s.reads.forEach(function (r) { html += '<tr><td class="t">' + esc(clock(r.at)) + '</td><td class="s">' + esc(r.source) + '</td><td>' + (r.ok ? '' : '<span class="text-warning">failed · </span>') + esc(r.detail || '') + '</td><td class="ms">' + (r.ms != null ? r.ms + ' ms' : '') + '</td></tr>'; });
             html += '</tbody></table></div>';
             el.innerHTML = html;
+            el.classList.remove('hidden');
             $('sourcesClose').addEventListener('click', function () { el.classList.add('hidden'); });
-        }).catch(function (e) { el.innerHTML = '<p class="text-warning">sources failed: ' + esc(e) + '</p>'; });
+        }).catch(function (e) { note('sources failed: ' + e); });
     }
 
     // ---- everything held for a hexagon
@@ -283,58 +472,72 @@
         rows.forEach(function (r) { if (r[1] != null && r[1] !== '' && r[1] !== '—') s += '<tr><th>' + esc(r[0]) + '</th><td class="mono">' + esc(r[1]) + '</td></tr>'; });
         return s + '</tbody></table>';
     }
+    function cmp(name, a, b, d, unit) {
+        var delta = a != null && b != null ? a - b : null;
+        return '<tr><td class="name">' + esc(name) + '</td><td class="ground">' + esc(fmt(a, d)) + '</td><td class="fc">' + esc(fmt(b, d)) + '</td><td class="d">' + (delta == null ? '—' : (delta > 0 ? '+' : '') + esc(fmt(delta, d))) + '</td><td class="d muted">' + esc(unit || '') + '</td></tr>';
+    }
     function detail(id) {
         fetch('/console/map/hexagon/' + encodeURIComponent(id)).then(function (r) { return r.ok ? r.json() : null; }).then(function (h) {
             var el = $('detail');
-            if (!h) { el.innerHTML = '<p class="muted">not held</p>'; el.classList.remove('hidden'); return; }
-            var r = h.reading || {}, c = r.current || {}, f = r.fire || {}, g = f.grass || {}, o = f.official || {}, w = f.wind || {}, d = r.drought || {}, st = r.station || {}, fl = r.flood || {}, nb = r.nearby, hx = r.hexagon || {}, lu = hx.landUse;
-            var html = '<div class="d-flex justify-content-between align-items-start"><h3>' + esc(h.id) + ' <span class="muted">' + esc(h.kind) + '</span></h3><button class="btn btn-sm btn-outline-secondary py-0" id="close" type="button">×</button></div>';
-            html += kv([['centre', fmt(h.lat, 4) + ', ' + fmt(h.lon, 4)], ['zone', h.zone], ['elevation', h.elevationM != null ? h.elevationM + ' m (' + h.elevationFrom + ')' : null], ['slope', h.slopeDeg != null ? h.slopeDeg + '°' : null],
-                ['land use', lu && lu.percent ? Object.keys(lu.percent).map(function (k) { return k.replace('_', ' ') + ' ' + lu.percent[k] + '%'; }).join(', ') + (lu.leads ? ' → ' + lu.leads : '') + (lu.source ? ' (' + lu.source + ')' : '') : (h.landUse ? Object.keys(h.landUse).map(function (k) { return k + ' ' + h.landUse[k] + '%'; }).join(', ') : null)],
-                ['fire ban district', h.fireBanDistrict], ['bureau district', h.bureauDistrict], ['station in hexagon', h.stationId], ['nearest station', h.nearestStationId ? h.nearestStationId + ' at ' + fmt(h.nearestStationKm, 1) + ' km' : null],
-                ['upstream', h.upstream], ['forecast fetched', when(h.refreshedAt)], ['forecast expires', when(h.expiresAt)], ['activated', when(h.activatedAt)], ['last asked', when(h.lastAskedAt)], ['asks this run', h.asks], ['snapshots', h.historyCount]]);
+            if (!h) { el.innerHTML = '<div class="drawer-head"><h3>' + esc(id) + '</h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div><p class="muted">not held</p>'; el.classList.remove('hidden'); $('close').addEventListener('click', function () { el.classList.add('hidden'); }); return; }
+            var r = h.reading || {}, c = r.current || {}, f = r.fire || {}, g = f.grass || {}, o = f.official || {}, w = f.wind || {}, d = r.drought || {}, st = r.station || {}, fl = r.flood || {}, nb = r.nearby, hx = r.hexagon || {}, lu = hx.landUse, src = r.source || {};
+            var fcNow = null;
+            if (r.forecast && r.forecast.hours && r.forecast.hours.length) { var t0 = Date.now(), best = null; r.forecast.hours.forEach(function (x) { var dt = Math.abs(Date.parse(x.at) - t0); if (best == null || dt < best) { best = dt; fcNow = x; } }); }
+            var html = '<div class="drawer-head"><h3>' + esc(h.id) + ' <span class="muted">' + esc(h.kind) + (h.fireBanDistrict ? ' · ' + esc(h.fireBanDistrict) : '') + '</span></h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div>';
+            if (state.mode !== 'now') html += '<p class="muted mb-1">the map is ' + (state.mode === 'ahead' ? '+' + state.hours + ' h ahead' : Math.abs(state.hours) + ' h behind') + '; this is the hexagon now.</p>';
             if (r.available === false) html += '<p class="text-warning">' + esc(r.unavailable) + '</p>';
-            html += '<h2>now <span class="muted">' + esc(FROM_WORDS[r.currentFrom] || r.currentFrom || '') + ' · ' + when(r.at) + '</span></h2>';
-            html += kv([['temperature', c.temperatureC != null ? c.temperatureC + ' °C' + (c.apparentTemperatureC != null ? ' (feels ' + c.apparentTemperatureC + ')' : '') : null], ['humidity', c.humidityPct != null ? c.humidityPct + ' %' : null], ['dew point', c.dewPointC != null ? c.dewPointC + ' °C' : null],
-                ['wind', c.windSpeedKmh != null ? c.windSpeedKmh + ' km/h from ' + fmt(c.windDirectionDeg) + '° gust ' + fmt(c.windGustKmh) : null], ['pressure', c.pressureMslHpa != null ? c.pressureMslHpa + ' hPa' : null], ['rain', c.precipitationMm != null ? c.precipitationMm + ' mm' : null], ['condition', c.condition]]);
+            // Now against the forecast, side by side: the one table this drawer is for.
+            html += '<h2>Now <span class="muted">' + esc(FROM_WORDS[r.currentFrom] || r.currentFrom || '') + ' · ' + clock(r.at) + '</span> against the forecast <span class="muted">' + esc(src.upstream || '') + (fcNow ? ' · ' + clock(fcNow.at) : '') + '</span></h2>';
+            html += '<table class="compare"><thead><tr><th></th><th class="ground">now</th><th class="fc">forecast</th><th>Δ</th><th></th></tr></thead><tbody>'
+                + cmp('temperature', c.temperatureC, fcNow && fcNow.temperatureC, 1, '°C') + cmp('humidity', c.humidityPct, fcNow && fcNow.humidityPct, 0, '%')
+                + cmp('wind', c.windSpeedKmh, fcNow && fcNow.windSpeedKmh, 0, 'km/h') + cmp('direction', c.windDirectionDeg, fcNow && fcNow.windDirectionDeg, 0, '°')
+                + cmp('gust', c.windGustKmh, fcNow && fcNow.windGustKmh, 0, 'km/h') + cmp('rain', c.precipitationMm, fcNow && fcNow.precipitationMm, 1, 'mm')
+                + cmp('feels like', c.apparentTemperatureC, null, 1, '°C') + cmp('dew point', c.dewPointC, null, 1, '°C') + cmp('pressure', c.pressureMslHpa, null, 1, 'hPa') + '</tbody></table>';
+            var dr = h.drift;
+            if (dr) {
+                var pct = Math.min(100, dr.score / 1.5 * 100);
+                html += '<div class="meter-row"><span class="muted">drift</span><div class="bar"><i style="width:' + pct + '%;background:' + driftColour(dr.score) + '"></i><b style="left:66.7%"></b></div><span class="mono">' + esc(dr.score) + '</span><span class="muted">' + (dr.drifted ? 'thrown out' : 'holds') + (dr.worst ? ' · ' + esc(dr.worst) : '') + '</span></div>';
+                html += '<div class="muted" style="font-size:.74rem">' + esc(fmt(dr.temperatureC, 1)) + ' °C of 3 · ' + esc(fmt(dr.humidityPct)) + ' pts of 20 · ' + esc(fmt(dr.windKmh, 1)) + ' km/h of 15 · ' + esc(fmt(dr.rainMm, 1)) + ' mm of 5 · judged by ' + esc(dr.stationId) + ' at ' + clock(dr.at) + '</div>';
+            }
             if (nb && nb.stations) {
-                html += '<h2>' + (nb.ring === 0 ? 'stations in it, blended' : 'neighbours') + ' <span class="muted">' + (nb.ring === 0 ? 'inside the hexagon' : 'ring ' + nb.ring) + ' · ' + (nb.elevationApplied ? 'brought to ' + Math.round(nb.elevationM) + ' m at ' + nb.lapseTemperatureCPerKm + ' °C/km (dew point ' + nb.lapseDewPointCPerKm + ')' : 'not moved for height') + '</span></h2><table class="table table-sm"><thead><tr><th>station</th><th class="num">km</th><th class="num">height</th><th class="num">weight</th></tr></thead><tbody>';
+                html += '<h2>' + (nb.ring === 0 ? 'Stations in it, blended' : 'Neighbours') + ' <span class="muted">' + (nb.ring === 0 ? 'inside the hexagon' : 'ring ' + nb.ring) + ' · ' + (nb.elevationApplied ? 'brought to ' + Math.round(nb.elevationM) + ' m at ' + nb.lapseTemperatureCPerKm + ' °C/km (dew point ' + nb.lapseDewPointCPerKm + ')' : 'not moved for height') + '</span></h2><table class="table table-sm"><thead><tr><th>station</th><th class="num">km</th><th class="num">height</th><th class="num">weight</th></tr></thead><tbody>';
                 nb.stations.forEach(function (x) { html += '<tr><td>' + esc(x.id) + ' <span class="muted">' + esc(x.name || '') + '</span></td><td class="num">' + fmt(x.distanceKm, 1) + '</td><td class="num">' + fmt(x.heightM) + '</td><td class="num">' + fmt(x.weight, 2) + '</td></tr>'; });
                 html += '</tbody></table>';
             }
-            var dr = h.drift;
-            if (dr) {
-                html += '<h2>drift <span class="muted">stations − forecast at ' + when(dr.at) + '</span></h2>';
-                html += kv([['score', dr.score + (dr.drifted ? ' · thrown out' : '') + (dr.worst ? ' (' + dr.worst + ')' : '')], ['temperature', dr.temperatureC != null ? dr.temperatureC + ' °C (tolerance 3)' : null],
-                    ['humidity', dr.humidityPct != null ? dr.humidityPct + ' points (tolerance 20)' : null], ['wind', dr.windKmh != null ? dr.windKmh + ' km/h (tolerance 15)' : null],
-                    ['rain since 9 am', dr.rainMm != null ? dr.rainMm + ' mm (tolerance 5)' : null], ['stations', dr.stationId], ['upstream', dr.upstream]]);
+            html += '<h2>Hexagon</h2>';
+            if (lu && lu.percent) {
+                html += '<div class="stack">' + Object.keys(lu.percent).map(function (k) { return '<i style="width:' + lu.percent[k] + '%;background:' + (PALETTES.LAND[k] || '#999') + '" title="' + esc(k.replace('_', ' ')) + ' ' + lu.percent[k] + '%"></i>'; }).join('') + '</div>';
             }
-            html += '<h2>fire</h2>';
+            html += kv([['centre', fmt(h.lat, 4) + ', ' + fmt(h.lon, 4)], ['elevation', h.elevationM != null ? h.elevationM + ' m (' + h.elevationFrom + ')' : null], ['slope', h.slopeDeg != null ? h.slopeDeg + '°' : null],
+                ['land use', lu && lu.percent ? Object.keys(lu.percent).map(function (k) { return k.replace('_', ' ') + ' ' + lu.percent[k] + '%'; }).join(', ') + (lu.leads ? ' → ' + lu.leads : '') + (lu.point ? ' · here: ' + lu.point.replace('_', ' ') : '') + (lu.source ? ' (' + lu.source + ')' : '') : null],
+                ['bureau district', h.bureauDistrict], ['station in hexagon', h.stationId], ['nearest station', h.nearestStationId ? h.nearestStationId + ' at ' + fmt(h.nearestStationKm, 1) + ' km' : null],
+                ['forecast fetched', when(h.refreshedAt)], ['forecast expires', when(h.expiresAt)], ['activated', when(h.activatedAt)], ['last asked', when(h.lastAskedAt)], ['asks this run', h.asks], ['snapshots', h.historyCount]]);
+            html += '<h2>Fire</h2>';
             html += kv([['FFDI', f.ffdi != null ? f.ffdi + ' ' + f.ffdiRating + (f.peakFfdi != null ? ' (peak ' + f.peakFfdi + ')' : '') : null], ['drought factor', f.droughtFactor], ['KBDI', f.kbdiMm != null ? f.kbdiMm + ' mm ' + f.kbdiBand : null],
                 ['GFDI', g.gfdi != null ? g.gfdi + ' ' + g.gfdiRating + ' (curing ' + g.curingPct + '%, ' + g.fuelLoadTHa + ' t/ha)' : (f.leads ? 'no curing figure' : null)], ['AFDRS grass', g.fbi != null ? 'FBI ' + g.fbi + ' ' + g.afdrsRating + ' · ' + g.rateOfSpreadKmh + ' km/h · ' + g.intensityKwm + ' kW/m' : null],
                 ['official', o.rating ? o.rating + (o.fbi != null ? ' (FBI ' + o.fbi + ')' : '') + (o.totalFireBan ? ' · TOTAL FIRE BAN' : '') + ' · ' + o.district : null], ['leads', f.leads ? f.leads + (f.appliesToPct != null ? ' over ' + f.appliesToPct + '% of the hexagon' : '') : null],
                 ['wind change', w.change ? when(w.change.at) + ' ' + w.change.fromDeg + '° → ' + w.change.toDeg + '° at ' + w.change.speedKmh + ' km/h' : null], ['fire weather warning', f.fireWeatherWarning ? 'YES' : null],
                 ['VPD', f.vapourPressureDeficitKpa != null ? f.vapourPressureDeficitKpa + ' kPa' : null], ['mixing height', f.boundaryLayerHeightM != null ? f.boundaryLayerHeightM + ' m' : null]]);
-            if (r.warnings && r.warnings.length) { html += '<h2>warnings</h2><ul class="small mb-1">'; r.warnings.forEach(function (x) { html += '<li>' + esc(x.title) + ' ' + esc(x.phenomena || '') + (x.headline ? ' — ' + esc(x.headline) : '') + ' <span class="muted">until ' + when(x.until) + '</span></li>'; }); html += '</ul>'; }
-            if (d.kbdiMm != null) { html += '<h2>drought</h2>' + kv([['KBDI', d.kbdiMm + ' mm ' + d.kbdiBand], ['drought factor', d.droughtFactor], ['mean annual rain', d.meanAnnualRainfallMm + ' mm'], ['computed for', d.computedFor], ['spun up from', d.spunUpFrom + ' (' + d.days + ' days)'], ['inputs', h.drought && h.drought.from]]); }
-            if (st.id) { html += '<h2>station ' + esc(st.id) + ' <span class="muted">' + esc(st.name) + (st.insideHexagon ? '' : ' · ' + fmt(st.distanceKm, 1) + ' km away') + '</span></h2>'; html += kv([['at', when(st.at)], ['temperature', st.temperatureC != null ? st.temperatureC + ' °C' : null], ['humidity', st.humidityPct != null ? st.humidityPct + ' %' : null], ['wind', st.windSpeedKmh != null ? st.windSpeedKmh + ' km/h ' + (st.windDirection || '') + ' gust ' + fmt(st.windGustKmh) : null], ['rain since 9am', st.rainSince9amMm != null ? st.rainSince9amMm + ' mm' : null], ['rain to 9am', st.rain24hMm != null ? st.rain24hMm + ' mm' : null], ['max / min', (st.maxTemperatureC != null || st.minTemperatureC != null) ? fmt(st.maxTemperatureC) + ' / ' + fmt(st.minTemperatureC) : null]]); }
-            if (fl.rain1dMm != null || fl.forecastRain24hMm != null || fl.riverDischargeCumecs != null) { html += '<h2>flood</h2>' + kv([['rain 1/2/3/7 d', fmt(fl.rain1dMm) + ' / ' + fmt(fl.rain2dMm) + ' / ' + fmt(fl.rain3dMm) + ' / ' + fmt(fl.rain7dMm) + ' mm'], ['ahead 24/48/72 h', fmt(fl.forecastRain24hMm) + ' / ' + fmt(fl.forecastRain48hMm) + ' / ' + fmt(fl.forecastRain72hMm) + ' mm'], ['river', fl.riverDischargeCumecs != null ? fl.riverDischargeCumecs + ' m³/s, ' + fmt(fl.dischargeRatioToMean) + '× the 92-day mean, ' + fmt(fl.riverTrend) : null]]); }
+            if (r.warnings && r.warnings.length) { html += '<h2>Warnings</h2><ul class="small mb-1">'; r.warnings.forEach(function (x) { html += '<li>' + esc(x.title) + ' ' + esc(x.phenomena || '') + (x.headline ? ' — ' + esc(x.headline) : '') + ' <span class="muted">until ' + when(x.until) + '</span></li>'; }); html += '</ul>'; }
+            if (d.kbdiMm != null) { html += '<h2>Drought</h2>' + kv([['KBDI', d.kbdiMm + ' mm ' + d.kbdiBand], ['drought factor', d.droughtFactor], ['mean annual rain', d.meanAnnualRainfallMm + ' mm'], ['computed for', d.computedFor], ['spun up from', d.spunUpFrom + ' (' + d.days + ' days)'], ['inputs', h.drought && h.drought.from]]); }
+            if (st.id) { html += '<h2>Station ' + esc(st.id) + ' <span class="muted">' + esc(st.name) + (st.insideHexagon ? '' : ' · ' + fmt(st.distanceKm, 1) + ' km away') + '</span></h2>'; html += kv([['at', when(st.at)], ['temperature', st.temperatureC != null ? st.temperatureC + ' °C' : null], ['humidity', st.humidityPct != null ? st.humidityPct + ' %' : null], ['wind', st.windSpeedKmh != null ? st.windSpeedKmh + ' km/h ' + (st.windDirection || '') + ' gust ' + fmt(st.windGustKmh) : null], ['rain since 9am', st.rainSince9amMm != null ? st.rainSince9amMm + ' mm' : null], ['rain to 9am', st.rain24hMm != null ? st.rain24hMm + ' mm' : null], ['max / min', (st.maxTemperatureC != null || st.minTemperatureC != null) ? fmt(st.maxTemperatureC) + ' / ' + fmt(st.minTemperatureC) : null]]); }
+            if (fl.rain1dMm != null || fl.forecastRain24hMm != null || fl.riverDischargeCumecs != null) { html += '<h2>Flood</h2>' + kv([['rain 1/2/3/7 d', fmt(fl.rain1dMm) + ' / ' + fmt(fl.rain2dMm) + ' / ' + fmt(fl.rain3dMm) + ' / ' + fmt(fl.rain7dMm) + ' mm'], ['ahead 24/48/72 h', fmt(fl.forecastRain24hMm) + ' / ' + fmt(fl.forecastRain48hMm) + ' / ' + fmt(fl.forecastRain72hMm) + ' mm'], ['river', fl.riverDischargeCumecs != null ? fl.riverDischargeCumecs + ' m³/s, ' + fmt(fl.dischargeRatioToMean) + '× the 92-day mean, ' + fmt(fl.riverTrend) : null]]); }
             if (r.forecast && r.forecast.days && r.forecast.days.length) {
-                html += '<h2>forecast · days ahead <span class="muted">' + esc((r.source || {}).upstream || '') + '</span></h2><table class="table table-sm"><thead><tr><th>day</th><th class="num">min/max</th><th class="num">RH</th><th class="num">wind</th><th class="num">rain</th><th>FFDI</th><th>FBI</th></tr></thead><tbody>';
+                html += '<h2>Days ahead <span class="muted">' + esc(src.upstream || '') + '</span></h2><table class="table table-sm"><thead><tr><th>day</th><th class="num">min/max</th><th class="num">RH</th><th class="num">wind</th><th class="num">rain</th><th>FFDI</th><th>FBI</th></tr></thead><tbody>';
                 r.forecast.days.forEach(function (x) { var df = x.fire || {}; html += '<tr><td class="mono">' + esc(x.date) + '</td><td class="num">' + fmt(x.minTemperatureC) + '/' + fmt(x.maxTemperatureC) + '</td><td class="num">' + fmt(x.minHumidityPct) + '</td><td class="num">' + fmt(x.maxWindKmh) + '</td><td class="num">' + fmt(x.precipitationMm) + '</td><td>' + (df.ffdi != null ? df.ffdi + ' ' + esc(df.ffdiRating) : '—') + '</td><td>' + (df.fbi != null ? df.fbi + ' ' + esc(df.afdrsRating) : '—') + '</td></tr>'; });
                 html += '</tbody></table>';
             }
             if (h.history && h.history.length) {
-                html += '<h2>history <span class="muted">' + h.historyCount + ' snapshots</span></h2><table class="table table-sm"><thead><tr><th>at</th><th>ref</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th>FFDI</th></tr></thead><tbody>';
+                html += '<h2>History <span class="muted">' + h.historyCount + ' snapshots</span></h2><table class="table table-sm"><thead><tr><th>at</th><th>ref</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th>FFDI</th></tr></thead><tbody>';
                 h.history.forEach(function (s) { var sc = s.current || {}, sf = s.fire || {}; html += '<tr><td class="mono">' + when(s.at) + '</td><td>' + esc(s.ref) + '</td><td class="num">' + fmt(sc.temperatureC) + '</td><td class="num">' + fmt(sc.humidityPct) + '</td><td class="num">' + fmt(sc.windSpeedKmh) + '</td><td>' + (sf.ffdi != null ? sf.ffdi + ' ' + esc(sf.ffdiRating) : '—') + '</td></tr>'; });
                 html += '</tbody></table>';
             }
             if (h.ledger && h.ledger.length) {
-                html += '<h2>station ledger</h2><table class="table table-sm"><thead><tr><th>at</th><th class="num">°C</th><th class="num">max</th><th class="num">rain 9am</th><th class="num">rain 24h</th></tr></thead><tbody>';
+                html += '<h2>Station ledger</h2><table class="table table-sm"><thead><tr><th>at</th><th class="num">°C</th><th class="num">max</th><th class="num">rain 9am</th><th class="num">rain 24h</th></tr></thead><tbody>';
                 h.ledger.forEach(function (s) { html += '<tr><td class="mono">' + when(s.at) + '</td><td class="num">' + fmt(s.temperature_c) + '</td><td class="num">' + fmt(s.max_temperature_c) + '</td><td class="num">' + fmt(s.rain_since_9am_mm) + '</td><td class="num">' + fmt(s.rain_24h_mm) + '</td></tr>'; });
                 html += '</tbody></table>';
             }
-            html += '<button class="btn btn-sm btn-outline-warning py-0" id="probe" type="button">probe (an ask: reads what is due, spends allowance)</button>';
+            html += '<button class="btn-probe" id="probe" type="button">' + icon('probe') + ' probe <span class="muted">an ask: reads what is due, spends allowance</span></button>';
             el.innerHTML = html;
             el.classList.remove('hidden');
             $('close').addEventListener('click', function () { el.classList.add('hidden'); });
@@ -344,37 +547,98 @@
     function probe(lat, lon) {
         var headers = window.gullyCsrf();
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        note('asking…');
         fetch('/console/map/probe', {method: 'POST', headers: headers, body: 'lat=' + lat + '&lon=' + lon})
-            .then(function (r) { return r.json(); }).then(function (rd) { etag = null; load(); sourcesPanel(); if (rd.hexagon) detail(rd.hexagon.id); });
+            .then(function (r) { return r.json(); }).then(function (rd) { etag = null; lastStations = null; load(); stations(); sourcesPanel(); if (rd.hexagon) detail(rd.hexagon.id); note('asked: ' + (rd.hexagon ? rd.hexagon.id : '') + (rd.currentFrom ? ' · now from ' + rd.currentFrom : '')); });
     }
 
-    // ---- the time slider: hours back from now, the layer as it was
-    function slid() {
-        var h = Number($('time').value);
-        if (h >= 0) { at = null; $('timeLabel').textContent = 'now'; }
-        else { var d = new Date(Date.now() + h * 3600000); at = d.toISOString(); $('timeLabel').textContent = when(at); }
-        load();
+    // ---- the timeline: hours from now, a week back and three days ahead; a tick at every local midnight
+    var timeInput = $('time');
+    function ticks() {
+        var el = $('ticks'), lo = Number(timeInput.min), hi = Number(timeInput.max), html = '', now = new Date();
+        var d = new Date(now); d.setHours(0, 0, 0, 0);
+        // Every midnight on a wide track; every other one, weekday only, on a narrow one.
+        var narrow = el.clientWidth < 560;
+        for (var day = -8; day <= 4; day++) {
+            var t = new Date(d.getTime() + day * 86400000), h = (t.getTime() - now.getTime()) / 3600000;
+            if (h < lo || h > hi || Math.abs(h) < 8 || (narrow && day % 2 !== 0)) continue;
+            html += '<span style="left:' + ((h - lo) / (hi - lo) * 100) + '%">' + t.toLocaleDateString(undefined, narrow ? {weekday: 'short'} : {weekday: 'short', day: 'numeric'}) + '</span>';
+        }
+        html += '<span class="now-tick" style="left:' + ((0 - lo) / (hi - lo) * 100) + '%">now</span>';
+        el.innerHTML = html;
+    }
+    function timeLabel() {
+        var lo = Number(timeInput.min), hi = Number(timeInput.max), h = state.hours, lab = $('timeLabel');
+        lab.style.left = ((h - lo) / (hi - lo) * 100) + '%';
+        lab.textContent = h === 0 ? 'now' : (h > 0 ? '+' + h + ' h · ' : h + ' h · ') + new Date(Date.now() + h * 3600000).toLocaleString(undefined, {weekday: 'short', hour: '2-digit', minute: '2-digit'});
+    }
+    function slid(immediate) {
+        state.hours = Number(timeInput.value);
+        timeLabel();
+        clearTimeout(loadTimer);
+        loadTimer = setTimeout(load, immediate ? 0 : 160);
+    }
+    function play() {
+        if (state.playing) { clearInterval(state.playing); state.playing = null; $('play').classList.remove('on'); $('play').innerHTML = icon('play'); return; }
+        if (state.hours < 0) timeInput.value = 0;
+        $('play').classList.add('on'); $('play').innerHTML = icon('pause');
+        state.playing = setInterval(function () {
+            var next = Number(timeInput.value) + 1;
+            if (next > Number(timeInput.max)) { play(); return; }
+            timeInput.value = next; slid(true);
+        }, 900);
     }
 
-    $('value').addEventListener('change', function () { value = $('value').value; legend(); hexLayer.setStyle(styleOf); glyphs(); });
-    $('grid').addEventListener('change', grid);
-    $('stations').addEventListener('change', stations);
-    $('weather').addEventListener('change', glyphs);
-    $('forecasts').addEventListener('change', draw);
-    $('time').addEventListener('change', slid);
-    $('now').addEventListener('click', function () { $('time').value = 0; slid(); });
-    $('sourcesToggle').addEventListener('click', function () { var el = $('sources'); el.classList.toggle('hidden'); if (!el.classList.contains('hidden')) { el.innerHTML = '<p class="muted">reading…</p>'; sourcesPanel(); } });
-    map.on('zoomend', glyphs);
-    map.on('moveend', function () { if ($('grid').checked) grid(); });
+    // ---- notes
+    var noteTimer = null;
+    function note(text) {
+        var el = $('note');
+        el.textContent = text; el.classList.remove('hidden');
+        clearTimeout(noteTimer);
+        noteTimer = setTimeout(function () { el.classList.add('hidden'); }, 3200);
+    }
+
+    // ---- wiring
+    document.querySelectorAll('#side button').forEach(function (b) { b.addEventListener('click', function () { pickSide(b.dataset.side); }); });
+    document.querySelectorAll('.tog').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]);
+            if (k === 'grid') grid(); else if (k === 'stations') stations(); else if (k === 'points' || k === 'forecasts') { draw(); legend(); tiles(); } else glyphs();
+        });
+    });
+    $('railFold').addEventListener('click', function () { $('rail').classList.toggle('folded'); });
+    $('sourcesToggle').addEventListener('click', function () { var el = $('sources'); if (el.classList.contains('hidden')) sourcesPanel(true); else el.classList.add('hidden'); });
+    timeInput.addEventListener('input', function () { slid(false); });
+    timeInput.addEventListener('change', function () { slid(true); });
+    $('now').addEventListener('click', function () { if (state.playing) play(); timeInput.value = 0; slid(true); });
+    $('play').addEventListener('click', play);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { $('detail').classList.add('hidden'); $('sources').classList.add('hidden'); }
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+        if (e.key === '1') pickSide('now'); else if (e.key === '2') pickSide('fc'); else if (e.key === '3') pickSide('diff');
+        else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { timeInput.value = Math.max(Number(timeInput.min), Math.min(Number(timeInput.max), Number(timeInput.value) + (e.key === 'ArrowRight' ? 1 : -1))); slid(false); }
+        else if (e.key === ' ') { e.preventDefault(); play(); }
+        else if (e.key === '0') { timeInput.value = 0; slid(true); }
+    });
+    var zoomWasPoints = pointsMode();
+    map.on('zoomend', function () { var pm = pointsMode(); if (pm !== zoomWasPoints || pm) { zoomWasPoints = pm; draw(); } else glyphs(); stations(); });
+    map.on('moveend', function () { if (togs.grid) grid(); });
     map.on('click', function (e) {
         var b = confirm('Probe ' + e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4) + '? This is an ask: it reads whatever is due for that state and spends allowance.');
         if (b) probe(e.latlng.lat, e.latlng.lng);
     });
+    document.addEventListener('gully:theme', function () { restyle(); });
+
+    buildRail();
+    ticks();
+    timeLabel();
     legend();
     load();
     stations();
-    // Reloaded every minute; between reloads the amber keeps fading; the sources panel keeps up.
-    setInterval(function () { if (!document.hidden && !at) load(); }, 60000);
-    setInterval(function () { if (!document.hidden && (value === 'fc:life' || value === 'now:from' || side() === 'fc')) hexLayer.setStyle(styleOf); }, 20000);
+    sourcesPanel(false);
+    // The layer every minute, the sources every half minute; between reloads the fades keep fading.
+    setInterval(function () { if (!document.hidden && state.hours === 0) load(); }, 60000);
+    setInterval(function () { if (!document.hidden && (current().kind === 'life' || current().kind === 'from' || state.group === 'fc')) restyle(); }, 20000);
     setInterval(function () { if (!document.hidden) sourcesPanel(); }, 30000);
+    setInterval(ticks, 600000);
 })();

@@ -1,5 +1,6 @@
 package au.gully.hexagons;
 
+import au.gully.cfs.Ratings;
 import au.gully.platform.Hashing;
 import au.gully.platform.Json;
 import au.gully.science.Conditions;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -21,6 +23,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <em>forecast</em>, the model's series read at this moment — with the drift between them, the fire
  * indices, the drought, the land use, the elevation, and when the hexagon was last asked about.
  * The map colours by either set, or by the difference, and fades a forecast as its life runs out.
+ * The timeline goes both ways: behind now the layer is what the snapshots say was "now" then; ahead
+ * of now it is the forecast series read at that hour, with the fire indices of that hour, for every
+ * hexagon holding a forecast.
  * <p>
  * Rendered once per change and kept as bytes with a fingerprint, so a map that polls every minute
  * gets "unchanged" until something changes. The map never triggers a fetch: it draws what is held.
@@ -34,10 +39,15 @@ public class MapLayer {
     private final FirePictures pictures;
     private final Life life;
     private final Drifts drifts;
+    private final Ratings ratings;
     private final Json json;
     private final AtomicReference<Rendered> rendered = new AtomicReference<>();
-    /** The day's mean drift per hexagon, read once per render rather than once per hexagon. */
-    private Map<String, Double> driftDay = Map.of();
+
+    /**
+     * How far the timeline reaches: back over the history, ahead over the hourly series.
+     */
+    public static final Duration BACK = Duration.ofDays(7);
+    public static final Duration AHEAD = Duration.ofHours(72);
 
     /**
      * The layer as it stands: rebuilt only when a hexagon has been replaced since the last render.
@@ -60,8 +70,9 @@ public class MapLayer {
     }
 
     /**
-     * The layer as it was at an instant, from the history: only hexagons asked about with a ref have
-     * a value then. Not cached; the time slider asks for it rarely.
+     * The layer at an instant. Behind now, from the history: only hexagons asked about with a ref
+     * have a value then. Ahead of now, from the forecasts held: the series read at that hour, for
+     * every hexagon with one. Not cached; the timeline asks as it is dragged.
      */
     public Rendered at(Instant at) {
         return render(store.version(), at);
@@ -69,13 +80,17 @@ public class MapLayer {
 
     private Rendered render(long version, Instant at) {
         Instant now = Instant.now();
-        Map<String, History.Snapshot> snapshots = at == null ? Map.of() : history.allAt(at);
-        driftDay = at == null ? drifts.meanScores(Duration.ofHours(24)) : Map.of();
+        boolean ahead = at != null && at.isAfter(now);
+        Map<String, History.Snapshot> snapshots = at == null || ahead ? Map.of() : history.allAt(at);
+        Map<String, Double> driftDay = at == null ? drifts.meanScores(Duration.ofHours(24)) : Map.of();
         List<Map<String, Object>> features = new ArrayList<>();
         int active = 0, withStation = 0, withForecast = 0, withDrought = 0, withLandUse = 0;
         Map<String, Integer> nowFrom = new LinkedHashMap<>();
         for (Hexagon h : store.all()) {
-            if (at != null && !snapshots.containsKey(h.id())) {
+            if (at != null && !ahead && !snapshots.containsKey(h.id())) {
+                continue;
+            }
+            if (ahead && h.forecast() == null) {
                 continue;
             }
             if (h.active()) active++;
@@ -83,7 +98,7 @@ public class MapLayer {
             if (h.hasForecast()) withForecast++;
             if (h.drought() != null) withDrought++;
             if (h.landUse() != null) withLandUse++;
-            Map<String, Object> f = feature(h, at == null ? null : snapshots.get(h.id()), now);
+            Map<String, Object> f = feature(h, at, ahead, snapshots.get(h.id()), driftDay, now);
             @SuppressWarnings("unchecked")
             Object from = ((Map<String, Object>) f.get("properties")).get("from");
             nowFrom.merge(from == null ? "none" : from.toString(), 1, Integer::sum);
@@ -94,7 +109,10 @@ public class MapLayer {
         fc.put("features", features);
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("at", at == null ? null : at.toString());
+        meta.put("mode", at == null ? "now" : ahead ? "ahead" : "history");
         meta.put("renderedAt", now.toString());
+        meta.put("backHours", BACK.toHours());
+        meta.put("aheadHours", AHEAD.toHours());
         meta.put("hexagons", features.size());
         meta.put("active", active);
         meta.put("withStation", withStation);
@@ -107,10 +125,11 @@ public class MapLayer {
         meta.put("version", version);
         fc.put("meta", meta);
         byte[] bytes = json.write(fc).getBytes(StandardCharsets.UTF_8);
-        return new Rendered(version, bytes, "\"" + Hashing.sha256Hex(bytes).substring(0, 20) + "\"", now);
+        // A weak tag, so the bytes may be gzipped on the way out (Tomcat will not compress behind a strong one).
+        return new Rendered(version, bytes, "W/\"" + Hashing.sha256Hex(bytes).substring(0, 20) + "\"", now);
     }
 
-    private Map<String, Object> feature(Hexagon h, History.Snapshot snapshot, Instant now) {
+    private Map<String, Object> feature(Hexagon h, Instant at, boolean ahead, History.Snapshot snapshot, Map<String, Double> driftDay, Instant now) {
         Map<String, Object> f = new LinkedHashMap<>();
         f.put("type", "Feature");
         f.put("id", h.id());
@@ -122,14 +141,14 @@ public class MapLayer {
         }
         geometry.put("coordinates", List.of(ring));
         f.put("geometry", geometry);
-        f.put("properties", snapshot == null ? properties(h, now) : properties(h, snapshot, now));
+        f.put("properties", ahead ? propertiesAhead(h, at, now) : snapshot == null ? properties(h, driftDay, now) : properties(h, snapshot, now));
         return f;
     }
 
     /**
      * The values a map colours by, now.
      */
-    private Map<String, Object> properties(Hexagon h, Instant now) {
+    private Map<String, Object> properties(Hexagon h, Map<String, Double> driftDay, Instant now) {
         Map<String, Object> p = new LinkedHashMap<>();
         what(p, h);
         // "Now" as the reading would answer it: the station, the stations blended, the neighbours brought
@@ -163,6 +182,56 @@ public class MapLayer {
         p.put("askedMinutesAgo", h.lastAskedAt() == null ? null : Duration.between(h.lastAskedAt(), now).toMinutes());
         p.put("asks", h.asks());
         return p;
+    }
+
+    /**
+     * The values as they are forecast to be at an hour ahead: the series read then, that hour's fire
+     * indices, the official rating for that day. There is no "now" in the future, and the layer says
+     * so: {@code from} is null and {@code ahead} true.
+     */
+    private Map<String, Object> propertiesAhead(Hexagon h, Instant at, Instant now) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        what(p, h);
+        now(p, null, null, null, now);
+        Forecast fc = h.forecast();
+        Conditions m = fc.at(at);
+        forecast(p, fc, m, now);
+        p.put("ahead", true);
+        p.put("aheadHours", Duration.between(now, at).toHours());
+        p.put("fcAt", m == null || m.at() == null ? at.toString() : m.at().toString());
+        ZoneId zone = h.zone() == null ? ZoneId.of("Australia/Adelaide") : ZoneId.of(h.zone());
+        FirePicture fire = h.fire();
+        fire(p, fire);
+        // The hour's own indices over the picture's: FFDI, GFDI and FBI at that hour, the drought factor of that day.
+        FirePictures.HourIndices hour = FirePictures.atHour(m == null ? null : withTime(m, at), fire, zone);
+        p.put("ffdi", hour == null ? null : hour.ffdi());
+        p.put("ffdiRating", hour == null ? null : hour.ffdiRating());
+        p.put("gfdi", hour == null ? null : hour.gfdi());
+        p.put("gfdiRating", hour == null ? null : hour.gfdiRating());
+        p.put("fbi", hour == null ? null : hour.fbi());
+        p.put("afdrsRating", hour == null ? null : hour.afdrsRating());
+        p.put("droughtFactor", hour == null ? null : hour.droughtFactor());
+        // The CFS rating for that day, where it reaches; null beyond its four days.
+        Optional<Ratings.RatingDay> day = ratings.rating(h.fireBanDistrict()).flatMap(r -> r.at(at));
+        p.put("officialRating", day.map(Ratings.RatingDay::rating).orElse(null));
+        p.put("officialFbi", day.map(Ratings.RatingDay::fbi).orElse(null));
+        p.put("totalFireBan", day.map(Ratings.RatingDay::totalFireBan).orElse(false));
+        p.put("drift", null);
+        p.put("drifted", false);
+        p.put("warm", h.lastAskedAt() != null && Duration.between(h.lastAskedAt(), now).compareTo(Duration.ofMinutes(15)) < 0);
+        p.put("lastAskedAt", h.lastAskedAt() == null ? null : h.lastAskedAt().toString());
+        p.put("asks", h.asks());
+        return p;
+    }
+
+    /**
+     * The blended hour stamped with the instant asked for, so the day it falls on is the right one.
+     */
+    private static Conditions withTime(Conditions c, Instant at) {
+        return c.at() != null ? c : Conditions.at(at)
+                .temperature(c.temperatureC()).apparent(c.apparentTemperatureC()).dewPoint(c.dewPointC()).humidity(c.humidityPct())
+                .wind(c.windSpeedKmh()).windDirection(c.windDirectionDeg()).gust(c.windGustKmh()).precipitation(c.precipitationMm())
+                .build();
     }
 
     /**

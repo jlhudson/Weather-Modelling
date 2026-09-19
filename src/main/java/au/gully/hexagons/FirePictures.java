@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -28,7 +30,7 @@ public class FirePictures {
      * How old a station's latest values may be before the model's "now" is used instead. The files
      * refresh every ten minutes; an hour without one means the station or the feed is down.
      */
-    static final Duration STATION_STALE = Duration.ofMinutes(70);
+    public static final Duration STATION_STALE = Duration.ofMinutes(70);
 
     /**
      * The fuel load the grassland indices are run at: McArthur's own standard pasture load.
@@ -197,6 +199,48 @@ public class FirePictures {
                 model == null ? null : model.windDirection80mDeg(),
                 model == null ? null : model.capeJkg(),
                 model == null ? null : model.liftedIndex());
+    }
+
+    /**
+     * The fire indices for one hour of a forecast: the forest index from the hour's conditions with the
+     * drought factor projected for that day (or today's where the outlook does not reach), and the
+     * grassland indices where the district has a curing figure. What the reading's hours carry, and
+     * what the map colours by when the timeline is ahead of now. Null without a drought factor.
+     */
+    public static HourIndices atHour(Conditions c, FirePicture fire, ZoneId zone) {
+        if (c == null || fire == null || fire.droughtFactor() == null) {
+            return null;
+        }
+        FireOutlook day = null;
+        if (c.at() != null) {
+            LocalDate date = c.at().atZone(zone).toLocalDate();
+            for (FireOutlook o : fire.outlook()) {
+                if (date.equals(o.date())) {
+                    day = o;
+                    break;
+                }
+            }
+        }
+        double factor = day == null || day.droughtFactor() == null ? fire.droughtFactor() : day.droughtFactor();
+        Double ffdi = FireDanger.of(c, factor);
+        Double gfdi = null;
+        CsiroGrassland.Result csiro = null;
+        FirePicture.Grass grass = fire.grass();
+        if (grass != null && grass.curingPct() != null) {
+            gfdi = GrassFireDanger.of(c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), grass.curingPct().doubleValue(), grass.fuelLoadTHa());
+            csiro = CsiroGrassland.of(c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), grass.curingPct().doubleValue(),
+                    grass.fuelLoadTHa(), CsiroGrassland.Condition.parse(grass.condition()));
+        }
+        return new HourIndices(ffdi, ffdi == null ? null : FireDanger.rating(ffdi), gfdi,
+                gfdi == null ? null : GrassFireDanger.rating(gfdi), csiro == null ? null : csiro.fbi(),
+                csiro == null ? null : csiro.rating(), factor);
+    }
+
+    /**
+     * One forecast hour's indices.
+     */
+    public record HourIndices(Double ffdi, String ffdiRating, Double gfdi, String gfdiRating, Integer fbi, String afdrsRating,
+                              Double droughtFactor) {
     }
 
     /**

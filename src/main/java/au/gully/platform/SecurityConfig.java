@@ -75,13 +75,20 @@ public class SecurityConfig {
     }
 
     /**
-     * A strong ETag on every successful API GET, hashed from the body, and {@code 304} to a matching
+     * A weak ETag on every successful API GET, hashed from the body, and {@code 304} to a matching
      * {@code If-None-Match}. With no generated-at time in any body, the hash only changes when the
      * reading does. The hexagon layer sets its own ETag, which the filter leaves alone.
+     * <p>
+     * Weak, not strong, and deliberately: Tomcat will not compress a response that carries a strong
+     * ETag (a gzipped body is a different representation, RFC 7232), so a strong tag here silently
+     * switched compression off for the whole API - the megabyte hexagon layer went out whole on
+     * every poll. A weak tag validates the same and lets the body be gzipped.
      */
     @Bean
     public FilterRegistrationBean<ShallowEtagHeaderFilter> apiEtagFilter() {
-        FilterRegistrationBean<ShallowEtagHeaderFilter> registration = new FilterRegistrationBean<>(new ShallowEtagHeaderFilter());
+        ShallowEtagHeaderFilter filter = new ShallowEtagHeaderFilter();
+        filter.setWriteWeakETag(true);
+        FilterRegistrationBean<ShallowEtagHeaderFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
         registration.setName("apiEtag");
         return registration;

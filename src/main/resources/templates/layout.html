@@ -19,6 +19,8 @@
     <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.5/dist/css/bootstrap.min.css}">
     <link rel="stylesheet" th:href="@{/webjars/leaflet/1.9.4/dist/leaflet.css}">
     <link rel="stylesheet" th:href="@{/css/console.css}">
+    <!-- The map page's own sheet, in the head with the rest: a sheet linked from the body would lay the map out twice. -->
+    <link rel="stylesheet" th:href="@{/css/map.css}" th:if="${title == 'Map'}">
     <!-- Deferred, in this order, so a page's own deferred script (map.js) runs after Leaflet and console.js. -->
     <script defer th:src="@{/webjars/bootstrap/5.3.5/dist/js/bootstrap.bundle.min.js}"></script>
     <script defer th:src="@{/webjars/leaflet/1.9.4/dist/leaflet.js}"></script>

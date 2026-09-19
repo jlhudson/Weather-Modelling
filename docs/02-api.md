@@ -20,11 +20,14 @@ its copy at start. The OpenAPI document generated from the typed responses is at
 - **Errors** are RFC 9457 problem details, `application/problem+json`:
   `{"type":"about:blank","title":"Bad Request","status":400,"detail":"lat must be -90..90 ..."}`.
   One format, including the filter's `401`, `403` and `429`.
-- **Caching.** Every successful GET carries a strong `ETag` hashed from the body, and a matching
-  `If-None-Match` is a `304`. No body carries a generated-at time, so the fingerprint only changes when
-  the reading does. A reading also carries `Cache-Control: private, max-age=<seconds to its expiry>`
-  and `Last-Modified` (when its "now" values were taken); the hexagon layer carries its own `ETag`
-  that changes only when a hexagon has. Bodies are gzip-compressed on request.
+- **Caching.** Every successful GET carries a weak `ETag` (`W/"…"`) hashed from the body, and a
+  matching `If-None-Match` is a `304`. No body carries a generated-at time, so the fingerprint only
+  changes when the reading does. A reading also carries `Cache-Control: private, max-age=<seconds to
+  its expiry>` and `Last-Modified` (when its "now" values were taken); the hexagon layer carries its
+  own `ETag` that changes only when a hexagon has. Bodies are gzip-compressed on request — the layer
+  is about 95 KB on the wire against 1.3 MB decoded. The tag is weak on purpose: Tomcat will not
+  compress a response carrying a strong one (a gzipped body is a different representation), and a
+  strong tag here had silently switched compression off for the whole API.
 - **Times** are ISO-8601 UTC. Dates are local calendar days at the point.
 
 ```
@@ -161,7 +164,13 @@ The Hub treats `available == false` as "no reading" and asks again on its next s
 ## 2.2 `GET /api/v1/hexagons.geojson?at=`
 
 Every hexagon held, as a `FeatureCollection` of polygons, each carrying the values a map colours by,
-with "now" and the forecast kept apart: `from` (`station`, `stations`, `neighbours`, `model` or null)
+with "now" and the forecast kept apart. With `at=` behind now, the values as they were, from the
+snapshots (a snapshot stands for six hours; only hexagons asked about with a ref have one). With `at=`
+ahead of now — up to 72 hours, the hourly series — the values as they are forecast to be for every
+hexagon holding a forecast: `fc*` read off the series at that hour, `ffdi`, `gfdi` and `fbi` as that
+hour's indices with that day's projected drought factor, `officialRating` as the CFS rating for that
+day, `ahead: true` and `aheadHours`; there is no "now" in the future, so `from` is null. `meta.mode` is
+`now`, `history` or `ahead`. The properties, by group: `from` (`station`, `stations`, `neighbours`, `model` or null)
 and `nowTemperatureC`, `nowHumidityPct`, `nowWindKmh`, `nowWindDeg`, `nowGustKmh`, `nowRainMm`,
 `nowAt`, `nowAgeMinutes`, `nowStations`, `nowRing`; `fcTemperatureC`, `fcHumidityPct`, `fcWindKmh`,
 `fcWindDeg`, `fcGustKmh`, `fcRainMm`, `fcFetchedAt`, `fcExpiresAt`, `fcMinutesLeft`, `stale`,
@@ -171,7 +180,7 @@ and `nowTemperatureC`, `nowHumidityPct`, `nowWindKmh`, `nowWindDeg`, `nowGustKmh
 `warnings`, `windChangeAt`); the ground (`elevationM`, `elevationFrom`, `landUse`, `landDominant`,
 `leads`, `burnablePct`, `landSource`); and the asks (`kind`, `active`, `warm`, `lastAskedAt`,
 `askedMinutesAgo`, `asks`). `meta` carries the counts, including `nowFrom` — how many hexagons take
-"now" from each source. Pre-rendered once per change and fingerprinted, so a
+"now" from each source — and `backHours`/`aheadHours`, how far `at=` reaches either way. Pre-rendered once per change and fingerprinted, so a
 map polling every minute gets `304` until something changes. With `at=`, the values as they were —
 only hexagons asked about with a ref have a value then. Never fetches. Served as `application/geo+json`;
 a client that accepts only `application/json` is answered as that rather than refused, and the same

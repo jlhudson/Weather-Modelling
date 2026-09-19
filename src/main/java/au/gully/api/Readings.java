@@ -244,14 +244,13 @@ public class Readings {
         }
         List<Reading.Hour> hours = new ArrayList<>();
         Instant floor = Instant.now().minus(Duration.ofHours(1));
-        FirePicture.Grass grass = fire == null ? null : fire.grass();
         for (Conditions c : f.hourly()) {
             if (c.at() == null || c.at().isBefore(floor)) {
                 continue;
             }
             hours.add(new Reading.Hour(c.at(), c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), c.windDirectionDeg(),
                     c.windGustKmh(), c.precipitationMm(), c.precipitationProbabilityPct(), c.condition(),
-                    hourFire(c, fire, fireDays, grass, zone)));
+                    hourFire(c, fire, zone)));
         }
         return new Reading.ForecastBlock(days, hours, fire == null || fire.wind() == null ? null : fire.wind().change());
     }
@@ -260,24 +259,9 @@ public class Readings {
      * The indices for one forecast hour, with the drought factor of the day the hour falls on — the
      * projected one — or the current factor where the outlook does not reach.
      */
-    private static Reading.HourFire hourFire(Conditions c, FirePicture fire, Map<LocalDate, FireOutlook> fireDays,
-                                             FirePicture.Grass grass, ZoneId zone) {
-        if (fire == null || fire.droughtFactor() == null) {
-            return null;
-        }
-        FireOutlook day = fireDays.get(c.at().atZone(zone).toLocalDate());
-        double factor = day == null || day.droughtFactor() == null ? fire.droughtFactor() : day.droughtFactor();
-        Double ffdi = FireDanger.of(c, factor);
-        Double gfdi = null;
-        CsiroGrassland.Result csiro = null;
-        if (grass != null && grass.curingPct() != null) {
-            gfdi = GrassFireDanger.of(c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), grass.curingPct().doubleValue(), grass.fuelLoadTHa());
-            csiro = CsiroGrassland.of(c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), grass.curingPct().doubleValue(),
-                    grass.fuelLoadTHa(), CsiroGrassland.Condition.parse(grass.condition()));
-        }
-        return new Reading.HourFire(ffdi, ffdi == null ? null : FireDanger.rating(ffdi), gfdi,
-                gfdi == null ? null : GrassFireDanger.rating(gfdi), csiro == null ? null : csiro.fbi(),
-                csiro == null ? null : csiro.rating(), factor);
+    private static Reading.HourFire hourFire(Conditions c, FirePicture fire, ZoneId zone) {
+        FirePictures.HourIndices h = FirePictures.atHour(c, fire, zone);
+        return h == null ? null : new Reading.HourFire(h.ffdi(), h.ffdiRating(), h.gfdi(), h.gfdiRating(), h.fbi(), h.afdrsRating(), h.droughtFactor());
     }
 
     private static Double rainOverNextHours(Forecast f, int hours) {

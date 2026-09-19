@@ -33,7 +33,7 @@ Port **8082** inside the container; `WEATHER_PORT` is the host side of the compo
 
 Every `/api/**` route needs an API key (`X-Api-Key` or `Authorization: Bearer`), issued on
 `/console/api-keys` with a scope. Answers are JSON, times ISO-8601 UTC, errors RFC 9457 problem details,
-bodies compressed and fingerprinted (a strong `ETag` that only changes when the reading does), rate
+bodies compressed and fingerprinted (a weak `ETag` that only changes when the reading does), rate
 limits in the `RateLimit-*` headers. The OpenAPI document is at `/api/v1/openapi.json`.
 
 | Route | What it answers |

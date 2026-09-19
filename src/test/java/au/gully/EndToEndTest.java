@@ -19,6 +19,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -273,12 +275,26 @@ class EndToEndTest {
             ResponseEntity<String> r = client().get().uri(page).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(page).isEqualTo(HttpStatus.OK);
             assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");
+            if (page.equals("/console/map")) {
+                // The map page: its own sheet in the head, the rail, the figures, the legend and the timeline.
+                assertThat(r.getBody()).contains("/css/map.css").contains("id=\"rail\"").contains("id=\"timeline\"").contains("id=\"legend\"").contains("id=\"stats\"");
+            }
         }
         for (String feed : new String[]{"/console/map/layer.geojson", "/console/map/grid.geojson?south=-35.2&west=138.3&north=-34.7&east=138.9",
-                "/console/map/stations.geojson", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+                "/console/map/stations.geojson", "/console/map/sources.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }
+        // The timeline: behind now the layer is the history, ahead of now the forecasts, and the layer says which.
+        String ahead = client().get().uri("/console/map/layer.geojson?at=" + Instant.now().plus(Duration.ofHours(6)))
+                .header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
+        assertThat(ahead).contains("\"mode\":\"ahead\"").contains("\"aheadHours\":72");
+        String behind = client().get().uri("/console/map/layer.geojson?at=" + Instant.now().minus(Duration.ofHours(6)))
+                .header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
+        assertThat(behind).contains("\"mode\":\"history\"");
+        // The stations as points say whether each is fresh.
+        String points = client().get().uri("/console/map/stations.geojson").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
+        assertThat(points).contains("\"meta\":").contains("\"fresh\":");
         // Without the cookie, the console is the login page.
         ResponseEntity<Void> anonymous = client().get().uri("/console/map").retrieve().toEntity(Void.class);
         assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);
