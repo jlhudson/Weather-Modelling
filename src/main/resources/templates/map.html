@@ -43,12 +43,20 @@
         <!-- The rail: what to colour by. One choice, three sides. -->
         <aside class="panel rail" id="rail">
             <div class="rail-head">
-                <div class="seg" id="side" role="tablist" aria-label="Side">
-                    <button class="on" data-side="now" role="tab" type="button">Now</button>
-                    <button data-side="fc" role="tab" type="button">Forecast</button>
-                    <button data-side="diff" role="tab" title="Now against the forecast" type="button">Δ</button>
+                <div class="rail-head-row">
+                    <div class="group-title">Show values from <span class="muted">· click to swap, or keys 1 2 3</span></div>
+                    <button class="icon-btn rail-fold" id="railFold" title="Collapse" type="button"><svg class="ico"><use href="#i-chevron"/></svg></button>
                 </div>
-                <button class="icon-btn rail-fold" id="railFold" title="Collapse" type="button"><svg class="ico"><use href="#i-chevron"/></svg></button>
+                <div class="seg" id="side" role="tablist" aria-label="Show values from">
+                    <button class="on" data-side="now" role="tab" title="Now: what the ground says (key 1)" type="button"><svg class="ico"><use href="#i-station"/></svg><span>Now</span></button>
+                    <button data-side="fc" role="tab" title="Forecast: what the model says (key 2)" type="button"><svg class="ico"><use href="#i-forecast"/></svg><span>Forecast</span></button>
+                    <button data-side="diff" role="tab" title="Compare: now minus forecast (key 3)" type="button"><svg class="ico"><use href="#i-delta"/></svg><span>Compare</span></button>
+                </div>
+                <div class="side-caption" id="sideCaption"></div>
+            </div>
+            <div class="coach hidden" id="coach">
+                <b>Pick a side, then a variable.</b> <span class="muted">Now is what the stations say, Forecast is what the model says, Compare is one minus the other. The map colours by your pick; the legend at the bottom is the scale. Drag the timeline to see the forecasts hour by hour.</span>
+                <button class="pill" id="coachOk" type="button">got it</button>
             </div>
             <div class="rail-body">
                 <div class="group" id="vars">

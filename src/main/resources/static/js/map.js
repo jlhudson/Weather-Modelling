@@ -69,7 +69,13 @@
             {id: 'kind', name: 'Kind', icon: 'kind', kind: 'category', palette: 'KIND'}
         ]
     };
-    var GROUP_NAMES = {now: 'Now · from the ground', fc: 'Forecast · the model', diff: 'Now against the forecast', fire: 'Fire', ground: 'Ground', asks: 'Requests'};
+    var GROUP_NAMES = {now: 'Now · from the ground', fc: 'Forecast · the model', diff: 'Compare · now minus forecast', fire: 'Fire', ground: 'Ground', asks: 'Requests'};
+    var SIDE_CAPTIONS = {
+        now: '<b>Now</b> is what the ground says: the station in each hexagon, several blended, or the neighbours brought to its height. Blue.',
+        fc: '<b>Forecast</b> is what the model says for this hour, for the hexagons holding one. Amber. Drag the timeline to see the hours ahead.',
+        diff: '<b>Compare</b> is now minus forecast, hexagon by hexagon: where the model runs warm, dry or windy. Red is over, blue is under.',
+        other: 'A layer of the hexagon itself: the same whichever side is picked.'
+    };
 
     // ---- colour: the ground in blues, the model in amber, ratings as published, categories fixed, numbers on a ramp.
     var FROM = {station: '#2563eb', stations: '#1e3a8a', neighbours: '#0d9488', model: '#f59e0b', none: '#9ca3af'};
@@ -187,6 +193,7 @@
             b.disabled = !allowed(b.dataset.side);
         });
         $('rail').dataset.side = isSide(state.group) ? state.group : 'other';
+        $('sideCaption').innerHTML = SIDE_CAPTIONS[isSide(state.group) ? state.group : 'other'];
         Object.keys(togs).forEach(function (k) { var b = document.querySelector('.tog[data-tog=' + k + ']'); if (b) b.classList.toggle('on', togs[k]); });
     }
     function chip(x, g) {
@@ -204,11 +211,13 @@
         buildRail(); legend(); restyle(); glyphs(); stations(); tiles();
     }
     function pickSide(side) {
-        if (!allowed(side)) return;
+        if (!allowed(side)) { note(state.mode === 'ahead' ? 'ahead of now there is only the forecast' : 'behind now there is only what was observed'); return; }
         state.side = side;
         // The same variable on the other side where it exists, else the side's first.
         var same = VARS[side].some(function (x) { return x.id === state.id; });
-        choose(side, same ? state.id : VARS[side][0].id);
+        choose(side, same ? state.id : VARS[side].some(function (x) { return x.id === 'temperatureC'; }) ? 'temperatureC' : VARS[side][0].id);
+        var v = current(), n = drawnProps().filter(function (p) { return valueOf(p, v) != null; }).length;
+        note((side === 'now' ? 'Now' : side === 'fc' ? 'Forecast' : 'Compare') + ' · ' + v.name.toLowerCase() + ' — ' + n + ' hexagon' + (n === 1 ? '' : 's') + (side === 'fc' ? ' hold a forecast' : side === 'diff' ? ' have both' : ' from the ground'));
     }
     // The timeline moved: the rail follows what the layer can show then.
     function reconcile() {
@@ -623,11 +632,18 @@
     var zoomWasPoints = pointsMode();
     map.on('zoomend', function () { var pm = pointsMode(); if (pm !== zoomWasPoints || pm) { zoomWasPoints = pm; draw(); } else glyphs(); stations(); });
     map.on('moveend', function () { if (togs.grid) grid(); });
+    window.addEventListener('resize', function () { ticks(); timeLabel(); });
     map.on('click', function (e) {
         var b = confirm('Probe ' + e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4) + '? This is an ask: it reads whatever is due for that state and spends allowance.');
         if (b) probe(e.latlng.lat, e.latlng.lng);
     });
     document.addEventListener('gully:theme', function () { restyle(); });
+
+    // The coach mark, once per browser: what the switch is for.
+    var coached = false;
+    try { coached = localStorage.getItem('gully.map.coached') === '1'; } catch (e) {}
+    if (!coached) $('coach').classList.remove('hidden');
+    $('coachOk').addEventListener('click', function () { $('coach').classList.add('hidden'); try { localStorage.setItem('gully.map.coached', '1'); } catch (e) {} });
 
     buildRail();
     ticks();
