@@ -260,8 +260,10 @@ filling towards its next check, when an ask last checked and read it, what it ho
 count is the whole file), which hexagon's ask caused that; and the ledger's last reads, each against
 the hexagon it was read for.
 
-**The legend** (bottom centre) is the scale the colours mean, with the distribution of the hexagons
-drawn on it: a histogram over the ramp and the mean for a number, swatches with counts for a category.
+**The legend** (bottom left) is the scale the colours mean, with the distribution drawn on it: a
+histogram over the ramp and the mean for a number, swatches with counts for a category — over the
+hexagons in the map view by default (it follows as you pan), or over every hexagon held with the
+"in view" switch off. Hovering a hexagon lights its bar.
 The stations are coloured on the same scale where they measure the variable shown, filled where the
 observation is fresh and hollow where the file for their state has not been asked for lately — so a
 station that disagrees with its hexagon is visible as a dot of a different colour.

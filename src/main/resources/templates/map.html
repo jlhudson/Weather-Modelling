@@ -99,7 +99,13 @@
 
         <!-- The legend: the scale the colours mean, with the distribution of the hexagons drawn on it. -->
         <div class="panel legend" id="legend">
-            <div class="legend-head"><span class="legend-title" id="legendTitle"></span><span class="muted" id="legendCount"></span></div>
+            <div class="legend-head">
+                <span class="legend-title" id="legendTitle"></span>
+                <span class="legend-scope">
+                    <span class="muted" id="legendCount"></span>
+                    <button aria-checked="true" class="tog on" id="inView" role="switch" title="Count only the hexagons inside the map view" type="button"><svg class="ico"><use href="#i-points"/></svg><span>in view</span></button>
+                </span>
+            </div>
             <div class="legend-body" id="legendBody"></div>
         </div>
 

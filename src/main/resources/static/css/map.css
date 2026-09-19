@@ -101,13 +101,15 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .stats-foot { border-top: 1px solid var(--p-line); margin-top: .45rem; padding-top: .4rem; display: flex; justify-content: space-between; align-items: center; }
 
 /* ---- the legend */
-.legend { left: 50%; transform: translateX(-50%); bottom: 4.2rem; width: 26rem; max-width: calc(100% - 1.2rem); padding: .45rem .7rem .5rem; }
-.legend-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .3rem; gap: .5rem; }
+.legend { left: .6rem; bottom: 4.4rem; width: 26rem; max-width: calc(100% - 1.2rem); padding: .45rem .7rem .5rem; }
+.legend-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .3rem; gap: .5rem; }
+.legend-scope { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
+.legend-scope .tog { padding: .12rem .5rem .12rem .4rem; font-size: .72rem; }
 .legend-title { color: var(--p-fg); }
 .legend-body { display: flex; flex-direction: column; gap: .25rem; }
 .hist { display: block; width: 100%; height: 30px; }
 .hist rect { fill: var(--p-muted); opacity: .55; }
-.hist rect.hot { fill: var(--p-fg); opacity: .85; }
+.hist rect.hot { fill: var(--p-accent); opacity: 1; }
 .ramp { height: 8px; border-radius: 4px; border: 1px solid var(--p-line); }
 .ramp-labels { display: flex; justify-content: space-between; font-family: var(--g-mono); font-size: .72rem; color: var(--p-muted); }
 .swatches { display: flex; flex-wrap: wrap; gap: .25rem .75rem; }
@@ -207,7 +209,7 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
     .rail { top: auto; left: .5rem; right: .5rem; bottom: 4.2rem; width: auto; max-height: 55%; }
     .rail.folded { max-height: none; }
     .stats { display: none; }
-    .legend { bottom: auto; top: .5rem; left: .5rem; right: .5rem; transform: none; width: auto; }
+    .legend { bottom: auto; top: .5rem; left: .5rem; right: .5rem; width: auto; }
     .timeline { width: calc(100% - 1rem); }
     .drawer, .drawer.left { top: .5rem; left: .5rem; right: .5rem; width: auto; max-height: calc(100% - 5rem); }
     .chips { grid-template-columns: 1fr 1fr 1fr; }

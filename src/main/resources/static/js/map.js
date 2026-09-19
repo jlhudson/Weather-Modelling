@@ -128,6 +128,7 @@
     var glyphLayer = L.layerGroup().addTo(map);
     var state = {side: 'now', group: 'now', id: 'from', hours: 0, mode: 'now', playing: null};
     var togs = {stations: true, wind: true, labels: true, grid: false, points: false, forecasts: false};
+    var inView = true;
     var etag = null, lastFc = null, lastStations = null, lastSources = null;
 
     function current() {
@@ -235,19 +236,34 @@
         buildRail();
     }
 
-    // ---- the legend: the scale, with the distribution of what is drawn
+    // ---- the legend: the scale, with the distribution of what is drawn - the hexagons in view, or every one held
     function drawnProps() {
         var out = [];
         if (!lastFc) return out;
         lastFc.features.forEach(function (f) { if (shown(f)) out.push(f.properties); });
         return out;
     }
+    function viewProps() {
+        var all = drawnProps();
+        if (!inView) return all;
+        var b = map.getBounds();
+        return all.filter(function (p) { return p.lat != null && b.contains([p.lat, p.lon]); });
+    }
+    var bins = 28, binOf = null;
+    function hotBin(x) {
+        var rects = document.querySelectorAll('#legendBody .hist rect');
+        rects.forEach(function (r) { r.classList.remove('hot'); });
+        if (x == null || binOf == null || !rects.length) return;
+        var i = binOf(x);
+        if (rects[i]) rects[i].classList.add('hot');
+    }
     function legend() {
-        var v = current(), props = drawnProps(), title = $('legendTitle'), body = $('legendBody'), count = $('legendCount');
+        var v = current(), props = viewProps(), title = $('legendTitle'), body = $('legendBody'), count = $('legendCount');
+        binOf = null;
         title.innerHTML = icon(v.icon) + ' ' + esc(v.name) + (v.hint ? ' <span class="muted">' + esc(v.hint) + '</span>' : '') + ' <span class="muted">· ' + esc(GROUP_NAMES[state.group].split(' · ')[0].toLowerCase()) + '</span>';
         var vals = [], counts = {};
         props.forEach(function (p) { var x = valueOf(p, v); if (x != null) { vals.push(x); counts[x] = (counts[x] || 0) + 1; } });
-        count.textContent = vals.length + ' of ' + props.length + ' hexagons';
+        count.textContent = vals.length + ' of ' + props.length + (inView ? ' in view' : ' held');
         if (v.kind === 'from') {
             var html = '<div class="swatches">';
             Object.keys(FROM).forEach(function (k) { html += '<span class="swatch"><i style="background:' + FROM[k] + (k === 'none' ? ';opacity:.35' : '') + '"></i>' + esc(FROM_WORDS[k]) + ' <b>' + (counts[k] || 0) + '</b></span>'; });
@@ -269,8 +285,9 @@
         // A number: its distribution as bars over the ramp, the range under it.
         var lo, hi, div = state.group === 'diff';
         if (div) { lo = -v.lim; hi = v.lim; } else { lo = v.range[0]; hi = v.range[1]; }
-        var bins = 28, hist = new Array(bins).fill(0), hot = -1;
-        vals.forEach(function (x) { var i = Math.max(0, Math.min(bins - 1, Math.floor((x - lo) / (hi - lo) * bins))); hist[i]++; });
+        var hist = new Array(bins).fill(0), hot = -1;
+        binOf = function (x) { return Math.max(0, Math.min(bins - 1, Math.floor((x - lo) / (hi - lo) * bins))); };
+        vals.forEach(function (x) { hist[binOf(x)]++; });
         var max = Math.max.apply(null, hist.concat([1]));
         var svg = '<svg class="hist" viewBox="0 0 ' + bins * 10 + ' 30" preserveAspectRatio="none">';
         hist.forEach(function (n, i) { var h = n ? Math.max(2, n / max * 30) : 0; svg += '<rect x="' + (i * 10 + 1) + '" y="' + (30 - h) + '" width="8" height="' + h + '"' + (i === hot ? ' class="hot"' : '') + '><title>' + n + '</title></rect>'; });
@@ -342,6 +359,8 @@
             L.circleMarker([p.lat, p.lon], {renderer: canvas, radius: r, color: s.color, weight: p.hasDrought ? 1.5 : .6, opacity: s.opacity, fillColor: s.fillColor, fillOpacity: Math.min(.95, s.fillOpacity * 1.6)})
                 .bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
+                .on('mouseover', function () { hotBin(valueOf(p)); })
+                .on('mouseout', function () { hotBin(null); })
                 .addTo(pointLayer);
         });
     }
@@ -349,6 +368,8 @@
         var p = f.properties;
         layer.bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'});
         layer.on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); });
+        layer.on('mouseover', function () { hotBin(valueOf(p)); });
+        layer.on('mouseout', function () { hotBin(null); });
     }
     function line(t, rh, w, dir, gust) {
         if (t == null && rh == null && w == null) return null;
@@ -616,6 +637,7 @@
         });
     });
     $('railFold').addEventListener('click', function () { $('rail').classList.toggle('folded'); });
+    $('inView').addEventListener('click', function () { inView = !inView; $('inView').classList.toggle('on', inView); $('inView').setAttribute('aria-checked', inView); legend(); });
     $('sourcesToggle').addEventListener('click', function () { var el = $('sources'); if (el.classList.contains('hidden')) sourcesPanel(true); else el.classList.add('hidden'); });
     timeInput.addEventListener('input', function () { slid(false); });
     timeInput.addEventListener('change', function () { slid(true); });
@@ -631,7 +653,7 @@
     });
     var zoomWasPoints = pointsMode();
     map.on('zoomend', function () { var pm = pointsMode(); if (pm !== zoomWasPoints || pm) { zoomWasPoints = pm; draw(); } else glyphs(); stations(); });
-    map.on('moveend', function () { if (togs.grid) grid(); });
+    map.on('moveend', function () { if (togs.grid) grid(); if (inView) legend(); });
     window.addEventListener('resize', function () { ticks(); timeLabel(); });
     map.on('click', function (e) {
         var b = confirm('Probe ' + e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4) + '? This is an ask: it reads whatever is due for that state and spends allowance.');
