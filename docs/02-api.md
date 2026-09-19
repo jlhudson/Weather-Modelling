@@ -111,17 +111,30 @@ curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/readings?lat=-35.02&lon=138.73&at=2026
 What each block is:
 
 - **`hexagon`** — what the point's hexagon is made of, and the state of what it holds. `kind` is
-  `station`, `forecast`, `both` or `bare`; `expiresAt` is when the forecast's life ends.
+  `station`, `forecast`, `both` or `bare`; `expiresAt` is when the forecast's life ends. `elevationM`
+  is the hexagon's mean height and `elevationFrom` where it came from (`terrain`, `open-meteo`, or
+  `station` until the first ask). `landUse` is the share per class, `leads` which fire index that
+  makes lead, `burnablePct` how much of the hexagon the indices describe, `point` the class at the
+  point itself, and `source` the raster (`dea-landcover-2025`, or a mounted file's name); null until
+  the first ask has read it (docs/01 §1.8).
 - **`source`** — the upstream the forecast came from, when it was fetched, when its life ends
   (`expiresAt`) under the cap in force now (`life`, `PT3H`, or `PT5H` while the allowance is tight), and
   `stale`, true when its life has ended and nothing has answered since. Null on a station-only reading.
-- **`drift`** — the station in the hexagon against the forecast at the station's time (docs/01 §1.3):
-  `temperatureC`, `humidityPct`, `windKmh`, `rainMm` as station minus forecast, `score` (the worst as a
-  share of its tolerance), `worst`, and `drifted` — true when that threw the forecast out. Null where
+- **`drift`** — the stations in the hexagon against the forecast at the observation's time (docs/01 §1.3):
+  `temperatureC`, `humidityPct`, `windKmh`, `rainMm` as observed minus forecast, `score` (the worst as a
+  share of its tolerance), `worst`, and `drifted` — true when that threw the forecast out. `stationId`
+  is the station, or the stations joined with `+` where the hexagon's blend was the judge. Null where
   the hexagon has no station, no forecast, or no comparison yet.
-- **`at`, `current`, `currentFrom`** — the conditions now and where they came from: `station` when a
-  Bureau station in the hexagon supplied them (its own fields; the model-only ones are null), `model`
+- **`at`, `current`, `currentFrom`** — the conditions now and where they came from (docs/01 §1.2):
+  `station` when the Bureau station in the hexagon supplied them as they are (its own fields; the
+  model-only ones are null); `stations` when several inside it were blended at the hexagon's
+  elevation; `neighbours` when the stations around it were, brought to its elevation; `model`
   otherwise. `at` is the time they describe.
+- **`nearby`** — with `currentFrom` of `stations` or `neighbours`: `ring` (0 inside the hexagon, else 1
+  or 2), each station used with its `distanceKm`, `heightM` and `weight` (the shares sum to 1),
+  `elevationM` the values were brought to, `elevationApplied` (false when the hexagon or a station
+  had no height, in which case the values are weighted as they are), and the two lapse rates. Null
+  otherwise.
 - **`station`** — the nearest station's latest values, inside the hexagon or not, with the distance.
 - **`fire`** — the fire picture (docs/01 §1.8). `grass` is null where the district has no curing figure;
   `official` is null outside South Australia; `leads` is null without land use.
@@ -147,11 +160,18 @@ The Hub treats `available == false` as "no reading" and asks again on its next s
 
 ## 2.2 `GET /api/v1/hexagons.geojson?at=`
 
-Every hexagon held, as a `FeatureCollection` of polygons, each carrying the values a map colours by
-(`temperatureC`, `humidityPct`, `windSpeedKmh`, `ffdi`, `ffdiRating`, `gfdi`, `fbi`, `afdrsRating`,
-`officialRating`, `totalFireBan`, `droughtFactor`, `kbdiMm`, `curingPct`, `elevationM`, `leads`,
-`landUse`, `kind`, `active`, `stale`, `warm`, `ageMinutes`, `refreshedAt`, `expiresAt`, `warnings`,
-`windChangeAt`, ...) and `meta` with the counts. Pre-rendered once per change and fingerprinted, so a
+Every hexagon held, as a `FeatureCollection` of polygons, each carrying the values a map colours by,
+with "now" and the forecast kept apart: `from` (`station`, `stations`, `neighbours`, `model` or null)
+and `nowTemperatureC`, `nowHumidityPct`, `nowWindKmh`, `nowWindDeg`, `nowGustKmh`, `nowRainMm`,
+`nowAt`, `nowAgeMinutes`, `nowStations`, `nowRing`; `fcTemperatureC`, `fcHumidityPct`, `fcWindKmh`,
+`fcWindDeg`, `fcGustKmh`, `fcRainMm`, `fcFetchedAt`, `fcExpiresAt`, `fcMinutesLeft`, `stale`,
+`upstream`; `diffTemperatureC`, `diffHumidityPct`, `diffWindKmh` (now minus forecast) and the drift
+(`drift`, `drifted`, `driftWorst`, `drift24h`, ...); the fire picture (`ffdi`, `ffdiRating`, `gfdi`,
+`fbi`, `afdrsRating`, `officialRating`, `totalFireBan`, `droughtFactor`, `kbdiMm`, `curingPct`,
+`warnings`, `windChangeAt`); the ground (`elevationM`, `elevationFrom`, `landUse`, `landDominant`,
+`leads`, `burnablePct`, `landSource`); and the asks (`kind`, `active`, `warm`, `lastAskedAt`,
+`askedMinutesAgo`, `asks`). `meta` carries the counts, including `nowFrom` — how many hexagons take
+"now" from each source. Pre-rendered once per change and fingerprinted, so a
 map polling every minute gets `304` until something changes. With `at=`, the values as they were —
 only hexagons asked about with a ref have a value then. Never fetches. Served as `application/geo+json`;
 a client that accepts only `application/json` is answered as that rather than refused, and the same

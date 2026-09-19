@@ -197,12 +197,15 @@ public class StationRegistry {
     }
 
     /**
-     * The station inside a cell, if there is one; the first by id where there are several.
+     * The hexagon's own station: the one nearest its centre where there are several inside it. The
+     * others are not lost - "now" is blended from all of them ({ Interpolation.inCell}) - but one
+     * is the hexagon's for the links, the logs and the drought ledger.
      */
     public Optional<Station> inCell(Grid grid, Cell cell) {
         return stations.values().stream()
                 .filter(s -> grid.cellOf(s.lat(), s.lon()).id().equals(cell.id()))
-                .min(Comparator.comparing(Station::id));
+                .min(Comparator.comparingDouble((Station s) -> Grid.planarMetres(cell.lat(), cell.lon(), s.lat(), s.lon()))
+                        .thenComparing(Station::id));
     }
 
     /**

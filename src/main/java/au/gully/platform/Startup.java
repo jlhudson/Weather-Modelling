@@ -28,11 +28,11 @@ import java.time.Instant;
  * <ol>
  *   <li>the console user;</li>
  *   <li>the registers back into memory — stations, curing, hexagons, river cells — from the database;</li>
- *   <li>the timers: the Bureau's files, the warnings, the CFS feeds, the drought step, the sweeps
- *       and the nightly backup, each first firing a moment after the service is up.</li>
+ *   <li>the housekeeping timers: the hourly sweep and the nightly backup.</li>
  * </ol>
- * The first poll of each source runs right after start, off the startup thread, and the hexagons'
- * pictures are computed as each answers.
+ * Nothing is polled (W-14): the Bureau's files, the warnings and the CFS feeds are read on request,
+ * when an ask finds them older than their cadence, and a hexagon's picture is drawn on the ask.
+ * The service starts knowing what it knew, and learns what it is asked about.
  */
 @Slf4j
 @Component
@@ -73,32 +73,16 @@ public class Startup implements ApplicationRunner {
 
     private void schedule() {
         Instant soon = Instant.now().plusSeconds(2);
-        // The registries feed the hexagons: each change recomputes the pictures.
+        // The registers feed the hexagons: a station file read re-links every hexagon to its station and gives
+        // each station a hexagon; the district shapes join the hexagons to their districts. Nothing recomputes a
+        // picture here: pictures are drawn on the ask (W-14).
         stationReader.onUpdate(at -> store.stationsChanged());
-        warnings.onUpdate(at -> store.recomputeAll());
-        ratings.onUpdate(at -> store.recomputeAll());
         districts.onUpdate(at -> store.districtsChanged());
-        curing.onUpdate(at -> store.recomputeAll());
 
-        // The district shapes first: the station poll creates a hexagon per station, and each wants its district.
-        if (properties.enabled() && properties.sources().cfs()) {
-            scheduler.scheduleWithFixedDelay(guarded("cfs districts", districts::poll), soon, Districts.EVERY);
-            scheduler.scheduleWithFixedDelay(guarded("cfs ratings", ratings::poll), soon.plusSeconds(8), Ratings.EVERY);
-        }
-        if (properties.enabled() && properties.sources().bureau()) {
-            scheduler.scheduleWithFixedDelay(guarded("bureau stations", stationReader::poll), soon.plusSeconds(3), StationReader.EVERY);
-            scheduler.scheduleWithFixedDelay(guarded("bureau warnings", warnings::poll), soon.plusSeconds(5), WarningsReader.EVERY);
-        }
-        // Once the stations are in, the pictures of every hexagon that had none.
-        scheduler.schedule(guarded("first pictures", () -> {
-            store.stationsChanged();
-            return store.size();
-        }), soon.plusSeconds(20));
-        scheduler.scheduleWithFixedDelay(guarded("drought step", store::stepDrought), soon.plusSeconds(30), Duration.ofMinutes(15));
-        scheduler.scheduleWithFixedDelay(guarded("rivers", store::refreshRivers), soon.plusSeconds(40), Duration.ofHours(1));
+        // Housekeeping only. Every source is read on request, when an ask finds it older than its cadence.
         scheduler.scheduleWithFixedDelay(guarded("sweep", () -> store.sweep() + ledger.prune()), soon.plusSeconds(60), Duration.ofHours(1));
-        log.info("timers: stations every {}, warnings every {}, ratings every {}, drought step every 15m, sweep hourly",
-                StationReader.EVERY, WarningsReader.EVERY, Ratings.EVERY);
+        log.info("timers: none but the hourly sweep; the Bureau files (every {}), warnings ({}), CFS ratings ({}) and shapes ({}) are read on request",
+                StationReader.EVERY, WarningsReader.EVERY, Ratings.EVERY, Districts.EVERY);
     }
 
     /**

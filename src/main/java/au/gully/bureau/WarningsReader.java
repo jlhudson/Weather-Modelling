@@ -2,6 +2,7 @@ package au.gully.bureau;
 
 import au.gully.platform.Fetched;
 import au.gully.platform.HttpFetcher;
+import au.gully.platform.ReadOutcome;
 import au.gully.platform.UpstreamException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,20 +34,62 @@ public class WarningsReader {
     private final Map<String, Set<String>> listedByState = new ConcurrentHashMap<>();
     private final Map<String, String> failures = new ConcurrentHashMap<>();
     private final List<Consumer<Instant>> listeners = new ArrayList<>();
+    private final Map<String, Instant> checkedAt = new ConcurrentHashMap<>();
+    private final Map<String, Object> locks = new ConcurrentHashMap<>();
     private volatile Instant lastPollAt;
 
     public void onUpdate(Consumer<Instant> listener) {
         listeners.add(listener);
     }
 
+    /**
+     * One state's listing, read now if it has not been checked inside {@link #EVERY} (W-14), and the
+     * products it names that are new. Called from an ask, for the state the hexagon is in.
+     */
+    public ReadOutcome ensure(String state, Instant now) {
+        Instant last = checkedAt.get(state);
+        if (last != null && Duration.between(last, now).compareTo(EVERY) < 0) {
+            return ReadOutcome.SKIPPED;
+        }
+        synchronized (locks.computeIfAbsent(state, k -> new Object())) {
+            last = checkedAt.get(state);
+            if (last != null && Duration.between(last, now).compareTo(EVERY) < 0) {
+                return ReadOutcome.SKIPPED;
+            }
+            checkedAt.put(state, now);
+            Read r = read(state, now);
+            if (r.changed()) {
+                listeners.forEach(l -> l.accept(now));
+            }
+            return r.outcome();
+        }
+    }
+
+    private record Read(ReadOutcome outcome, boolean changed) {
+    }
+
+    /**
+     * Every state, for the console's "read them all now".
+     */
     public int poll() {
         Instant now = Instant.now();
-        boolean changed = false;
+        int changed = 0;
         for (String state : StationReader.STATES) {
+            checkedAt.remove(state);
+            ensure(state, now);
+            changed++;
+        }
+        return changed;
+    }
+
+    private Read read(String state, Instant now) {
+        boolean changed = false;
+        ReadOutcome outcome = ReadOutcome.READ;
+        {
             try {
                 Fetched f = http.getIfChanged(URI.create(WarningFiles.feedUrl(state)));
                 if (f.notModified()) {
-                    continue;
+                    return new Read(ReadOutcome.UNCHANGED, expire(now));
                 }
                 List<WarningFiles.Item> items = WarningFiles.parseFeed(f.body());
                 Set<String> listed = new HashSet<>();
@@ -72,9 +115,18 @@ public class WarningsReader {
                 if (failures.put(state, e.getMessage()) == null) {
                     log.warn("bureau warnings {}: {}", state, e.getMessage());
                 }
+                outcome = ReadOutcome.FAILED;
             }
         }
-        // A warning past its own end time is not current, whatever the listing still says.
+        lastPollAt = now;
+        return new Read(outcome, expire(now) || changed);
+    }
+
+    /**
+     * A warning past its own end time is not current, whatever the listing still says.
+     */
+    private boolean expire(Instant now) {
+        boolean changed = false;
         for (Iterator<Map.Entry<String, Warning>> it = warnings.entrySet().iterator(); it.hasNext(); ) {
             Warning w = it.next().getValue();
             if (w.until() != null && w.until().plus(Duration.ofHours(1)).isBefore(now)) {
@@ -84,10 +136,7 @@ public class WarningsReader {
             }
         }
         lastPollAt = now;
-        if (changed) {
-            listeners.forEach(l -> l.accept(now));
-        }
-        return warnings.size();
+        return changed;
     }
 
     private boolean fetchProduct(String state, WarningFiles.Item item, Instant now) {
@@ -135,5 +184,15 @@ public class WarningsReader {
 
     public Map<String, String> failures() {
         return Map.copyOf(failures);
+    }
+
+    /** When one state's listing was last checked by an ask; null if never. */
+    public Instant checkedAt(String state) {
+        return checkedAt.get(state);
+    }
+
+    /** How many warnings are held, all states. */
+    public int count() {
+        return warnings.size();
     }
 }

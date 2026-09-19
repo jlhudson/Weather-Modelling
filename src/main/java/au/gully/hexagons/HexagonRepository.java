@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * The {@code hexagon} table: one row per hexagon the service holds, written when the hexagon is
@@ -50,11 +51,12 @@ public class HexagonRepository {
         if (held.equals(spec)) {
             return false;
         }
-        long hexagons = count("hexagon"), snapshots = count("reading_snapshot"), rivers = count("river_discharge");
-        db.sql("truncate table hexagon, reading_snapshot, river_discharge").update();
+        long hexagons = count("hexagon"), snapshots = count("reading_snapshot"), rivers = count("river_discharge"), drifts = count("forecast_drift");
+        // Everything keyed by a hexagon id goes, the drift ledger included: an old id would otherwise be read as a new hexagon's.
+        db.sql("truncate table hexagon, reading_snapshot, river_discharge, forecast_drift").update();
         db.sql("update grid_spec set spec = :spec, since = :at where id = 1").param("spec", spec).param("at", Db.ts(Instant.now())).update();
-        log.warn("grid changed from [{}] to [{}]: every hexagon id changed, so {} hexagons, {} snapshots and {} river cells were reset",
-                held, spec, hexagons, snapshots, rivers);
+        log.warn("grid changed from [{}] to [{}]: every hexagon id changed, so {} hexagons, {} snapshots, {} river cells and {} drift rows were reset",
+                held, spec, hexagons, snapshots, rivers, drifts);
         return true;
     }
 
@@ -124,6 +126,24 @@ public class HexagonRepository {
         db.sql("update hexagon set river = :r::jsonb, river_computed_for = :for where id = :id")
                 .param("id", h.id()).param("r", r == null ? null : json.write(r))
                 .param("for", r == null ? null : r.computedFor()).update();
+    }
+
+    public void saveLandUse(Hexagon h, byte[] landCover) {
+        db.sql("update hexagon set land_use = :land::jsonb, land_cover = :tiff where id = :id")
+                .param("id", h.id()).param("land", h.landUse() == null ? null : json.write(h.landUse())).param("tiff", landCover).update();
+    }
+
+    /**
+     * The land-cover raster a hexagon's land use was counted from, when it was fetched rather than mounted.
+     */
+    public Optional<byte[]> landCover(String id) {
+        return db.sql("select land_cover from hexagon where id = :id").param("id", id)
+                .query(byte[].class).optional();
+    }
+
+    public void saveElevation(Hexagon h) {
+        db.sql("update hexagon set elevation_m = :e, elevation_from = :from where id = :id")
+                .param("id", h.id()).param("e", h.elevationM()).param("from", h.elevationFrom()).update();
     }
 
     public void saveDistrict(Hexagon h) {

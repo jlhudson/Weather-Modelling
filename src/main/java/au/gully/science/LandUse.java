@@ -5,19 +5,20 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * What a hexagon is made of, as a percentage per class, and the class at the point that was asked
- * about (docs/06 item 19). Counted once from the mounted land-cover raster when the hexagon is first
- * created, never on request.
+ * What a hexagon is made of, as a percentage per class (docs/06 item 19, W-15). Counted once per
+ * hexagon from a land-cover raster: the mounted file when one is there, else Digital Earth
+ * Australia's land cover read for the hexagon on its first ask and kept with it.
  * <p>
- * It matters twice. It is worth returning for the point itself — "this point is in pine forest",
- * "this is a car park" — and it decides which fire index is the right one: a hexagon that is mostly
- * forest leads with the McArthur forest index, mostly grass leads with the grassland indices, and one
- * that is mostly water or built-up carries both but says they apply to little of it.
+ * It matters twice. The class at the point asked about is worth returning on its own — "this point
+ * is in pine forest", "this is a car park" — and the shares decide which fire index is the right one:
+ * a hexagon that is mostly forest leads with the McArthur forest index, mostly grass leads with the
+ * grassland indices, and one that is mostly water or built-up carries both but says they apply to
+ * little of it.
  *
- * @param pointClass the class of the cell the point itself falls in, or null when no file is mounted
- * @param percent    whole-number share of the hexagon per class; absent classes are absent, not zero
+ * @param percent whole-number share of the hexagon per class; absent classes are absent, not zero
+ * @param source  where the raster came from: the mounted file's name, or {@code dea-landcover-2025}
  */
-public record LandUse(LandClass pointClass, Map<LandClass, Integer> percent) {
+public record LandUse(Map<LandClass, Integer> percent, String source) {
 
     /**
      * The seven classes every land-cover product can be reduced to, and the one for a value the
@@ -66,6 +67,22 @@ public record LandUse(LandClass pointClass, Map<LandClass, Integer> percent) {
      */
     public int burnablePct() {
         return share(LandClass.FOREST) + share(LandClass.SCRUB) + share(LandClass.GRASSLAND) + share(LandClass.CROPLAND);
+    }
+
+    /**
+     * The class with the largest share, for a map's one colour; null when nothing was counted.
+     */
+    public LandClass dominant() {
+        LandClass best = null;
+        int most = 0;
+        for (LandClass c : LandClass.values()) {
+            int v = share(c);
+            if (v > most) {
+                most = v;
+                best = c;
+            }
+        }
+        return best;
     }
 
     /**

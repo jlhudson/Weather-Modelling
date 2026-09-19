@@ -29,7 +29,8 @@ import java.util.zip.Inflater;
  * <p>
  * The file is read positionally, never mapped, so a five-gigabyte land-use raster costs no address
  * space, and the last few decoded tiles are kept so the thousands of samples a hexagon overlay takes
- * hit the disk a handful of times.
+ * hit the disk a handful of times. A raster fetched for one hexagon - a few kilobytes from a WCS -
+ * is read the same way from memory ({ #of}).
  */
 public final class GeoTiff implements AutoCloseable {
 
@@ -51,6 +52,8 @@ public final class GeoTiff implements AutoCloseable {
     private static final int TILE_CACHE = 16;
 
     private final FileChannel channel;
+    /** The whole file, when it was handed over as bytes rather than a path. */
+    private final ByteBuffer memory;
     private final ByteOrder order;
     private final boolean big;
     private final Path path;
@@ -73,12 +76,20 @@ public final class GeoTiff implements AutoCloseable {
     };
 
     public static GeoTiff open(Path path) throws IOException {
-        return new GeoTiff(path);
+        return new GeoTiff(path, FileChannel.open(path, StandardOpenOption.READ), null);
     }
 
-    private GeoTiff(Path path) throws IOException {
+    /**
+     * A small raster held in memory, named for the messages.
+     */
+    public static GeoTiff of(byte[] bytes, String name) throws IOException {
+        return new GeoTiff(Path.of(name), null, ByteBuffer.wrap(bytes));
+    }
+
+    private GeoTiff(Path path, FileChannel channel, ByteBuffer memory) throws IOException {
         this.path = path;
-        this.channel = FileChannel.open(path, StandardOpenOption.READ);
+        this.channel = channel;
+        this.memory = memory;
         ByteBuffer head = read(0, 16);
         short bom = head.getShort(0);
         if (bom == 0x4949) {
@@ -451,6 +462,13 @@ public final class GeoTiff implements AutoCloseable {
 
     private ByteBuffer read(long at, int size) throws IOException {
         ByteBuffer b = ByteBuffer.allocate(Math.max(0, size)).order(order);
+        if (memory != null) {
+            int from = (int) Math.min(Math.max(0, at), memory.limit());
+            int n = Math.min(Math.max(0, size), memory.limit() - from);
+            b.put(memory.duplicate().position(from).limit(from + n));
+            b.flip();
+            return b;
+        }
         long position = at;
         while (b.hasRemaining()) {
             int n = channel.read(b, position);
@@ -480,7 +498,9 @@ public final class GeoTiff implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        channel.close();
+        if (channel != null) {
+            channel.close();
+        }
     }
 
     /**

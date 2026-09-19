@@ -5,13 +5,13 @@ import lombok.experimental.UtilityClass;
 /**
  * The Australian Albers equal-area conic projection (the one EPSG:3577 is, in its spherical form): the
  * plane the hexagons are drawn on. Every national raster and most state ones are published in it,
- * and on it a 25 km hexagon is 25 km from Cape York to Hobart — the cos-latitude squeeze a plain
+ * and on it a 20 km hexagon is 20 km from Cape York to Hobart — the cos-latitude squeeze a plain
  * lat/lon grid would suffer (a degree of longitude is 82 per cent as long at Adelaide as at Darwin)
  * is what this exists to remove.
  * <p>
  * Standard parallels 18° S and 36° S, central meridian 132° E, origin at the equator. Spherical
  * rather than ellipsoidal (Snyder 1987, eqs. 14-1 to 14-11): the difference is a few hundred metres
- * in position, which matters to nobody keying a 25 km hexagon, and the arithmetic fits on one screen.
+ * in position, which matters to nobody keying a 20 km hexagon, and the arithmetic fits on one screen.
  */
 @UtilityClass
 public class Albers {

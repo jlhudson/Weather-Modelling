@@ -18,14 +18,14 @@ import java.util.Set;
  * <p>
  * Hexagons, and only hexagons: they are the tiling whose cells are nearest to round — every point in
  * one is within half a width of its centre. Axial coordinates {@code (q, r)}; a hexagon's id is {@code q_r}. The size is the
- * width across the flats, so a 25 km hexagon is 25 km wide and 29 km tall.
+ * width across the flats, so a 20 km hexagon is 20 km wide and 23 km tall.
  */
 public final class Grid {
 
     /**
      * The width of a hexagon across the flats, in kilometres.
      */
-    public static final double CELL_KM = 25;
+    public static final double CELL_KM = 20;
 
     /**
      * The anchor: hexagon {@code 0_0} is centred here. The Murray Bridge Golf Course, as OpenStreetMap
@@ -124,6 +124,33 @@ public final class Grid {
             out.add(cell(c.q() + v[0], c.r() + v[1]));
         }
         return out;
+    }
+
+    /**
+     * The hexagons exactly {@code steps} away: six at one step, twelve at two, {@code 6 × steps} in
+     * general. The neighbourhoods the interpolation of "now" walks outwards through.
+     */
+    public List<Cell> ring(Cell c, int steps) {
+        if (steps <= 1) {
+            return ring(c);
+        }
+        List<Cell> out = new ArrayList<>();
+        for (int dq = -steps; dq <= steps; dq++) {
+            for (int dr = -steps; dr <= steps; dr++) {
+                if ((Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2 == steps) {
+                    out.add(cell(c.q() + dq, c.r() + dr));
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The distance in metres between two points on the plane: what the interpolation weights by.
+     */
+    public static double planarMetres(double lat1, double lon1, double lat2, double lon2) {
+        double[] a = Albers.forward(lat1, lon1), b = Albers.forward(lat2, lon2);
+        return Math.hypot(a[0] - b[0], a[1] - b[1]);
     }
 
     /**

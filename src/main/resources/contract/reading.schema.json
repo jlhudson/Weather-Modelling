@@ -5,7 +5,7 @@
   "description": "What GET /api/v1/readings answers. Kept identically in Weather-Modelling (src/main/resources/contract) and The-Hub-Database (hub-services/src/main/resources/contract); each build checks what it serves or reads against its copy and the two copies against each other.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "available", "unavailable", "point", "hexagon", "source", "at", "current", "currentFrom", "station", "fire", "flood", "drought", "warnings", "forecast", "drift", "history", "disclaimer"],
+  "required": ["schema", "available", "unavailable", "point", "hexagon", "source", "at", "current", "currentFrom", "station", "nearby", "fire", "flood", "drought", "warnings", "forecast", "drift", "history", "disclaimer"],
   "properties": {
     "schema": {"const": "gully/reading/1"},
     "available": {"type": "boolean"},
@@ -15,8 +15,9 @@
     "source": {"oneOf": [{"$ref": "#/$defs/source"}, {"type": "null"}]},
     "at": {"$ref": "#/$defs/instantOrNull"},
     "current": {"oneOf": [{"$ref": "#/$defs/conditions"}, {"type": "null"}]},
-    "currentFrom": {"enum": ["station", "model", null]},
+    "currentFrom": {"enum": ["station", "stations", "neighbours", "model", null]},
     "station": {"oneOf": [{"$ref": "#/$defs/station"}, {"type": "null"}]},
+    "nearby": {"oneOf": [{"$ref": "#/$defs/nearby"}, {"type": "null"}]},
     "fire": {"oneOf": [{"$ref": "#/$defs/fire"}, {"type": "null"}]},
     "flood": {"oneOf": [{"$ref": "#/$defs/flood"}, {"type": "null"}]},
     "drought": {"oneOf": [{"$ref": "#/$defs/drought"}, {"type": "null"}]},
@@ -44,7 +45,7 @@
       "properties": {
         "id": {"type": "string"}, "lat": {"type": "number"}, "lon": {"type": "number"},
         "widthKm": {"type": "number"},
-        "elevationM": {"$ref": "#/$defs/num"}, "elevationFrom": {"enum": ["terrain", "model", "station", null]},
+        "elevationM": {"$ref": "#/$defs/num"}, "elevationFrom": {"enum": ["terrain", "open-meteo", "model", "station", null]},
         "slopeDeg": {"$ref": "#/$defs/num"}, "zone": {"$ref": "#/$defs/str"},
         "fireBanDistrict": {"$ref": "#/$defs/str"}, "bureauDistrict": {"$ref": "#/$defs/str"},
         "landUse": {"oneOf": [{"$ref": "#/$defs/landUse"}, {"type": "null"}]},
@@ -54,12 +55,13 @@
       }
     },
     "landUse": {
-      "type": "object", "additionalProperties": false, "required": ["point", "percent", "leads", "burnablePct"],
+      "type": "object", "additionalProperties": false, "required": ["point", "percent", "leads", "burnablePct", "source"],
       "properties": {
         "point": {"enum": ["forest", "grassland", "cropland", "scrub", "built_up", "water", "bare", "unknown", null]},
         "percent": {"type": "object", "additionalProperties": {"type": "integer"}},
         "leads": {"enum": ["forest", "grass", null]},
-        "burnablePct": {"$ref": "#/$defs/int"}
+        "burnablePct": {"$ref": "#/$defs/int"},
+        "source": {"$ref": "#/$defs/str"}
       }
     },
     "source": {
@@ -69,6 +71,18 @@
         "upstream": {"type": "string"}, "model": {"$ref": "#/$defs/str"}, "attribution": {"$ref": "#/$defs/str"},
         "fetchedAt": {"$ref": "#/$defs/instant"}, "expiresAt": {"$ref": "#/$defs/instantOrNull"},
         "life": {"$ref": "#/$defs/str"}, "stale": {"type": "boolean"}
+      }
+    },
+    "nearby": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ring", "stations", "elevationM", "elevationApplied", "lapseTemperatureCPerKm", "lapseDewPointCPerKm"],
+      "properties": {
+        "ring": {"type": "integer"}, "elevationM": {"$ref": "#/$defs/num"}, "elevationApplied": {"type": "boolean"},
+        "lapseTemperatureCPerKm": {"type": "number"}, "lapseDewPointCPerKm": {"type": "number"},
+        "stations": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["id", "name", "distanceKm", "heightM", "weight"],
+          "properties": {"id": {"type": "string"}, "name": {"$ref": "#/$defs/str"}, "distanceKm": {"type": "number"},
+                         "heightM": {"$ref": "#/$defs/num"}, "weight": {"type": "number"}}}}
       }
     },
     "drift": {

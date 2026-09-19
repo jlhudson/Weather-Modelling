@@ -88,6 +88,24 @@ public record Hexagon(
                 f, drought, river, fire, createdAt, activatedAt, lastAskedAt, lastSnapshotAt, asks, version + 1);
     }
 
+    /**
+     * The mean elevation read for the hexagon, and where from.
+     */
+    public Hexagon withElevation(Double metres, String from) {
+        return new Hexagon(cell, zone, metres, from, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
+                stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt, activatedAt,
+                lastAskedAt, lastSnapshotAt, asks, version + 1);
+    }
+
+    /**
+     * The land use counted for the hexagon.
+     */
+    public Hexagon withLandUse(LandUse use) {
+        return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, use, fireBanDistrict, bureauDistrict,
+                stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt, activatedAt,
+                lastAskedAt, lastSnapshotAt, asks, version + 1);
+    }
+
     public Hexagon withDrought(DroughtState d) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, d, river, fire, createdAt, activatedAt,

@@ -44,6 +44,7 @@ public class OpenMeteo implements Upstream {
     public static final String FORECAST = "https://api.open-meteo.com/v1/forecast";
     public static final String ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
     public static final String FLOOD = "https://flood-api.open-meteo.com/v1/flood";
+    public static final String ELEVATION = "https://api.open-meteo.com/v1/elevation";
 
     public static final int FORECAST_DAYS = 7;
     public static final int FORECAST_HOURS = 72;
@@ -213,6 +214,28 @@ public class OpenMeteo implements Upstream {
                 + "&start_date=" + start + "&end_date=" + end
                 + "&daily=precipitation_sum,temperature_2m_max&timezone=auto";
         return daily(read(url));
+    }
+
+    /**
+     * The ground height at up to a hundred points, from Open-Meteo's elevation endpoint (a 90 m digital
+     * elevation model): what a hexagon's mean elevation is read from when no terrain file is mounted,
+     * one call per hexagon, once. Null where the model has nothing (the sea).
+     */
+    public List<Double> elevation(List<double[]> points) throws UpstreamException {
+        StringBuilder lats = new StringBuilder(), lons = new StringBuilder();
+        for (double[] p : points) {
+            lats.append(lats.isEmpty() ? "" : ",").append(fixed(p[0]));
+            lons.append(lons.isEmpty() ? "" : ",").append(fixed(p[1]));
+        }
+        JsonNode root = read(ELEVATION + "?latitude=" + lats + "&longitude=" + lons);
+        JsonNode values = Nodes.at(root, "elevation");
+        List<Double> out = new ArrayList<>();
+        if (values != null && values.isArray()) {
+            for (JsonNode v : values) {
+                out.add(v == null || v.isNull() ? null : v.asDouble());
+            }
+        }
+        return out;
     }
 
     /**

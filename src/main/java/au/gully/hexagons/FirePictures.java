@@ -40,12 +40,14 @@ public class FirePictures {
      */
     public static final int FORECAST_HOURS = 48;
 
+    private final Grid grid;
     private final StationRegistry stations;
     private final WarningsReader warnings;
     private final Ratings ratings;
     private final Curing curing;
 
-    public FirePictures(StationRegistry stations, WarningsReader warnings, Ratings ratings, Curing curing) {
+    public FirePictures(Grid grid, StationRegistry stations, WarningsReader warnings, Ratings ratings, Curing curing) {
+        this.grid = grid;
         this.stations = stations;
         this.warnings = warnings;
         this.ratings = ratings;
@@ -53,23 +55,46 @@ public class FirePictures {
     }
 
     /**
-     * The conditions "now" for a hexagon: its own station's latest values when it has a station and
-     * they are fresh, else the model's current block, else nothing.
+     * The conditions "now" for a hexagon, from the ground first (W-13): the stations inside it when
+     * they are fresh - one as it is, several blended at the hexagon's elevation ({ Interpolation#inCell});
+     * else the stations around it, brought to its elevation ({ Interpolation#at}); else the
+     * model's series read at this moment; else nothing.
      */
     public Optional<Now> now(Hexagon h, Instant at) {
-        if (h.stationId() != null) {
-            Optional<Observation> o = stations.latest(h.stationId());
-            if (o.isPresent() && o.get().at() != null && Duration.between(o.get().at(), at).compareTo(STATION_STALE) < 0) {
-                return Optional.of(new Now(conditions(o.get()), "station", o.get().at()));
-            }
+        Optional<Now> observed = observed(h, at);
+        if (observed.isPresent()) {
+            return observed;
+        }
+        Optional<Interpolation.Result> nearby = Interpolation.at(grid, stations, h.cell(), h.elevationM(), at);
+        if (nearby.isPresent()) {
+            return Optional.of(new Now(nearby.get().conditions(), "neighbours", nearby.get().conditions().at(), nearby.get()));
         }
         Forecast f = h.forecast();
         if (f != null) {
             // The model's "now" is its series read at this moment, not its current block from the fetch.
             Conditions c = f.at(at);
             if (c != null) {
-                return Optional.of(new Now(c, "model", c.at() == null ? at : c.at()));
+                return Optional.of(new Now(c, "model", c.at() == null ? at : c.at(), null));
             }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * "Now" from the hexagon's own stations only - what a forecast is judged against (W-12) - or empty
+     * when it has none reporting.
+     */
+    public Optional<Now> observed(Hexagon h, Instant at) {
+        if (h.stationId() == null) {
+            return Optional.empty();
+        }
+        Optional<Interpolation.Result> several = Interpolation.inCell(grid, stations, h.cell(), h.elevationM(), at);
+        if (several.isPresent()) {
+            return Optional.of(new Now(several.get().conditions(), "stations", several.get().conditions().at(), several.get()));
+        }
+        Optional<Observation> o = stations.latest(h.stationId());
+        if (o.isPresent() && o.get().at() != null && Duration.between(o.get().at(), at).compareTo(STATION_STALE) < 0) {
+            return Optional.of(new Now(conditions(o.get()), "station", o.get().at(), null));
         }
         return Optional.empty();
     }
@@ -175,8 +200,14 @@ public class FirePictures {
     }
 
     /**
-     * The conditions now, and where they came from.
+     * The conditions now, and where they came from: {@code station}, {@code stations} or {@code neighbours}
+     * (the last two with how) or {@code model}.
      */
-    public record Now(Conditions conditions, String from, Instant at) {
+    public record Now(Conditions conditions, String from, Instant at, Interpolation.Result nearby) {
+
+        /** Whether the values were measured in the hexagon itself, by one station or several. */
+        public boolean observed() {
+            return "station".equals(from) || "stations".equals(from);
+        }
     }
 }

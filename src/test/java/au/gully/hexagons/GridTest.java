@@ -52,7 +52,7 @@ class GridTest {
         assertThat(origin.lat()).isCloseTo(Grid.ANCHOR_LAT, offset(1e-6));
         assertThat(origin.lon()).isCloseTo(Grid.ANCHOR_LON, offset(1e-6));
         assertThat(GRID.cellOf(Grid.ANCHOR_LAT, Grid.ANCHOR_LON).id()).isEqualTo("0_0");
-        assertThat(GRID.spec()).contains("25.0 km").contains("-35.13133,139.26558");
+        assertThat(GRID.spec()).contains("20.0 km").contains("-35.13133,139.26558");
         Cell c = GRID.cellOf(-34.93, 138.60);
         List<Cell> ring = GRID.ring(c);
         assertThat(ring).hasSize(6);
@@ -60,7 +60,7 @@ class GridTest {
             // Centre to centre across a shared flat is the width across flats.
             assertThat(Geo.haversineMetres(c.lat(), c.lon(), n.lat(), n.lon())).isCloseTo(Grid.CELL_KM * 1000, offset(200.0));
         }
-        assertThat(GRID.areaKm2()).isCloseTo(541.3, offset(0.1));
+        assertThat(GRID.areaKm2()).isCloseTo(346.4, offset(0.1));
     }
 
     @Test

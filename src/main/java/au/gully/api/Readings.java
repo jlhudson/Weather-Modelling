@@ -53,11 +53,11 @@ public class Readings {
         FirePicture fire = h.fire();
         DroughtIndex drought = h.drought() == null ? null : h.drought().index();
         ZoneId zone = store.zoneOf(h);
-        boolean stale = f != null && !"station".equals(c.from()) && store.life().expired(f, now);
-        return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, now),
+        boolean stale = f != null && !c.observed() && store.life().expired(f, now);
+        return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, point, now),
                 f == null ? null : new Reading.Source(f.upstream(), f.model(), f.attribution(), f.fetchedAt(),
                         store.life().expiresAt(f), store.life().forecast().toString(), stale),
-                c.at(), c.conditions(), c.from(), station(h), fire(fire), flood(h, f, drought, zone), drought,
+                c.at(), c.conditions(), c.from(), station(h), nearby(c.nearby()), fire(fire), flood(h, f, drought, zone), drought,
                 warnings(fire), withForecast && f != null ? forecast(f, fire, h, zone) : null, drift(h), null, Reading.DISCLAIMER);
     }
 
@@ -77,14 +77,14 @@ public class Readings {
         }
         History.Snapshot s = nearest.get();
         Instant now = Instant.now();
-        return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, now), null, s.at(), s.current(), s.currentFrom(),
-                station(h), fire(s.fire()), null, s.drought(), warnings(s.fire()), null, null,
+        return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, point, now), null, s.at(), s.current(), s.currentFrom(),
+                station(h), null, fire(s.fire()), null, s.drought(), warnings(s.fire()), null, null,
                 new Reading.HistoryBlock(s.at(), s.askedAt(), s.ref(), at), Reading.DISCLAIMER);
     }
 
     public Reading unavailable(Reading.Point point, Hexagon h, String why) {
-        return new Reading(Reading.SCHEMA, false, why, point, h == null ? null : hexagon(h, Instant.now()), null, null,
-                null, null, h == null ? null : station(h), null, null, null, List.of(), null, null, null, Reading.DISCLAIMER);
+        return new Reading(Reading.SCHEMA, false, why, point, h == null ? null : hexagon(h, point, Instant.now()), null, null,
+                null, null, h == null ? null : station(h), null, null, null, null, List.of(), null, null, null, Reading.DISCLAIMER);
     }
 
     private static String reason(Hexagon h) {
@@ -93,15 +93,25 @@ public class Readings {
 
     // ---------------------------------------------------------------- the blocks
 
-    Reading.HexagonBlock hexagon(Hexagon h, Instant now) {
+    Reading.HexagonBlock hexagon(Hexagon h, Reading.Point point, Instant now) {
         Grid grid = store.grid();
         Forecast f = h.forecast();
         LandUse land = h.landUse();
+        // The class at the point itself, off the hexagon's raster; the shares are the hexagon's.
+        String at = land == null || point == null ? null
+                : store.landClassAt(h, point.lat(), point.lon()).map(LandUse.LandClass::key).orElse(null);
         return new Reading.HexagonBlock(h.id(), round(h.cell().lat()), round(h.cell().lon()), grid.cellKm(),
                 h.elevationM(), h.elevationFrom(), h.slopeDeg(), h.zone(), h.fireBanDistrict(), h.bureauDistrict(),
-                land == null ? null : new Reading.LandUseBlock(land.pointClass() == null ? null : land.pointClass().key(),
-                        land.byKey(), land.leads(), land.burnablePct()),
+                land == null ? null : new Reading.LandUseBlock(at, land.byKey(), land.leads(), land.burnablePct(), land.source()),
                 h.stationId(), h.kind(), h.activatedAt(), f == null ? null : f.fetchedAt(), store.life().expiresAt(f));
+    }
+
+    static Reading.NearbyBlock nearby(Interpolation.Result r) {
+        if (r == null) {
+            return null;
+        }
+        return new Reading.NearbyBlock(r.ring(), r.stations().stream().map(u -> new Reading.NearbyStation(u.id(), u.name(), u.distanceKm(), u.heightM(), u.weight())).toList(),
+                r.elevationM(), r.elevationApplied(), Interpolation.LAPSE_TEMPERATURE_C_PER_KM, Interpolation.LAPSE_DEW_POINT_C_PER_KM);
     }
 
     /**

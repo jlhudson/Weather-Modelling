@@ -5,24 +5,51 @@
     <div class="map-tools">
         <label>Show
             <select class="form-select form-select-sm" id="value">
-                <option value="activity" selected>what is active</option>
-                <option value="drift">drift · station against forecast</option>
-                <option value="drift24h">drift · 24 h mean</option>
-                <option value="temperatureC">temperature °C</option>
-                <option value="humidityPct">humidity %</option>
-                <option value="windSpeedKmh">wind km/h</option>
-                <option value="windGustKmh">gust km/h</option>
-                <option value="ffdi">FFDI</option>
-                <option value="gfdi">GFDI</option>
-                <option value="fbi">FBI (AFDRS grass)</option>
-                <option value="officialRating">official rating</option>
-                <option value="droughtFactor">drought factor</option>
-                <option value="kbdiMm">KBDI mm</option>
-                <option value="curingPct">curing %</option>
-                <option value="ageMinutes">age min</option>
-                <option value="elevationM">elevation m</option>
-                <option value="leads">land use leads</option>
-                <option value="kind">kind</option>
+                <optgroup label="Now · from the ground">
+                    <option value="now:from" selected>where "now" comes from</option>
+                    <option value="now:temperatureC">temperature °C</option>
+                    <option value="now:humidityPct">humidity %</option>
+                    <option value="now:windKmh">wind km/h</option>
+                    <option value="now:gustKmh">gust km/h</option>
+                    <option value="now:rainMm">rain since 9 am mm</option>
+                    <option value="now:age">age of the observation min</option>
+                </optgroup>
+                <optgroup label="Forecast · the model">
+                    <option value="fc:life">forecasts held · fading as their life runs out</option>
+                    <option value="fc:temperatureC">temperature °C</option>
+                    <option value="fc:humidityPct">humidity %</option>
+                    <option value="fc:windKmh">wind km/h</option>
+                    <option value="fc:gustKmh">gust km/h</option>
+                    <option value="fc:rainMm">rain this hour mm</option>
+                    <option value="fc:age">age of the fetch min</option>
+                </optgroup>
+                <optgroup label="Now against the forecast">
+                    <option value="diff:temperatureC">temperature · now − forecast</option>
+                    <option value="diff:humidityPct">humidity · now − forecast</option>
+                    <option value="diff:windKmh">wind · now − forecast</option>
+                    <option value="drift">drift score · stations against the forecast</option>
+                    <option value="drift24h">drift score · 24 h mean</option>
+                </optgroup>
+                <optgroup label="Fire">
+                    <option value="ffdi">FFDI</option>
+                    <option value="gfdi">GFDI</option>
+                    <option value="fbi">FBI (AFDRS grass)</option>
+                    <option value="officialRating">official rating</option>
+                    <option value="droughtFactor">drought factor</option>
+                    <option value="kbdiMm">KBDI mm</option>
+                    <option value="curingPct">curing %</option>
+                </optgroup>
+                <optgroup label="Ground">
+                    <option value="elevationM">elevation m</option>
+                    <option value="landDominant">land use · largest share</option>
+                    <option value="leads">land use · which index leads</option>
+                    <option value="burnablePct">burnable %</option>
+                </optgroup>
+                <optgroup label="Requests">
+                    <option value="asked">minutes since last asked · what drives every read</option>
+                    <option value="asks">asks this run</option>
+                    <option value="kind">kind</option>
+                </optgroup>
             </select>
         </label>
         <label><input class="form-check-input" id="forecasts" type="checkbox"> forecasts only</label>
@@ -34,12 +61,14 @@
             <span class="mono" id="timeLabel">now</span>
         </label>
         <button class="btn btn-sm btn-outline-secondary py-0" id="now" type="button">now</button>
+        <button class="btn btn-sm btn-outline-secondary py-0" id="sourcesToggle" type="button">sources</button>
         <span class="muted" id="status" th:text="${hexagons} + ' hexagons held (' + ${cellKm} + ' km) · ' + ${stations} + ' stations · ' + ${warnings} + ' warnings'"></span>
         <span class="legend ms-auto" id="legend"></span>
     </div>
     <div class="map-wrap">
         <div id="map"></div>
         <div class="hidden" id="detail"></div>
+        <div class="hidden" id="sources"></div>
     </div>
     <script defer th:src="@{/js/map.js}"></script>
 </section>

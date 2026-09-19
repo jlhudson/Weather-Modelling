@@ -2,6 +2,7 @@ package au.gully.cfs;
 
 import au.gully.platform.Fetched;
 import au.gully.platform.HttpFetcher;
+import au.gully.platform.ReadOutcome;
 import au.gully.platform.Nodes;
 import au.gully.platform.UpstreamException;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class Ratings {
     private final Map<String, DistrictRating> byDistrict = new ConcurrentHashMap<>();
     private final List<Consumer<Instant>> listeners = new ArrayList<>();
     private volatile Instant readAt;
+    private volatile Instant checkedAt;
     private volatile String failure;
 
     public Ratings(HttpFetcher http) {
@@ -57,6 +59,19 @@ public class Ratings {
 
     public static String normalise(String district) {
         return district == null ? null : district.trim().toUpperCase().replaceAll("\\s+", " ");
+    }
+
+    /**
+     * The feed, read now if it has not been checked inside {@link #EVERY} (W-14). Called from an ask
+     * for a South Australian hexagon; one thread reads at a time.
+     */
+    public synchronized ReadOutcome ensure(Instant now) {
+        if (checkedAt != null && Duration.between(checkedAt, now).compareTo(EVERY) < 0) {
+            return ReadOutcome.SKIPPED;
+        }
+        checkedAt = now;
+        poll();
+        return failure == null ? ReadOutcome.READ : ReadOutcome.FAILED;
     }
 
     public int poll() {
@@ -139,6 +154,11 @@ public class Ratings {
 
     public Instant readAt() {
         return readAt;
+    }
+
+    /** When an ask last checked the feed; null if never. */
+    public Instant checkedAt() {
+        return checkedAt;
     }
 
     public String failure() {

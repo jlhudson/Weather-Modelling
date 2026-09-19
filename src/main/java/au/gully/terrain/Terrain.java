@@ -23,7 +23,9 @@ import static au.gully.science.Numbers.round1;
 /**
  * The two rasters on the service's own volume — elevation and land cover — read once per hexagon
  * when it is first created (docs/06 items 17 and 19). No upstream call, no expiry, works offline;
- * a finer file replaces either without changing anything else.
+ * a finer file replaces either without changing anything else. Without a file, a hexagon that is
+ * asked about reads its elevation from Open-Meteo and its land cover from Digital Earth Australia
+ * ({ DeaLandCover}) on the ask, so nothing need be mounted for either to be there.
  * <p>
  * Neither file is committed or downloaded by the service. Geoscience Australia's 9-second DEM (about
  * 250 m, a few hundred megabytes for the country) is the elevation; ABARES' catchment-scale land use
@@ -151,10 +153,21 @@ public class Terrain {
     }
 
     /**
-     * The land use of a cell as a percentage per class, plus the class at the point, from the mounted
-     * file. Empty when there is no file, or the cell is entirely outside it.
+     * The class at a point from the mounted file; empty without one, or outside it.
      */
-    public Optional<LandUse> landUse(Grid grid, Cell cell, double pointLat, double pointLon) {
+    public Optional<LandClass> landClassAt(double lat, double lon) {
+        if (landCover == null) {
+            return Optional.empty();
+        }
+        double at = landCover.sample(lat, lon);
+        return Double.isNaN(at) ? Optional.empty() : Optional.of(classOf((int) Math.round(at)));
+    }
+
+    /**
+     * The land use of a cell as a percentage per class from the mounted file. Empty when there is no
+     * file, or the cell is entirely outside it.
+     */
+    public Optional<LandUse> landUse(Grid grid, Cell cell) {
         if (landCover == null) {
             return Optional.empty();
         }
@@ -174,9 +187,7 @@ public class Terrain {
         Map<LandClass, Integer> percent = new EnumMap<>(LandClass.class);
         int t = total;
         counts.forEach((k, v) -> percent.put(k, (int) Math.round(100.0 * v / t)));
-        double at = landCover.sample(pointLat, pointLon);
-        LandClass pointClass = Double.isNaN(at) ? null : classOf((int) Math.round(at));
-        return Optional.of(new LandUse(pointClass, percent));
+        return Optional.of(new LandUse(percent, landCoverSource));
     }
 
     LandClass classOf(int value) {

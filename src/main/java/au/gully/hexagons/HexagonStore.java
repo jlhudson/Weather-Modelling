@@ -6,6 +6,8 @@ import au.gully.cfs.Districts;
 import au.gully.drought.Drought;
 import au.gully.drought.Rivers;
 import au.gully.platform.GullyProperties;
+import au.gully.science.LandUse;
+import au.gully.terrain.DeaLandCover;
 import au.gully.terrain.Terrain;
 import au.gully.upstreams.Forecast;
 import au.gully.upstreams.Upstreams;
@@ -50,6 +52,7 @@ public class HexagonStore {
     private final Grid grid;
     private final HexagonRepository repository;
     private final Terrain terrain;
+    private final DeaLandCover landCover;
     private final StationRegistry stations;
     private final Districts districts;
     private final Upstreams upstreams;
@@ -59,6 +62,7 @@ public class HexagonStore {
     private final Rivers rivers;
     private final Life life;
     private final Drifts drifts;
+    private final Sources sources;
     private final GullyProperties properties;
 
     private final Map<String, Hexagon> hexagons = new ConcurrentHashMap<>();
@@ -70,6 +74,17 @@ public class HexagonStore {
     private final AtomicLong stale = new AtomicLong();
     /** When a hexagon's forecast was last thrown out for drift, so a model that is simply wrong is not re-fetched every ten minutes. */
     private final Map<String, Instant> discarded = new ConcurrentHashMap<>();
+    /** When a hexagon's elevation was last asked for and not answered, so a failing endpoint is not asked on every ask. */
+    private final Map<String, Instant> elevationTried = new ConcurrentHashMap<>();
+    /** The same for its land cover. */
+    private final Map<String, Instant> landCoverTried = new ConcurrentHashMap<>();
+    /** The land-cover rasters read lately, a few kilobytes each, for the class at a point; the rest are in the row. */
+    private final Map<String, byte[]> rasters = Collections.synchronizedMap(new LinkedHashMap<>(64, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, byte[]> eldest) {
+            return size() > 256;
+        }
+    });
 
     /**
      * How long after a forecast is thrown out for drift before one is fetched again: the next model
@@ -77,12 +92,13 @@ public class HexagonStore {
      */
     public static final Duration REFETCH_AFTER_DRIFT = Duration.ofHours(1);
 
-    public HexagonStore(Grid grid, HexagonRepository repository, Terrain terrain, StationRegistry stations, Districts districts,
+    public HexagonStore(Grid grid, HexagonRepository repository, Terrain terrain, DeaLandCover landCover, StationRegistry stations, Districts districts,
                         Upstreams upstreams, FirePictures pictures, History history, Drought drought, Rivers rivers,
-                        Life life, Drifts drifts, GullyProperties properties) {
+                        Life life, Drifts drifts, Sources sources, GullyProperties properties) {
         this.grid = grid;
         this.repository = repository;
         this.terrain = terrain;
+        this.landCover = landCover;
         this.stations = stations;
         this.districts = districts;
         this.upstreams = upstreams;
@@ -92,6 +108,7 @@ public class HexagonStore {
         this.rivers = rivers;
         this.life = life;
         this.drifts = drifts;
+        this.sources = sources;
         this.properties = properties;
     }
 
@@ -109,21 +126,26 @@ public class HexagonStore {
     public Hexagon ask(double lat, double lon, boolean wantForecast, String ref) {
         Instant now = Instant.now();
         Cell cell = grid.cellOf(lat, lon);
+        // The sources this answer draws on, read now if they are older than their cadence (W-14): the
+        // station file and the warnings of the state the hexagon is in, the CFS feeds for South Australia.
+        sources.ensureFor(cell, now);
         boolean created = !hexagons.containsKey(cell.id());
         Hexagon h = hexagons.computeIfAbsent(cell.id(), k -> create(cell, now));
         boolean firstAsk = h.activatedAt() == null;
         h = replace(cell.id(), old -> old.asked(now));
         if (firstAsk || created) {
             repository.saveActivity(h);
-            h = ensureRiver(h, lat, lon, now);
         }
-        // Every ask, not only the first: cheap when the area is current, and the way a hexagon picks up an
-        // area spun up or adopted since it was last asked about.
+        h = ensureElevation(h, now);
+        h = ensureLandUse(h, now);
+        h = ensureRiver(h, lat, lon, now);
+        // Every ask, not only the first: cheap when current, and the way a hexagon picks up a spin-up
+        // that could not be fed the last time.
         h = ensureDrought(h, now);
 
         // The station's word on the forecast, before deciding whether one is needed.
         h = checkDrift(h, now);
-        boolean stationFresh = pictures.now(h, now).map(n -> "station".equals(n.from())).orElse(false);
+        boolean stationFresh = pictures.now(h, now).map(FirePictures.Now::observed).orElse(false);
         Forecast f = h.forecast();
         Instant discardedAt = discarded.get(h.id());
         boolean mayFetch = discardedAt == null || Duration.between(discardedAt, now).compareTo(REFETCH_AFTER_DRIFT) >= 0;
@@ -141,9 +163,8 @@ public class HexagonStore {
         } else if (nextExpiry != null && Duration.between(now, nextExpiry).compareTo(properties.refreshAhead()) < 0) {
             refreshInBackground(h.id());
         }
-        if (h.fire() == null) {
-            h = recompute(h.id(), now);
-        }
+        // The picture is drawn on the ask, from what is held now: nothing keeps it up between asks.
+        h = recompute(h.id(), now);
         served.incrementAndGet();
         if (h.forecast() != null && !stationFresh && life.expired(h.forecast(), now)) {
             stale.incrementAndGet();
@@ -176,7 +197,7 @@ public class HexagonStore {
         String zone = nearest.map(n -> n.station().zone()).orElse(properties.zone());
         Hexagon h = new Hexagon(cell, zone, elev, elevFrom,
                 terrain.meanSlopeDeg(grid, cell).orElse(null),
-                terrain.landUse(grid, cell, cell.lat(), cell.lon()).orElse(null),
+                terrain.landUse(grid, cell).orElse(null),
                 districts.districtOf(cell.lat(), cell.lon()).orElse(null),
                 nearest.map(n -> n.station().district()).orElse(null),
                 inside.map(Station::id).orElse(null),
@@ -251,7 +272,6 @@ public class HexagonStore {
         for (String id : hexagons.keySet()) {
             Hexagon h = hexagons.get(id);
             if (h != null && (h.active() || h.hasStation())) {
-                checkDrift(h, now);
                 recompute(id, now);
                 n++;
             }
@@ -290,7 +310,6 @@ public class HexagonStore {
                 changed++;
             }
         }
-        recomputeAll();
         return changed;
     }
 
@@ -314,7 +333,6 @@ public class HexagonStore {
         }
         if (changed > 0) {
             log.info("districts: {} hexagons joined to a district", changed);
-            recomputeAll();
         }
         return changed;
     }
@@ -330,7 +348,7 @@ public class HexagonStore {
         if (drift.isEmpty() || !drift.get().drifted()) {
             return h;
         }
-        log.info("forecast for {} thrown out: {} against station {}", h.id(), drift.get().describe(), h.stationId());
+        log.info("forecast for {} thrown out: {} against station {}", h.id(), drift.get().describe(), drift.get().stationId());
         Hexagon after = replace(h.id(), old -> old.withForecast(null, now));
         repository.saveForecast(after, null);
         discarded.put(h.id(), now);
@@ -346,6 +364,99 @@ public class HexagonStore {
     }
 
     // ---------------------------------------------------------------- drought and rivers
+
+    /**
+     * The hexagon's mean elevation, for a hexagon that is asked about (W-13): from the terrain file when
+     * one is mounted (read at creation), else from Open-Meteo's elevation model over a lattice of
+     * points across the hexagon, one call, once. A station hexagon nobody asks about keeps its
+     * station's height; the interpolation brings the neighbours' values to the elevation of the hexagon
+     * asked about, and that is the one that has to be right.
+     */
+    private Hexagon ensureElevation(Hexagon h, Instant now) {
+        if ("terrain".equals(h.elevationFrom()) || "open-meteo".equals(h.elevationFrom())) {
+            return h;
+        }
+        Instant tried = elevationTried.get(h.id());
+        if (tried != null && Duration.between(tried, now).compareTo(Duration.ofMinutes(15)) < 0) {
+            return h;
+        }
+        elevationTried.put(h.id(), now);
+        List<double[]> points = grid.lattice(h.cell(), 7);
+        Optional<List<Double>> heights = upstreams.elevation(points, h.id());
+        if (heights.isEmpty()) {
+            return h;
+        }
+        double sum = 0;
+        int count = 0;
+        for (Double z : heights.get()) {
+            if (z != null) {
+                sum += z;
+                count++;
+            }
+        }
+        if (count == 0) {
+            return h;
+        }
+        double mean = Math.round(sum / count * 10) / 10.0;
+        Hexagon after = replace(h.id(), old -> old.withElevation(mean, "open-meteo"));
+        repository.saveElevation(after);
+        elevationTried.remove(h.id());
+        log.debug("hexagon {}: mean elevation {} m from {} points", h.id(), mean, count);
+        return after;
+    }
+
+    /**
+     * The hexagon's land use, for a hexagon that is asked about (W-15): from the mounted file when one
+     * is there (counted at creation), else Digital Earth Australia's land cover read once for the
+     * hexagon's box and kept with it.
+     */
+    private Hexagon ensureLandUse(Hexagon h, Instant now) {
+        if (h.landUse() != null || terrain.hasLandCover() || !properties.enabled()) {
+            return h;
+        }
+        Instant tried = landCoverTried.get(h.id());
+        if (tried != null && Duration.between(tried, now).compareTo(Duration.ofMinutes(15)) < 0) {
+            return h;
+        }
+        landCoverTried.put(h.id(), now);
+        Optional<DeaLandCover.Cover> cover = landCover.fetch(grid, h.cell(), h.id());
+        if (cover.isEmpty()) {
+            return h;
+        }
+        Optional<LandUse> use = DeaLandCover.landUse(cover.get(), grid, h.cell());
+        if (use.isEmpty()) {
+            return h;
+        }
+        Hexagon after = replace(h.id(), old -> old.withLandUse(use.get()));
+        repository.saveLandUse(after, cover.get().tiff());
+        rasters.put(h.id(), cover.get().tiff());
+        landCoverTried.remove(h.id());
+        log.debug("hexagon {}: land use {} from {}", h.id(), use.get().byKey(), use.get().source());
+        return after;
+    }
+
+    /**
+     * The land-cover class at a point in a hexagon: from the mounted file, else from the raster the
+     * hexagon was read from. Empty when neither is there.
+     */
+    public Optional<LandUse.LandClass> landClassAt(Hexagon h, double lat, double lon) {
+        Optional<LandUse.LandClass> mounted = terrain.landClassAt(lat, lon);
+        if (mounted.isPresent()) {
+            return mounted;
+        }
+        if (h.landUse() == null) {
+            return Optional.empty();
+        }
+        byte[] tiff = rasters.get(h.id());
+        if (tiff == null) {
+            tiff = repository.landCover(h.id()).orElse(null);
+            if (tiff == null) {
+                return Optional.empty();
+            }
+            rasters.put(h.id(), tiff);
+        }
+        return DeaLandCover.classAt(tiff, lat, lon);
+    }
 
     /**
      * The hexagon's drought: spun up on the first ask that can feed it, stepped to yesterday when it is
@@ -383,68 +494,6 @@ public class HexagonStore {
         Hexagon after = replace(h.id(), old -> old.withRiver(river.get()));
         repository.saveRiver(after);
         return after;
-    }
-
-    /**
-     * The daily step (docs/06 item 7): every hexagon whose last complete day is behind the calendar is
-     * stepped forward from the station ledger, exactly once per hexagon per day, after 9:10 am in its
-     * zone when the rain day has closed, and has its picture recomputed. Runs on a short timer.
-     *
-     * @return how many hexagons were stepped
-     */
-    public int stepDrought() {
-        Instant now = Instant.now();
-        int stepped = 0;
-        for (String id : hexagons.keySet()) {
-            Hexagon h = hexagons.get(id);
-            if (h == null || h.drought() == null) {
-                continue;
-            }
-            try {
-                DroughtState next = drought.stepDaily(h.cell(), h.drought(), zoneOf(h), now).orElse(null);
-                if (next != null) {
-                    Hexagon after = replace(id, old -> old.withDrought(next));
-                    repository.saveDrought(after);
-                    recompute(id, now);
-                    stepped++;
-                }
-            } catch (RuntimeException e) {
-                log.warn("drought step for {} failed: {}", id, e.getMessage());
-            }
-        }
-        if (stepped > 0) {
-            log.info("drought: {} hexagons stepped", stepped);
-        }
-        return stepped;
-    }
-
-    /**
-     * Rivers refreshed once a day for the active hexagons.
-     */
-    public int refreshRivers() {
-        if (!properties.sources().rivers()) {
-            return 0;
-        }
-        Instant now = Instant.now();
-        int refreshed = 0;
-        for (String id : hexagons.keySet()) {
-            Hexagon h = hexagons.get(id);
-            if (h == null || !h.active() || h.river() == null || h.lastAskedAt() == null
-                    || Duration.between(h.lastAskedAt(), now).compareTo(properties.coldAfter()) > 0) {
-                continue;
-            }
-            LocalDate today = LocalDate.now(zoneOf(h));
-            if (!h.river().computedFor().isBefore(today)) {
-                continue;
-            }
-            Optional<RiverState> river = rivers.at(h.river().lat(), h.river().lon(), today);
-            if (river.isPresent()) {
-                Hexagon after = replace(id, old -> old.withRiver(river.get()));
-                repository.saveRiver(after);
-                refreshed++;
-            }
-        }
-        return refreshed;
     }
 
     /**

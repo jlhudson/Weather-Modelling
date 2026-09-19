@@ -61,11 +61,20 @@ details > summary { cursor: pointer; }
 .map-tools { display: flex; flex-wrap: wrap; gap: .3rem .8rem; align-items: center; margin-bottom: .35rem; flex: 0 0 auto; }
 .map-tools label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; white-space: nowrap; }
 .map-tools select, .map-tools input[type=range] { max-width: 14rem; }
-#detail { position: absolute; top: .5rem; right: .5rem; width: 30rem; max-width: calc(100% - 1rem); max-height: calc(100% - 1rem); overflow: auto; z-index: 1000;
+#detail, #sources { position: absolute; top: .5rem; right: .5rem; width: 30rem; max-width: calc(100% - 1rem); max-height: calc(100% - 1rem); overflow: auto; z-index: 1000;
   background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .3rem; padding: .5rem .6rem; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
-#detail.hidden { display: none; }
-#detail h3 { font-size: .95rem; margin: 0 0 .25rem; }
-#detail .table { font-size: .85rem; }
+#detail.hidden, #sources.hidden { display: none; }
+#detail h3, #sources h3 { font-size: .95rem; margin: 0 0 .25rem; }
+#detail .table, #sources .table { font-size: .85rem; }
+/* The sources panel sits on the left, so a hexagon's detail and the sources can be read together. */
+#sources { right: auto; left: .5rem; width: 34rem; font-size: .85rem; }
+#sources .reads { max-height: 16rem; overflow: auto; }
+#sources .src { border-top: 1px solid var(--bs-border-color); padding: .25rem 0; }
+#sources .src:first-of-type { border-top: 0; }
+#sources .glyph-arrow { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; margin-right: .3rem; }
+.hx-arrow.fc line, .hx-arrow.fc polyline, .hx-arrow.fc circle { stroke: #b45309; }
+.hx-arrow.fc circle { fill: #b45309; }
+.hx-label.fc { color: #b45309; }
 .legend { display: inline-flex; gap: .15rem; align-items: center; }
 .legend i { display: inline-block; width: 1.1rem; height: .7rem; box-sizing: border-box; }
 /* On a phone the swatches alone: the words are on their titles, and the map wants the rows back. */

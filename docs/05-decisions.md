@@ -93,11 +93,12 @@ any good, and it re-fetched every hour whether or not anything had changed. A ca
 stretch is the one lever that matters when the allowance is running out. A station's values are
 values, not a reading of a different grade, and they are free every ten minutes.
 
-### W-8 · Terrain and land use from mounted files, read once
+### W-8 · Terrain and land use from mounted files, read once (the fallback changed by W-15)
 
 **The decision.** Elevation, slope and land use come from GeoTIFFs on the service's volume, read by a
 reader written here (classic and BigTIFF, stripped or tiled, four codecs, two coordinate systems) once
-when a hexagon is created. Without a file, the hexagon carries the upstream model's own elevation.
+when a hexagon is created. Without a file, the hexagon carried the upstream model's own elevation and
+no land use; since W-15 it reads both on its first ask, from Open-Meteo and Digital Earth Australia.
 
 **Why.** No upstream call, no expiry, works offline, and a finer file replaces either without changing
 anything else. A GIS library for one method — the value of one cell at a point — would have been forty
@@ -139,8 +140,8 @@ daily from the station ledger for free, kept on the hexagon's row. `V4` dropped 
 
 ### W-12 · The station in the hexagon judges the forecast, on the four things it measures
 
-**The decision.** Every ten minutes, a hexagon with a station and a forecast compares the station's
-values with the forecast read off its series at the same moment — temperature, humidity, wind speed
+**The decision.** On every ask, a hexagon with a station and a forecast compares the station's values
+— the blend of its stations, where it holds several (W-13) — with the forecast read off its series at the same moment — temperature, humidity, wind speed
 and rain since 9 am, each as station minus forecast and as a share of a tolerance (3 °C, 20 points,
 15 km/h, 5 mm). The score is the worst of the four; at 1 the forecast is thrown out, the station stays
 "now", and the days ahead are fetched again an hour later, not at once. Every comparison is written to
@@ -153,4 +154,71 @@ left out — the first two are noise at a point, the third is not what fire turn
 station does not measure cannot be judged. The hour before a re-fetch is what stops a model that is
 simply wrong today from being fetched every ten minutes at five units a time. **What it costs.** A
 hexagon without a station is not judged at all; its forecast lives out its cap. — James, 19 September 2026.
+
+### W-13 · "Now" from the ground first: the stations in the hexagon blended, else the neighbours brought to its elevation, by inverse distance and lapse rate
+
+**The decision.** "Now" is measured before it is modelled. A hexagon with one station answers with
+it, unmoved. A hexagon with several stations blends them: each weighted by the inverse square of its
+distance from the centre, its temperature and dew point first brought to the hexagon's mean elevation
+by the lapse rates (−6.5 °C/km for temperature, −2 °C/km for dew point), humidity recomputed from the
+two, wind averaged as a vector. A hexagon with none takes the same blend from its neighbours — two or
+more of the six around it, else six or more of the eighteen in two rings — brought to its elevation.
+Only then does the model stand in, and the reading says so (`currentFrom`, `nearby`). Elevation is
+the hexagon's mean over a lattice of points, read on the first ask from Open-Meteo's elevation model
+when no terrain file is mounted, because the neighbours' values are brought *to* it.
+
+**Why inverse distance with a lapse rate, and not a Kalman filter.** A Kalman filter estimates a
+state through *time* from noisy readings of it; it is the right tool for smoothing one station's
+series or fusing a model run with observations as they arrive. The question here is spatial and
+instantaneous — the value *here* from values *there*, now — and the standard answer to that for
+surface weather is to weight by distance and correct for height. The height correction is the part
+that matters: a ridge 600 m above the plains is 4 °C cooler and noticeably wetter than the plains'
+stations say, and averaging their humidity would miss it entirely; recomputing humidity from the
+adjusted temperature and dew point does not. Wind is not corrected for height — its dependence on
+height is exposure, not lapse — nor is pressure, which the Bureau has already reduced to sea level.
+The share rule (30% of a ring) is what stops one distant station speaking for a whole neighbourhood.
+**What it costs.** A blend is an estimate, and is never allowed to judge a forecast (W-12); only a
+measurement throws one out. — James, 19 September 2026.
+
+### W-14 · Nothing on a timer: the sources are read on request, whole, when an ask finds them due
+
+**The decision.** No source is polled. An ask for a hexagon reads the Bureau's station file for the
+state the hexagon is in when that file has not been checked for fifteen minutes — a conditional GET,
+and a file that is downloaded is processed whole, every station in the state — the state's warnings
+at five minutes, and for a South Australian hexagon the CFS ratings hourly and the district shapes
+daily. Elevation, land cover, the drought's spin-up and its daily step, the river discharge and the
+forecast are each fetched on the ask that finds them missing or due, and the hexagon's picture is
+drawn then. The only timers are an hourly sweep and the nightly backup. Every read that touched the
+network is written to the ledger against the hexagon that caused it, and the map's sources panel
+shows it.
+
+**Why.** The service is asked about a handful of places at a time, and knowing about all of
+Tasmania for three hours when nobody asks about Tasmania is work and traffic for nothing; the
+Bureau asks for exactly this restraint. Reading the whole file when a file is read is not a
+contradiction — one download serves every hexagon in the state for the next quarter of an hour, and
+the alternative, a request per station, is the traffic the Bureau does not want. **What it costs.**
+The first ask for a state after a quiet spell pays for the read, a few hundred milliseconds; the
+station hexagons of a state nobody asks about are as old as its last ask, and the map says so. —
+James, 19 September 2026.
+
+### W-15 · Land cover from Digital Earth Australia, read once per hexagon on the ask; elevation from Open-Meteo the same way
+
+**The decision.** With no land-cover file mounted, every hexagon's land use was blank. Now a hexagon
+that is asked about reads its land cover from Geoscience Australia's DEA Land Cover (Landsat, 30 m,
+one map per calendar year) — one WCS `GetCoverage` for the hexagon's box, a 96-pixel GeoTIFF of
+level-4 class codes, counted into the seven classes over a lattice and kept with the hexagon so the
+class at any point later asked about is read off it — and its elevation as the mean over a lattice
+from Open-Meteo's elevation model. Both once, both kept on the row; a mounted file, when there is
+one, still wins.
+
+**Why DEA and not OpenStreetMap or a global product.** It is the national product, it covers the
+whole country at 30 m every year, its level-4 code carries the woody-or-herbaceous and canopy-cover
+distinction the two fire indices actually need, and its WCS answers a hexagon in one call of a few
+kilobytes with no key. OpenStreetMap's land use is sparse in the country that burns; the global
+10 m products need a download of the continent or a licensed platform. **What it costs.** One call
+per hexagon, ever, on a service that is not ours; a hexagon asked about while it is down carries no
+land use until the next ask a quarter of an hour later, and its indices lead by nothing. The mapping
+from a hundred level-4 codes to seven classes is a judgement, written down in `DeaLandCover` with the
+reasons, and a wetland's class follows its lifeform because reeds and paperbarks both burn dry. —
+James, 19 September 2026.
 

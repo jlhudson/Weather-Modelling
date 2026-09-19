@@ -52,14 +52,19 @@ land use. In the container the files live on the `weather-data` volume at `/data
 
 ## 3.4 The constants
 
-What is not configuration, and where it lives: the hexagon's width and the grid's anchor (`Grid.CELL_KM`, 25 km;
+What is not configuration, and where it lives: the hexagon's width and the grid's anchor (`Grid.CELL_KM`, 20 km;
 `Grid.ANCHOR_LAT` and `ANCHOR_LON`, the Murray Bridge Golf Course — change either and the hexagon-keyed
 tables are reset at the next start, the service says so in the log);
 every upstream's host, model, licence, allowance, cost per fetch, per-minute limit and pause
 (`OpenMeteo.SPEC`, `GoogleWeather.SPEC`); the budget guard (90%) and the breaker's trip count (3);
-the Bureau's product identifiers and cadences (`StationFile`, `WarningFiles`, `StationReader.EVERY`,
-`WarningsReader.EVERY`); the station ledger's cadence (six hours) and the rain day (9 am); the CFS
-URLs and cadences (`Ratings`, `Districts`); the drought window (365 days), the archive lag (5 days) and the
+the Bureau's product identifiers and the age at which an ask reads a file again (`StationFile`,
+`WarningFiles`, `StationReader.EVERY` 15 min, `WarningsReader.EVERY` 5 min); the station ledger's
+cadence (six hours) and the rain day (9 am); the CFS URLs and the same ages (`Ratings.EVERY` an hour,
+`Districts.EVERY` a day); the state boxes an ask reads files for (`States`); the interpolation's
+rings (2), share (0.30 — 2 of 6, 6 of 18), power (2) and lapse rates (−6.5 and −2.0 °C/km,
+`Interpolation`); the elevation lattice (7 across, `HexagonStore`); the land-cover service, coverage,
+pixels across a hexagon (96), counting lattice (48) and how many years back the latest map is looked
+for (3) (`DeaLandCover`); the drought window (365 days), the archive lag (5 days) and the
 station reach (75 km) (`Drought`); a forecast's life (3 h, 5 h once the day's allowance is 70% spent,
 `Life`), the drift tolerances (3 °C, 20 points, 15 km/h, 5 mm, `Drift`) and the hour before a forecast
 thrown out for drift is fetched again (`HexagonStore.REFETCH_AFTER_DRIFT`); the river cells (5 km) (`Rivers`); the history's

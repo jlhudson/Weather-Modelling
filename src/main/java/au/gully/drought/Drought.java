@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * The drought of a hexagon, stepped forward daily (docs/06 item 7): a soil moisture deficit
  * integrated from a year of daily rain and maximum temperature, and the drought factor that falls
  * out of it. It is the hexagon's, like everything else the hexagon holds — one state per hexagon,
- * on its row — and it needs no cell of its own: at 25 km a hexagon is already the scale a drought
+ * on its row — and it needs no cell of its own: at 20 km a hexagon is already the scale a drought
  * factor describes.
  * <p>
  * The inputs are the Bureau stations inside the hexagon (or the nearest within reach) — the day's
@@ -89,7 +89,9 @@ public class Drought {
      */
     public Optional<DroughtState> ensure(Cell cell, DroughtState held, ZoneId zone, LocalDate today) {
         synchronized (locks.computeIfAbsent(cell.id(), k -> new Object())) {
-            LocalDate yesterday = today.minusDays(1);
+            // The last complete rain day: yesterday once today's 9 am total is in the files, the day before until then.
+            ZonedDateTime local = Instant.now().atZone(zone);
+            LocalDate yesterday = local.toLocalTime().isBefore(DAY_CLOSES) ? today.minusDays(2) : today.minusDays(1);
             if (held != null && !held.computedFor().isBefore(yesterday)) {
                 return Optional.of(held);
             }
@@ -103,22 +105,6 @@ public class Drought {
             }
             return Optional.of(stepTo(cell, held, yesterday));
         }
-    }
-
-    /**
-     * The daily step (docs/06 item 7): the state stepped forward once the rain day has closed —
-     * after 9:10 am in the hexagon's zone — and not before. Empty when there is nothing to do yet.
-     */
-    public Optional<DroughtState> stepDaily(Cell cell, DroughtState held, ZoneId zone, Instant now) {
-        ZonedDateTime local = now.atZone(zone);
-        if (held == null || local.toLocalTime().isBefore(DAY_CLOSES)) {
-            return Optional.empty();
-        }
-        LocalDate yesterday = local.toLocalDate().minusDays(1);
-        if (!held.computedFor().isBefore(yesterday)) {
-            return Optional.empty();
-        }
-        return ensure(cell, held, zone, local.toLocalDate()).filter(s -> !s.computedFor().equals(held.computedFor()));
     }
 
     // ---------------------------------------------------------------- the maths

@@ -2,6 +2,7 @@ package au.gully.cfs;
 
 import au.gully.platform.Fetched;
 import au.gully.platform.HttpFetcher;
+import au.gully.platform.ReadOutcome;
 import au.gully.platform.Nodes;
 import au.gully.platform.UpstreamException;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class Districts {
     private final List<Consumer<Instant>> listeners = new ArrayList<>();
     private volatile List<District> districts = List.of();
     private volatile Instant readAt;
+    private volatile Instant checkedAt;
     private volatile String failure;
 
     public Districts(HttpFetcher http) {
@@ -55,6 +57,19 @@ public class Districts {
      */
     public void onUpdate(Consumer<Instant> listener) {
         listeners.add(listener);
+    }
+
+    /**
+     * The shapes, read now if they have not been checked inside {@link #EVERY} (W-14): a day, since the
+     * boundaries do not move. Called from an ask for a South Australian hexagon.
+     */
+    public synchronized ReadOutcome ensure(Instant now) {
+        if (checkedAt != null && Duration.between(checkedAt, now).compareTo(EVERY) < 0) {
+            return ReadOutcome.SKIPPED;
+        }
+        checkedAt = now;
+        poll();
+        return failure == null ? ReadOutcome.READ : ReadOutcome.FAILED;
     }
 
     public int poll() {
@@ -161,6 +176,11 @@ public class Districts {
 
     public Instant readAt() {
         return readAt;
+    }
+
+    /** When an ask last checked the feed; null if never. */
+    public Instant checkedAt() {
+        return checkedAt;
     }
 
     public String failure() {

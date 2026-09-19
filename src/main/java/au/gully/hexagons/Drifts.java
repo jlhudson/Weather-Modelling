@@ -1,7 +1,5 @@
 package au.gully.hexagons;
 
-import au.gully.bureau.Observation;
-import au.gully.bureau.StationRegistry;
 import au.gully.storage.Db;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -25,29 +23,33 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class Drifts {
 
-    private final StationRegistry stations;
+    private final FirePictures pictures;
     private final JdbcClient db;
     private final Map<String, Drift> latest = new ConcurrentHashMap<>();
 
-    public Drifts(StationRegistry stations, JdbcClient db) {
-        this.stations = stations;
+    public Drifts(FirePictures pictures, JdbcClient db) {
+        this.pictures = pictures;
         this.db = db;
     }
 
     /**
-     * The station against the forecast, for a hexagon with both and a fresh observation; recorded
-     * when the observation is new. Empty otherwise.
+     * The hexagon's stations against the forecast, for a hexagon with both and a fresh observation -
+     * the one station's values, or the blend where it holds several; recorded when the observation is
+     * new. Empty otherwise. The neighbours' interpolation is never a judge: a forecast is thrown out
+     * by a measurement, not by an estimate.
      */
     public Optional<Drift> check(Hexagon h, Instant now) {
         if (h.stationId() == null || h.forecast() == null) {
             return Optional.empty();
         }
-        Optional<Observation> o = stations.latest(h.stationId());
-        if (o.isEmpty() || o.get().at() == null || Duration.between(o.get().at(), now).compareTo(FirePictures.STATION_STALE) >= 0) {
+        Optional<FirePictures.Now> o = pictures.observed(h, now);
+        if (o.isEmpty()) {
             return Optional.empty();
         }
         ZoneId zone = h.zone() == null ? ZoneId.of("Australia/Adelaide") : ZoneId.of(h.zone());
-        Optional<Drift> drift = Drift.of(o.get(), h.forecast(), zone);
+        String judge = o.get().nearby() == null ? h.stationId()
+                : o.get().nearby().stations().stream().map(Interpolation.Used::id).collect(java.util.stream.Collectors.joining("+"));
+        Optional<Drift> drift = Drift.of(o.get().conditions(), judge, h.forecast(), zone);
         drift.ifPresent(d -> {
             Drift held = latest.get(h.id());
             // The same observation against the same forecast is the same comparison; a new observation,

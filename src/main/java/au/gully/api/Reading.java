@@ -22,8 +22,12 @@ import java.util.Map;
  *
  * @param available   whether there is a reading at all; false with {@code unavailable} saying why
  * @param at          the time {@code current} describes: the station's observation time, or the model's
- * @param currentFrom {@code station} when a Bureau station in the hexagon supplied "now", {@code model} otherwise
+ * @param currentFrom {@code station} when the Bureau station in the hexagon supplied "now", {@code stations}
+ *                    when several inside it were blended, {@code neighbours} when the stations around it
+ *                    were (W-13), {@code model} otherwise
  * @param station     the nearest Bureau station's latest values, inside the hexagon or not, with its distance
+ * @param nearby      how the stations' values were blended and brought here, when they were (ring 0 is
+ *                    the hexagon's own stations); null otherwise
  * @param drift       the station in the hexagon against the forecast it holds (W-12); null without both
  * @param history     present when the reading is a snapshot answered for a past time
  */
@@ -38,6 +42,7 @@ public record Reading(
         Conditions current,
         String currentFrom,
         StationBlock station,
+        NearbyBlock nearby,
         FireBlock fire,
         FloodWeather flood,
         DroughtIndex drought,
@@ -51,7 +56,7 @@ public record Reading(
     public static final String SCHEMA = "gully/reading/1";
 
     public static final String DISCLAIMER = "Weather from third-party forecast models and the Bureau of Meteorology's "
-            + "published station values, held per 25 km hexagon; the fire indices are computed here and the official "
+            + "published station values, held per 20 km hexagon; the fire indices are computed here and the official "
             + "rating is the CFS's. Not an official Bureau of Meteorology product.";
 
     public record Point(double lat, double lon) {
@@ -69,11 +74,12 @@ public record Reading(
     }
 
     /**
-     * @param point   the class at the point asked about
+     * @param point   the class at the point asked about, read off the hexagon's raster
      * @param percent share of the hexagon per class, whole numbers, absent classes absent
      * @param leads   {@code forest} or {@code grass}: which index describes this ground
+     * @param source  the raster: {@code dea-landcover-2025} (Digital Earth Australia, that calendar year) or a mounted file's name
      */
-    public record LandUseBlock(String point, Map<String, Integer> percent, String leads, Integer burnablePct) {
+    public record LandUseBlock(String point, Map<String, Integer> percent, String leads, Integer burnablePct, String source) {
     }
 
     /**
@@ -102,6 +108,17 @@ public record Reading(
                                String windDirection, Double windGustKmh, Double pressureMslHpa, Double rainSince9amMm,
                                Double rain24hMm, Double maxTemperatureC, Double minTemperatureC, Double visibilityKm,
                                String cloud) {
+    }
+
+    /**
+     * The neighbouring stations that made "now" (W-13): how far out the search went, each station with
+     * its distance, height and share of the answer, and the elevation the values were brought to.
+     */
+    public record NearbyBlock(int ring, List<NearbyStation> stations, Double elevationM, boolean elevationApplied,
+                              double lapseTemperatureCPerKm, double lapseDewPointCPerKm) {
+    }
+
+    public record NearbyStation(String id, String name, double distanceKm, Double heightM, double weight) {
     }
 
     /**

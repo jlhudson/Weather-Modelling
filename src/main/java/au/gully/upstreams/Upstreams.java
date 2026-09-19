@@ -107,6 +107,13 @@ public class Upstreams {
         return spend(OpenMeteo.SMALL_UNITS, "recent " + pastDays + " days", () -> openMeteo.recent(lat, lon, pastDays));
     }
 
+    /**
+     * The ground height at a set of points, for a hexagon's mean elevation, on Open-Meteo's budget at one unit.
+     */
+    public Optional<List<Double>> elevation(List<double[]> points, String what) {
+        return spend(OpenMeteo.SMALL_UNITS, "elevation " + what, () -> openMeteo.elevation(points));
+    }
+
     public Optional<List<OpenMeteo.DischargeRow>> discharge(double lat, double lon, int pastDays, int forecastDays) {
         return spend(OpenMeteo.SMALL_UNITS, "river discharge", () -> openMeteo.discharge(lat, lon, pastDays, forecastDays));
     }

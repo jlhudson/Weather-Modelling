@@ -9,6 +9,8 @@ import au.gully.bureau.StationRegistry;
 import au.gully.bureau.WarningsReader;
 import au.gully.hexagons.*;
 import au.gully.platform.Json;
+import au.gully.upstreams.Ledger;
+import au.gully.upstreams.Upstreams;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -45,6 +47,10 @@ public class MapController {
     private final WarningsReader warnings;
     private final History history;
     private final Readings readings;
+    private final Sources sources;
+    private final Ledger ledger;
+    private final Upstreams upstreams;
+    private final Life life;
     private final Json json;
 
     @GetMapping
@@ -130,6 +136,54 @@ public class MapController {
         fc.put("type", "FeatureCollection");
         fc.put("features", features);
         return fc;
+    }
+
+    /**
+     * The sources as they stand and the last reads they saw (W-14): each with its cadence, when an ask
+     * last checked it and last read it, what it holds, and the hexagon whose ask caused that; then
+     * the ledger's latest rows - station files, warnings, CFS feeds, forecasts, elevations, land
+     * cover - each against the hexagon it was read for. What the map's sources panel shows.
+     */
+    @GetMapping(value = "/sources.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> sources() {
+        Instant now = Instant.now();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("at", now.toString());
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Sources.Status st : sources.status(now)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", st.id());
+            m.put("name", st.name());
+            m.put("cadenceMinutes", st.cadence().toMinutes());
+            m.put("checkedAt", st.checkedAt() == null ? null : st.checkedAt().toString());
+            m.put("readAt", st.readAt() == null ? null : st.readAt().toString());
+            m.put("dueAt", st.dueAt() == null ? null : st.dueAt().toString());
+            m.put("items", st.items());
+            m.put("failure", st.failure());
+            m.put("triggeredBy", st.triggeredBy());
+            m.put("triggeredAt", st.triggeredAt() == null ? null : st.triggeredAt().toString());
+            list.add(m);
+        }
+        out.put("sources", list);
+        List<Map<String, Object>> reads = new ArrayList<>();
+        for (Map<String, Object> row : ledger.recent(60)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("source", row.get("upstream"));
+            Object at = row.get("at");
+            m.put("at", at == null ? null : at.toString());
+            m.put("ok", row.get("ok"));
+            m.put("ms", row.get("latency_ms"));
+            m.put("units", row.get("units"));
+            m.put("detail", row.get("detail"));
+            reads.add(m);
+        }
+        out.put("reads", reads);
+        Map<String, Object> allowance = new LinkedHashMap<>();
+        allowance.put("dayFraction", Math.round(upstreams.dayFraction() * 1000) / 1000.0);
+        allowance.put("lifeMinutes", life.forecast().toMinutes());
+        out.put("allowance", allowance);
+        return out;
     }
 
     /**
