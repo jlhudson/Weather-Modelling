@@ -176,7 +176,9 @@ hour's indices with that day's projected drought factor, `officialRating` as the
 day, `ahead: true` and `aheadHours`; there is no "now" in the future, so `from` is null. `meta.mode` is
 `now`, `history` or `ahead`. The properties, by group: `from` (`station`, `stations`, `neighbours`, `model` or null)
 and `nowTemperatureC`, `nowHumidityPct`, `nowWindKmh`, `nowWindDeg`, `nowGustKmh`, `nowRainMm`,
-`nowAt`, `nowAgeMinutes`, `nowStations`, `nowRing`; `fcTemperatureC`, `fcHumidityPct`, `fcWindKmh`,
+`nowAt`, `nowAgeMinutes`, `nowStations`, `nowRing`, and — at the reach in force (W-18), now only —
+`stationsInReach`, how many stations count for the hexagon, and `stationsReporting`, how many of them
+are fresh; `fcTemperatureC`, `fcHumidityPct`, `fcWindKmh`,
 `fcWindDeg`, `fcGustKmh`, `fcRainMm`, `fcFetchedAt`, `fcExpiresAt`, `fcMinutesLeft`, `stale`,
 `upstream`; `diffTemperatureC`, `diffHumidityPct`, `diffWindKmh` (now minus forecast) and the drift
 (`drift`, `drifted`, `driftWorst`, `drift24h`, ...); the fire picture (`ffdi`, `ffdiRating`, `gfdi`,
@@ -184,7 +186,7 @@ and `nowTemperatureC`, `nowHumidityPct`, `nowWindKmh`, `nowWindDeg`, `nowGustKmh
 `warnings`, `windChangeAt`); the ground (`elevationM`, `elevationFrom`, `landUse`, `landDominant`,
 `leads`, `burnablePct`, `landSource`); and the asks (`kind`, `active`, `warm`, `lastAskedAt`,
 `askedMinutesAgo`, `asks`). `meta` carries the counts, including `nowFrom` — how many hexagons take
-"now" from each source — and `backHours`/`aheadHours`, how far `at=` reaches either way. Pre-rendered once per change and fingerprinted, so a
+"now" from each source — `reachKm`, the station reach in force, and `backHours`/`aheadHours`, how far `at=` reaches either way. Pre-rendered once per change and fingerprinted, so a
 map polling every minute gets `304` until something changes. With `at=`, the values as they were —
 only hexagons asked about with a ref have a value then. Never fetches. Served as `application/geo+json`;
 a client that accepts only `application/json` is answered as that rather than refused, and the same

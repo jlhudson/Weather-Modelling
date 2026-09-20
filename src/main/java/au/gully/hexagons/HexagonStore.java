@@ -280,15 +280,15 @@ public class HexagonStore {
     }
 
     /**
-     * The station register changed: every hexagon re-finds its station and its nearest, and every
-     * station gets a hexagon of its own - and one for each neighbour within its reach - so the map
-     * can show them and they can answer "now" for free.
+     * The station register changed, or the reach did: every hexagon re-finds its station and its
+     * nearest, and every station gets a hexagon of its own - and one for each neighbour within its
+     * reach - so the map can show them and they can answer "now" for free.
      */
     public int stationsChanged() {
         Instant now = Instant.now();
         int changed = 0;
         for (Station s : stations.all()) {
-            for (Cell cell : grid.cellsReaching(s.lat(), s.lon(), Grid.STATION_REACH_KM)) {
+            for (Cell cell : grid.cellsReaching(s.lat(), s.lon(), stations.reachKm())) {
                 if (!hexagons.containsKey(cell.id())) {
                     hexagons.computeIfAbsent(cell.id(), k -> create(cell, now));
                     changed++;

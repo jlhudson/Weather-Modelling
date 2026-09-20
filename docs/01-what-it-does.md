@@ -47,10 +47,12 @@ A reading has two halves, and the service never lets one stand in for the other 
 
 - `station` — the hexagon's Bureau station has fresh values (under seventy minutes old). They are the
   reading's "now" as they are, unmoved: an observation is a fact. A station is the hexagon's when it
-  is inside it **or within a quarter of the width of its edge** (`Grid.STATION_REACH_KM`, 4.25 km at 17 km):
-  a station a kilometre over the line is as much this hexagon's weather as its neighbour's, so it
-  counts for both — for up to three hexagons at a corner. The `station` block says whether it is
-  inside and how far from the centre it sits.
+  is inside it **or within the reach of its edge** — a quarter of the width, 4.25 km at 17 km
+  (`Grid.DEFAULT_STATION_REACH_KM`), until the console sets another (`Reach`, W-18; the map's
+  coverage layer is where it is turned, and the value survives a restart): a station a kilometre over
+  the line is as much this hexagon's weather as its neighbour's, so it counts for both — for up to
+  three hexagons at a corner at the default, for a ring or two at a wide reach. The `station` block
+  says whether it is inside and how far from the centre it sits.
 - `stations` — several stations count for the hexagon (inside it, or within reach). They are blended: each weighted by the inverse
   square of its distance from the hexagon's centre, its temperature and dew point first brought to the
   hexagon's mean elevation by the lapse rates (−6.5 °C/km and −2 °C/km), humidity recomputed from the

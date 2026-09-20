@@ -72,9 +72,15 @@
             {id: 'asked', name: 'Last asked', unit: 'min ago', icon: 'ask', range: [0, 120], reverse: true},
             {id: 'asks', name: 'Asks', hint: 'this run', icon: 'count', range: [0, 50]},
             {id: 'kind', name: 'Kind', icon: 'kind', kind: 'category', palette: 'KIND'}
+        ],
+        // The coverage (W-18): the stations counting for each hexagon at the reach on the slider - one is "now"
+        // for free, two or more are blended - and of those, the ones reporting. Drawn from its own feed, not the layer.
+        coverage: [
+            {id: 'stations', name: 'Within reach', hint: 'stations counting for it', icon: 'station', kind: 'count'},
+            {id: 'reporting', name: 'Reporting', hint: 'of those, fresh now', icon: 'clock', kind: 'count'}
         ]
     };
-    var GROUP_NAMES = {now: 'Now · from the ground', fc: 'Forecast · the model', diff: 'Compare · now minus forecast', shift: 'Wind change · last hour', fire: 'Fire', ground: 'Ground', asks: 'Requests'};
+    var GROUP_NAMES = {now: 'Now · from the ground', fc: 'Forecast · the model', diff: 'Compare · now minus forecast', shift: 'Wind change · last hour', fire: 'Fire', ground: 'Ground', asks: 'Requests', coverage: 'Coverage · stations within reach'};
     var SHIFT = {slight: '#eab308', marked: '#f97316', sharp: '#ef4444'};
     var SIDE_CAPTIONS = {
         now: '<b>Now</b> is what the ground says: the station in each hexagon, several blended, or the neighbours brought to its height. Blue.',
@@ -95,6 +101,9 @@
         SHIFT: {slight: '#eab308', marked: '#f97316', sharp: '#ef4444'}
     };
     var DROUGHT = '#a855f7';
+    // The coverage's count: none in grey, one in the ground's blue, two and more darker - past one it is a blend.
+    var COUNT = ['#9ca3af', '#2563eb', '#1e3a8a', '#4c1d95'];
+    var COUNT_WORDS = ['none', 'one · its "now"', 'two · blended', 'three or more · blended'];
     function ramp(t) {
         t = Math.max(0, Math.min(1, t));
         var stops = [[0, [33, 102, 172]], [.5, [247, 247, 190]], [1, [178, 24, 43]]];
@@ -131,12 +140,14 @@
     var hexLayer = L.geoJSON(null, {style: styleOf, onEachFeature: onHexagon, filter: shown}).addTo(map);
     var pointLayer = L.layerGroup().addTo(map);
     var gridLayer = L.geoJSON(null, {style: {color: '#888', weight: .6, fill: false, opacity: .6}, interactive: false});
+    // The coverage stands in for the hexagons while its group is chosen: thousands of cells, so on the canvas.
+    var coverageLayer = L.geoJSON(null, {style: coverageStyle, onEachFeature: onCoverage, renderer: canvas}).addTo(map);
     var stationLayer = L.layerGroup().addTo(map);
     var glyphLayer = L.layerGroup().addTo(map);
     var state = {side: 'now', group: 'now', id: 'from', hours: 0, mode: 'now', playing: null};
     var togs = {stations: true, wind: true, trend: true, labels: true, borders: true, grid: false, points: false, forecasts: false};
     var inView = true;
-    var etag = null, lastFc = null, lastStations = null, lastSources = null;
+    var etag = null, lastFc = null, lastStations = null, lastSources = null, lastCoverage = null;
 
     function current() {
         var list = VARS[state.group] || [];
@@ -150,9 +161,11 @@
         if (state.mode === 'history') return g === 'now' || g === 'fire' || g === 'ground' || g === 'asks';
         return true;
     }
+    function isCoverage() { return state.group === 'coverage'; }
     function shiftColour(grade) { return grade ? SHIFT[grade] : null; }
     function valueOf(p, v, g) {
         v = v || current(); g = g || state.group;
+        if (g === 'coverage') return p[v.id];
         if (g === 'now') return v.id === 'from' ? (p.from || 'none') : v.id === 'age' ? p.nowAgeMinutes : p['now' + cap(v.id)];
         if (g === 'fc') return v.id === 'life' ? (p.hasForecast ? freshness(p) : null) : v.id === 'age' ? p.fcAgeMinutes : p['fc' + cap(v.id)];
         if (g === 'diff') return v.kind === 'drift' ? p[v.id] : p['diff' + cap(v.id)];
@@ -164,6 +177,7 @@
         var v = current(), x = valueOf(p, v);
         if (x == null) return null;
         if (v.kind === 'from') return FROM[x] || FROM.none;
+        if (v.kind === 'count') return COUNT[Math.min(3, x)];
         if (v.kind === 'life') return '#f59e0b';
         if (v.kind === 'drift') return driftColour(x);
         if (v.kind === 'category') return PALETTES[v.palette][x] || '#9ca3af';
@@ -189,6 +203,12 @@
         if (!togs.borders && !shift) line = {color: '#000', weight: 0, opacity: 0};
         return {color: line.color, weight: line.weight, opacity: line.opacity, dashArray: p.stale && state.mode === 'now' && togs.borders ? '4 3' : null, fillColor: c || '#000', fillOpacity: opacityOf(p, c)};
     }
+    // A coverage cell: the count's colour, faint at none; a cell nothing holds yet is outlined dashed.
+    function coverageStyle(f) {
+        var p = f.properties, x = valueOf(p), c = COUNT[Math.min(3, x || 0)];
+        var line = togs.borders ? {color: p.held ? '#777' : '#999', weight: p.held ? .6 : .5, opacity: .5, dashArray: p.held ? null : '2 3'} : {color: '#000', weight: 0, opacity: 0, dashArray: null};
+        return {color: line.color, weight: line.weight, opacity: line.opacity, dashArray: line.dashArray, fillColor: c, fillOpacity: x ? .55 : (p.held ? .12 : .06)};
+    }
 
     // ---- the rail
     function buildRail() {
@@ -196,11 +216,14 @@
         vars.innerHTML = '';
         $('varsTitle').textContent = GROUP_NAMES[state.side];
         VARS[state.side].forEach(function (x) { vars.appendChild(chip(x, state.side)); });
-        ['shift', 'fire', 'ground', 'asks'].forEach(function (g) {
+        ['shift', 'fire', 'ground', 'asks', 'coverage'].forEach(function (g) {
             var el = document.querySelector('.chips[data-group=' + g + ']');
             el.innerHTML = '';
             VARS[g].forEach(function (x) { el.appendChild(chip(x, g)); });
         });
+        $('reach').classList.toggle('on', isCoverage());
+        $('reachKm').disabled = !allowed('coverage');
+        $('reachSet').disabled = !allowed('coverage');
         document.querySelectorAll('#side button').forEach(function (b) {
             b.classList.toggle('on', b.dataset.side === state.side && isSide(state.group));
             b.disabled = !allowed(b.dataset.side);
@@ -219,9 +242,14 @@
         return b;
     }
     function choose(g, id) {
+        var was = state.group;
         state.group = g; state.id = id;
         if (isSide(g)) state.side = g;
-        buildRail(); legend(); restyle(); glyphs(); stations(); tiles();
+        buildRail();
+        // Into or out of the coverage, the map swaps what it draws; within it, the feed is asked again at the slider.
+        if (g === 'coverage' || was === 'coverage') draw();
+        if (g === 'coverage') coverage();
+        legend(); restyle(); glyphs(); stations(); tiles();
     }
     function pickSide(side) {
         if (!allowed(side)) { note(state.mode === 'ahead' ? 'ahead of now there is only the forecast' : 'behind now there is only what was observed'); return; }
@@ -249,11 +277,16 @@
     }
 
     // ---- the legend: the scale, with the distribution of what is drawn - the hexagons in view, or every one held
-    function drawnProps() {
+    function layerProps() {
         var out = [];
         if (!lastFc) return out;
         lastFc.features.forEach(function (f) { if (shown(f)) out.push(f.properties); });
         return out;
+    }
+    // What the map is drawing: the coverage's cells while that group is chosen, else the layer's hexagons.
+    function drawnProps() {
+        if (isCoverage()) return lastCoverage ? lastCoverage.features.map(function (f) { return f.properties; }) : [];
+        return layerProps();
     }
     function viewProps() {
         var all = drawnProps();
@@ -281,6 +314,18 @@
             Object.keys(FROM).forEach(function (k) { html += '<span class="swatch"><i style="background:' + FROM[k] + (k === 'none' ? ';opacity:.35' : '') + '"></i>' + esc(FROM_WORDS[k]) + ' <b>' + (counts[k] || 0) + '</b></span>'; });
             html += '<span class="swatch"><i style="border:2px solid ' + DROUGHT + ';background:transparent"></i>drought stepped <b>' + props.filter(function (p) { return p.hasDrought; }).length + '</b></span></div>';
             body.innerHTML = html;
+            return;
+        }
+        if (v.kind === 'count') {
+            // None, one, two, three or more; and the reach the cells were counted at against the one in force.
+            var by = [0, 0, 0, 0];
+            vals.forEach(function (x) { by[Math.min(3, x)]++; });
+            var cm = (lastCoverage && lastCoverage.meta) || {};
+            var h3 = '<div class="swatches">';
+            COUNT.forEach(function (c, i) { h3 += '<span class="swatch"><i style="background:' + c + (i === 0 ? ';opacity:.35' : '') + '"></i>' + esc(COUNT_WORDS[i]) + ' <b>' + by[i] + '</b></span>'; });
+            h3 += '<span class="swatch"><i class="count-key many">2</i>blended</span>';
+            h3 += '</div><div class="muted reach-note">' + (cm.reachKm != null ? 'at a reach of <b>' + cm.reachKm + ' km</b>' : '') + (cm.savedKm != null ? (cm.reachKm === cm.savedKm ? ' · the reach in force' : ' · in force <b>' + cm.savedKm + ' km</b>; press set to make this it') : '') + (cm.stations != null ? ' · ' + cm.stations + ' stations' : '') + '</div>';
+            body.innerHTML = h3;
             return;
         }
         if (v.kind === 'life') {
@@ -315,7 +360,7 @@
 
     // ---- the figures
     function tiles() {
-        var m = (lastFc && lastFc.meta) || {}, nf = m.nowFrom || {}, props = drawnProps();
+        var m = (lastFc && lastFc.meta) || {}, nf = m.nowFrom || {}, props = layerProps();
         var ground = (nf.station || 0) + (nf.stations || 0) + (nf.neighbours || 0);
         var drifted = props.filter(function (p) { return p.drifted; }).length;
         var a = lastSources && lastSources.allowance;
@@ -364,12 +409,71 @@
     function draw() {
         hexLayer.clearLayers();
         pointLayer.clearLayers();
+        coverageLayer.clearLayers();
+        if (isCoverage()) { if (lastCoverage) coverageLayer.addData(lastCoverage); glyphs(); return; }
         if (!lastFc) return;
         if (pointsMode()) points(); else hexLayer.addData(lastFc);
         glyphs();
     }
     function pointsMode() { return togs.points || map.getZoom() <= 5; }
-    function restyle() { if (pointsMode()) { pointLayer.clearLayers(); points(); } else hexLayer.setStyle(styleOf); }
+    function restyle() { if (isCoverage()) coverageLayer.setStyle(coverageStyle); else if (pointsMode()) { pointLayer.clearLayers(); points(); } else hexLayer.setStyle(styleOf); }
+
+    // ---- the coverage (W-18): the cells every station would count for at the reach on the slider, asked
+    // as it moves; only the latest answer is drawn. Set makes the slider's reach the one in force.
+    var coverageSeq = 0, coverageTimer = null;
+    function reachOnSlider() { return Number($('reachKm').value); }
+    function coverage() {
+        var km = reachOnSlider(), seq = ++coverageSeq;
+        fetch('/console/map/coverage.geojson?reachKm=' + km).then(function (r) { return r.json(); }).then(function (fc) {
+            if (seq !== coverageSeq) return;
+            lastCoverage = fc;
+            if (isCoverage()) { draw(); legend(); }
+        }).catch(function (e) { note('coverage failed: ' + e); });
+    }
+    function reachMoved(immediate) {
+        $('reachValue').textContent = reachOnSlider();
+        if (!isCoverage()) { choose('coverage', 'stations'); return; }
+        clearTimeout(coverageTimer);
+        coverageTimer = setTimeout(coverage, immediate ? 0 : 150);
+    }
+    function reachSaved(km, by, since) {
+        $('reachSaved').innerHTML = 'set to <b>' + esc(km) + ' km</b>' + (by ? ' <span class="muted">by ' + esc(by) + (since ? ', ' + when(since) : '') + '</span>' : ' <span class="muted">(the default)</span>');
+    }
+    function setReach() {
+        if (!window.gullyCsrf) return;
+        var km = reachOnSlider(), headers = window.gullyCsrf();
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        $('reachSet').disabled = true;
+        fetch('/console/map/reach', {method: 'POST', headers: headers, body: 'km=' + km}).then(function (r) { return r.json(); }).then(function (o) {
+            $('reachSet').disabled = false;
+            reachSaved(o.reachKm, o.by, o.since);
+            note('reach set to ' + o.reachKm + ' km · ' + o.hexagonsChanged + ' hexagons re-linked or created · ' + o.hexagons + ' held');
+            etag = null; load(); coverage();
+        }).catch(function (e) { $('reachSet').disabled = false; note('set failed: ' + e); });
+    }
+    function onCoverage(f, layer) {
+        var p = f.properties;
+        layer.bindTooltip(function () {
+            var s = '<b>' + esc(p.id) + '</b> <span class="muted">' + (p.held ? 'held' : 'not held yet') + '</span><br>' + p.stations + ' station' + (p.stations === 1 ? '' : 's') + ' within reach' + (p.stations ? ', ' + p.reporting + ' reporting' : '') + (p.stations > 1 ? ' · <b>blended</b>' : p.stations === 1 ? ' · its "now"' : '');
+            if (p.names && p.names.length) s += '<br><span class="muted">' + p.names.map(esc).join(' · ') + '</span>';
+            return s;
+        }, {sticky: true, className: 'hx-tip'});
+        layer.on('click', function (e) { L.DomEvent.stopPropagation(e); if (p.held) detail(p.id); else note(p.id + ' is not held: nothing has asked about it, and no station reaches it at the reach in force'); });
+        layer.on('mouseover', function () { hotBin(valueOf(p)); });
+        layer.on('mouseout', function () { hotBin(null); });
+    }
+    // The count in every cell from zoom 8 (a digit needs the room): bold in a red ring past one, where "now" is a blend.
+    function countGlyphs() {
+        var z = map.getZoom();
+        if (z < 8 || !lastCoverage) return;
+        var b = map.getBounds().pad(.2);
+        lastCoverage.features.forEach(function (f) {
+            var p = f.properties;
+            if (p.lat == null || !b.contains([p.lat, p.lon])) return;
+            var n = valueOf(p);
+            L.marker([p.lat, p.lon], {icon: L.divIcon({className: 'hx-glyph', html: '<span class="hx-count' + (n > 1 ? ' many' : n === 0 ? ' none' : '') + '">' + n + '</span>', iconSize: [24, 24], iconAnchor: [12, 12]}), interactive: false, keyboard: false}).addTo(glyphLayer);
+        });
+    }
     // Hexagons as points: one dot at each centre, the fill colour, sized by zoom. What a continent looks like.
     function points() {
         var z = map.getZoom(), r = Math.max(2.5, Math.min(9, z * 1.1));
@@ -403,6 +507,7 @@
         else if (p.ahead) s += '';
         else if (p.hasStation) s += '<br><span class="row-now"><b>now</b></span> <span class="muted">station ' + esc(p.stationId) + ' in it, no fresh values: the file for its state has not been asked for lately</span>';
         else s += '<br><span class="row-now"><b>now</b></span> <span class="muted">nothing from the ground' + (p.nearestStationId ? ' · nearest station ' + esc(p.nearestStationId) : '') + '</span>';
+        if (p.stationsInReach != null) s += '<br><span class="muted">' + p.stationsInReach + ' station' + (p.stationsInReach === 1 ? '' : 's') + ' within reach' + (p.stationsInReach ? ', ' + p.stationsReporting + ' reporting' : '') + '</span>';
         var fc = line(p.fcTemperatureC, p.fcHumidityPct, p.fcWindKmh, p.fcWindDeg, p.fcGustKmh);
         if (fc) s += '<br><span class="row-fc"><b>forecast</b></span> ' + fc + ' <span class="muted">' + esc(p.upstream || '') + ' · fetched ' + clock(p.fcFetchedAt) + (p.ahead ? '' : p.stale ? ' · <b>past its life</b>' : p.fcMinutesLeft != null ? ' · ' + p.fcMinutesLeft + ' min left' : '') + '</span>';
         else if (p.hasForecast && !p.ahead) s += '<br><span class="row-fc"><b>forecast</b></span> <span class="muted">held, nothing for this hour</span>';
@@ -472,6 +577,7 @@
 
     function glyphs() {
         glyphLayer.clearLayers();
+        if (isCoverage()) { countGlyphs(); return; }
         var z = map.getZoom();
         if ((!togs.wind && !togs.labels) || z < 7 || !lastFc) return;
         var fc = state.side === 'fc' || state.mode === 'ahead', cls = fc ? 'fc' : 'now';
@@ -738,6 +844,10 @@
     $('sourcesToggle').addEventListener('click', function () { var el = $('sources'); if (el.classList.contains('hidden')) sourcesPanel(true); else el.classList.add('hidden'); });
     timeInput.addEventListener('input', function () { slid(false); });
     timeInput.addEventListener('change', function () { slid(true); });
+    $('reachKm').addEventListener('input', function () { reachMoved(false); });
+    $('reachKm').addEventListener('change', function () { reachMoved(true); });
+    $('reachSet').addEventListener('click', setReach);
+    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
     $('now').addEventListener('click', function () { if (state.playing) play(); timeInput.value = 0; slid(true); });
     $('play').addEventListener('click', play);
     document.addEventListener('keydown', function (e) {
@@ -749,8 +859,8 @@
         else if (e.key === '0') { timeInput.value = 0; slid(true); }
     });
     var zoomWasPoints = pointsMode();
-    map.on('zoomend', function () { var pm = pointsMode(); if (pm !== zoomWasPoints || pm) { zoomWasPoints = pm; draw(); } else glyphs(); stations(); });
-    map.on('moveend', function () { if (togs.grid) grid(); if (inView) legend(); });
+    map.on('zoomend', function () { var pm = pointsMode(); if (!isCoverage() && (pm !== zoomWasPoints || pm)) { zoomWasPoints = pm; draw(); } else glyphs(); stations(); });
+    map.on('moveend', function () { if (togs.grid) grid(); if (inView) legend(); if (isCoverage()) glyphs(); });
     window.addEventListener('resize', function () { ticks(); timeLabel(); });
     map.on('click', function (e) {
         var b = confirm('Probe ' + e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4) + '? This is an ask: it reads whatever is due for that state and spends allowance.');
@@ -791,7 +901,7 @@
     setInterval(liveTick, 1000);
     setInterval(watch, 60000);
     watch();
-    setInterval(function () { if (!document.hidden && state.hours === 0) { load(); lastStations = null; stations(); } }, 60000);
+    setInterval(function () { if (!document.hidden && state.hours === 0) { load(); lastStations = null; stations(); if (isCoverage()) coverage(); } }, 60000);
     setInterval(function () { if (!document.hidden && (current().kind === 'life' || current().kind === 'from' || state.group === 'fc')) restyle(); }, 20000);
     setInterval(function () { if (!document.hidden) sourcesPanel(); }, 30000);
     setInterval(ticks, 600000);

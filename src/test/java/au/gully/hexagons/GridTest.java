@@ -127,31 +127,64 @@ class GridTest {
 
     /**
      * The reach: a station counts for the hexagon it is in and for any neighbour whose edge is within
-     * a quarter of the width - 4.25 km at 17 km. Inside, one; near an edge, two; near a corner, three.
+     * the reach - a quarter of the width, 4.25 km at 17 km, until the console sets another. Inside,
+     * one; near an edge, two; near a corner, three.
      */
     @Test
     void aStationNearAnEdgeCountsForTheHexagonBeyondIt() {
-        assertThat(Grid.STATION_REACH_KM).isEqualTo(4.25);
+        assertThat(Grid.DEFAULT_STATION_REACH_KM).isEqualTo(4.25);
         Cell centre = GRID.cell(0, 0);
         // The centre itself: inside, distance zero, one hexagon.
         assertThat(GRID.distanceKm(centre, centre.lat(), centre.lon())).isEqualTo(0);
-        assertThat(GRID.cellsReaching(centre.lat(), centre.lon(), Grid.STATION_REACH_KM)).extracting(Cell::id).containsExactly("0_0");
+        assertThat(GRID.cellsReaching(centre.lat(), centre.lon(), Grid.DEFAULT_STATION_REACH_KM)).extracting(Cell::id).containsExactly("0_0");
         // A point 1 km past the flat edge to the north (flat-topped: the flats are 8.5 km above and below the
         // centre, the corners 9.8 km east and west): in the northern neighbour, 1 km from 0_0, so it counts for both.
         double[] east = Albers.inverse(Albers.forward(centre.lat(), centre.lon())[0], Albers.forward(centre.lat(), centre.lon())[1] + 9500);
         assertThat(GRID.cellOf(east[0], east[1]).id()).isNotEqualTo("0_0");
         assertThat(GRID.distanceKm(centre, east[0], east[1])).isCloseTo(1.0, offset(0.05));
-        List<Cell> reached = GRID.cellsReaching(east[0], east[1], Grid.STATION_REACH_KM);
+        List<Cell> reached = GRID.cellsReaching(east[0], east[1], Grid.DEFAULT_STATION_REACH_KM);
         assertThat(reached).hasSize(2);
         assertThat(reached).extracting(Cell::id).contains("0_0");
         // A point 6 km past the edge is beyond the reach: its own hexagon only.
         double[] far = Albers.inverse(Albers.forward(centre.lat(), centre.lon())[0], Albers.forward(centre.lat(), centre.lon())[1] + 14500);
         assertThat(GRID.distanceKm(centre, far[0], far[1])).isCloseTo(6.0, offset(0.05));
-        assertThat(GRID.cellsReaching(far[0], far[1], Grid.STATION_REACH_KM)).hasSize(1);
+        assertThat(GRID.cellsReaching(far[0], far[1], Grid.DEFAULT_STATION_REACH_KM)).hasSize(1);
         // A point 1 km beyond a corner (the corners are 9.8 km out, at 60° steps) reaches three.
         double a = Math.toRadians(60);
         double[] c0 = Albers.forward(centre.lat(), centre.lon());
         double[] corner = Albers.inverse(c0[0] + 10815 * Math.cos(a), c0[1] + 10815 * Math.sin(a));
-        assertThat(GRID.cellsReaching(corner[0], corner[1], Grid.STATION_REACH_KM)).hasSize(3);
+        assertThat(GRID.cellsReaching(corner[0], corner[1], Grid.DEFAULT_STATION_REACH_KM)).hasSize(3);
+    }
+
+    /**
+     * The reach the console sets walks outward as far as it goes (W-18): from a hexagon's centre the six
+     * neighbours' edges are 8.5 km away and the second ring's nearest edges 19.6 km (the nearest second-ring
+     * centre is √3 widths out, less a circumradius), so 8 km reaches nothing, 9 km the ring of six, and
+     * 20 km some of the twelve beyond. Every hexagon reached is within the reach and none is missed.
+     */
+    @Test
+    void aWiderReachWalksPastTheFirstRing() {
+        Cell centre = GRID.cell(0, 0);
+        assertThat(GRID.cellsReaching(centre.lat(), centre.lon(), 8)).hasSize(1);
+        assertThat(GRID.cellsReaching(centre.lat(), centre.lon(), 9)).hasSize(7);
+        List<Cell> wide = GRID.cellsReaching(centre.lat(), centre.lon(), 20);
+        assertThat(wide.size()).isGreaterThan(7).isLessThanOrEqualTo(19);
+        assertThat(wide.stream().map(Cell::id).distinct().count()).isEqualTo(wide.size());
+        for (Cell c : wide) {
+            assertThat(GRID.distanceKm(c, centre.lat(), centre.lon())).isLessThanOrEqualTo(20);
+        }
+        for (Cell c : GRID.ring(centre, 2)) {
+            boolean in = GRID.distanceKm(c, centre.lat(), centre.lon()) <= 20;
+            assertThat(wide.stream().anyMatch(w -> w.id().equals(c.id()))).as(c.id()).isEqualTo(in);
+        }
+        // From a corner, the second ring's nearest corner is one edge's length away - 9.8 km - and nothing more.
+        double[] c0 = Albers.forward(centre.lat(), centre.lon());
+        double[] corner = Albers.inverse(c0[0] + 9815 * Math.cos(Math.toRadians(60)), c0[1] + 9815 * Math.sin(Math.toRadians(60)));
+        assertThat(GRID.cellsReaching(corner[0], corner[1], 9.5)).hasSize(3);
+        assertThat(GRID.cellsReaching(corner[0], corner[1], 10.5).size()).isGreaterThan(3);
+        // The reach the console sets is held to its range and its step.
+        assertThat(Reach.clamp(-1)).isEqualTo(0);
+        assertThat(Reach.clamp(4.3)).isEqualTo(4.25);
+        assertThat(Reach.clamp(99)).isEqualTo(Reach.MAX_KM);
     }
 }

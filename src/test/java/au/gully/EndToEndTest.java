@@ -68,7 +68,7 @@ class EndToEndTest {
         // The legacy row is still there, with the hash of the plaintext the init script planted.
         String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
         assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent"}) {
+        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent", "setting"}) {
             Long n = db.sql("select count(*) from " + table).query(Long.class).single();
             assertThat(n).as(table).isNotNull();
         }
@@ -172,6 +172,8 @@ class EndToEndTest {
     au.gully.hexagons.HexagonStore store;
     @Autowired
     au.gully.hexagons.Drifts drifts;
+    @Autowired
+    au.gully.hexagons.Reach reach;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -201,6 +203,21 @@ class EndToEndTest {
         // What the reader does after a file: every hexagon re-finds its station, every station gets one.
         store.stationsChanged();
         assertThat(store.size()).isGreaterThanOrEqualTo(3);
+        // The reach (W-18): the default until set; set, it is written, the stations count for more hexagons
+        // and every station gets them; reloaded with the registers, it is still the value set. Put back after.
+        assertThat(reach.isDefault()).isTrue();
+        int held = store.size(), reached = stations.hexagonsOf(store.grid(), "023000").size();
+        assertThat(reach.set(12.3, "test")).as("held to the slider's quarter-kilometre step").isEqualTo(12.25);
+        assertThat(stations.hexagonsOf(store.grid(), "023000").size()).isGreaterThan(reached);
+        assertThat(store.stationsChanged()).isGreaterThan(0);
+        assertThat(store.size()).isGreaterThan(held);
+        reach.rehydrate();
+        assertThat(reach.km()).isEqualTo(12.25);
+        assertThat(reach.by()).isEqualTo("test");
+        assertThat(reach.since()).isNotNull();
+        reach.set(au.gully.hexagons.Grid.DEFAULT_STATION_REACH_KM, "test");
+        store.stationsChanged();
+        assertThat(stations.hexagonsOf(store.grid(), "023000").size()).isEqualTo(reached);
         assertThat(stations.ledgerRows()).isEqualTo(3);
         assertThat(stations.nearest(-34.93, 138.6)).isPresent();
         assertThat(stations.nearest(-34.93, 138.6).get().station().id()).isEqualTo("023000");
@@ -311,7 +328,7 @@ class EndToEndTest {
             }
         }
         for (String feed : new String[]{"/console/map/layer.geojson", "/console/map/grid.geojson?south=-35.2&west=138.3&north=-34.7&east=138.9",
-                "/console/map/stations.geojson", "/console/map/sources.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+                "/console/map/stations.geojson", "/console/map/coverage.geojson?reachKm=10", "/console/map/sources.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }

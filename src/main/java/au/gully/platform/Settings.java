@@ -47,6 +47,7 @@ public class Settings {
         m.put("gully.diagnostics.keep-warnings", diagnostics.keepWarnings());
         m.put("grid.cell-km (constant)", Grid.CELL_KM);
         m.put("grid.anchor (constant)", Grid.ANCHOR_LAT + "," + Grid.ANCHOR_LON);
+        m.put("grid.station-reach-km (default; the console may hold another, read with the registers)", Grid.DEFAULT_STATION_REACH_KM);
         return m;
     }
 

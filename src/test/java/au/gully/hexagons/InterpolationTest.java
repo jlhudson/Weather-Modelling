@@ -29,12 +29,12 @@ class InterpolationTest {
      * A register with the given stations, each reporting the same moment.
      */
     private static StationRegistry registry(List<Station> stations, List<Observation> observations) {
-        return new StationRegistry(null) {
+        return new StationRegistry(null, null) {
             @Override
             public List<Station> inCells(Grid grid, java.util.Collection<Cell> cells) {
                 // As the register does: a station counts for the hexagon it is in and any it reaches.
                 java.util.Set<String> ids = cells.stream().map(Cell::id).collect(java.util.stream.Collectors.toSet());
-                return stations.stream().filter(s -> grid.cellsReaching(s.lat(), s.lon(), Grid.STATION_REACH_KM).stream().anyMatch(c -> ids.contains(c.id()))).toList();
+                return stations.stream().filter(s -> grid.cellsReaching(s.lat(), s.lon(), Grid.DEFAULT_STATION_REACH_KM).stream().anyMatch(c -> ids.contains(c.id()))).toList();
             }
 
             @Override

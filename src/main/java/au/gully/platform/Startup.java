@@ -8,6 +8,7 @@ import au.gully.cfs.Districts;
 import au.gully.cfs.Ratings;
 import au.gully.drought.Rivers;
 import au.gully.hexagons.HexagonStore;
+import au.gully.hexagons.Reach;
 import au.gully.platform.access.ConsoleUsers;
 import au.gully.platform.diagnostics.StartupHistory;
 import au.gully.upstreams.Ledger;
@@ -41,6 +42,7 @@ public class Startup implements ApplicationRunner {
 
     private final ConsoleUsers consoleUsers;
     private final StationRegistry stations;
+    private final Reach reach;
     private final Curing curing;
     private final HexagonStore store;
     private final Rivers rivers;
@@ -61,6 +63,7 @@ public class Startup implements ApplicationRunner {
         step(1, "console user", consoleUsers::ensureUser);
         step(2, "registers from the database", () -> {
             store.ensureGrid();
+            reach.rehydrate();
             stations.rehydrate();
             curing.rehydrate();
             rivers.rehydrate();

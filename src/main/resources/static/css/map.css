@@ -87,6 +87,16 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .tog.on { color: var(--p-fg); border-color: var(--p-line-strong); background: rgba(127, 127, 127, .14); }
 .tog.on .ico { color: var(--p-ground); }
 .tog[data-tog=forecasts].on .ico { color: var(--p-accent); }
+/* The reach (W-18): a slider under the coverage chips, the value beside it, and set. Lit while the coverage is what the map shows. */
+.reach { margin-top: .45rem; padding: .4rem .5rem; border: 1px dashed var(--p-line); border-radius: 9px; font-size: .76rem; }
+.reach.on { border-style: solid; border-color: var(--p-ground); background: color-mix(in srgb, var(--p-ground) 8%, transparent); }
+.reach label { display: block; margin-bottom: .15rem; }
+.reach label b { font-family: var(--g-mono); font-weight: 600; }
+.reach input[type=range] { width: 100%; margin: .1rem 0 .25rem; accent-color: var(--p-ground); }
+.reach input[type=range]:disabled { opacity: .35; }
+.reach-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.reach-row b { font-family: var(--g-mono); font-weight: 600; }
+.reach-row .pill:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---- the figures */
 .stats { top: .6rem; right: .6rem; width: 27rem; padding: .5rem .6rem .45rem; }
@@ -210,6 +220,13 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .hx-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font: 500 10px/1.15 var(--g-mono); white-space: nowrap;
     color: var(--bs-body-color); background: color-mix(in srgb, var(--bs-body-bg) 75%, transparent); padding: 0 3px; border-radius: 2px; }
 .hx-label.fc { color: #f59e0b; }
+/* The coverage's count in every cell: past one it is a blend, so bold in a red ring; none is faint. */
+.hx-count { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+    font: 600 11px/1 var(--g-mono); color: var(--bs-body-color); background: color-mix(in srgb, var(--bs-body-bg) 80%, transparent); }
+.hx-count.many { color: #dc2626; border: 2px solid #dc2626; font-weight: 800; font-size: 12px; }
+.hx-count.none { color: var(--p-muted); font-weight: 500; background: color-mix(in srgb, var(--bs-body-bg) 55%, transparent); }
+.count-key { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; border-radius: 999px; border: 2px solid #dc2626; color: #dc2626; font: 800 .62rem/1 var(--g-mono); }
+.reach-note { margin-top: .3rem; font-size: .74rem; }
 /* The wind trend at a station: three arrows from one point - the mean of the five before (grey), the
    latest (black, or the grade of the change it has measured), the model an hour ahead (amber, dashed). */
 .wt-glyph { pointer-events: none; background: none; border: 0; }

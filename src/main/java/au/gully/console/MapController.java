@@ -58,6 +58,7 @@ public class MapController {
     private final Ledger ledger;
     private final Upstreams upstreams;
     private final Life life;
+    private final Reach reach;
     private final Json json;
 
     @GetMapping
@@ -66,7 +67,102 @@ public class MapController {
         model.addAttribute("stations", stations.size());
         model.addAttribute("warnings", warnings.all().size());
         model.addAttribute("cellKm", store.grid().cellKm());
+        model.addAttribute("reachKm", reach.km());
+        model.addAttribute("reachMaxKm", Reach.MAX_KM);
+        model.addAttribute("reachBy", reach.by());
+        model.addAttribute("reachSince", reach.since());
         return "map";
+    }
+
+    /**
+     * The coverage a reach would give (W-18): every hexagon any station would count for at that
+     * distance, held or not, with how many stations count for it and how many of those are
+     * reporting; and every hexagon held with none, at zero. The same walk Set will apply, so the
+     * preview cannot differ from the result. Not cached: the slider asks as it is dragged, and the
+     * walk over every station is milliseconds.
+     */
+    @GetMapping(value = "/coverage.geojson", produces = "application/geo+json")
+    @ResponseBody
+    public Map<String, Object> coverage(@RequestParam(required = false) Double reachKm) {
+        Grid grid = store.grid();
+        Instant now = Instant.now();
+        double km = reachKm == null ? reach.km() : Reach.clamp(reachKm);
+        Map<String, Cell> cells = new LinkedHashMap<>();
+        Map<String, int[]> counts = new HashMap<>();
+        Map<String, List<String>> names = new HashMap<>();
+        for (Station s : stations.all()) {
+            Observation o = stations.latest(s.id()).orElse(null);
+            boolean reporting = o != null && o.at() != null && Duration.between(o.at(), now).compareTo(FirePictures.STATION_STALE) < 0;
+            for (Cell c : grid.cellsReaching(s.lat(), s.lon(), km)) {
+                cells.putIfAbsent(c.id(), c);
+                int[] n = counts.computeIfAbsent(c.id(), k -> new int[2]);
+                n[0]++;
+                if (reporting) n[1]++;
+                names.computeIfAbsent(c.id(), k -> new ArrayList<>()).add(s.name() + (reporting ? "" : " (not reporting)"));
+            }
+        }
+        for (Hexagon h : store.all()) {
+            cells.putIfAbsent(h.id(), h.cell());
+        }
+        List<Map<String, Object>> features = new ArrayList<>();
+        int[] byCount = new int[4], byReporting = new int[4];
+        for (Cell c : cells.values()) {
+            int[] n = counts.getOrDefault(c.id(), new int[2]);
+            byCount[Math.min(3, n[0])]++;
+            byReporting[Math.min(3, n[1])]++;
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("type", "Feature");
+            f.put("id", c.id());
+            List<List<Double>> ring = new ArrayList<>();
+            for (double[] v : grid.outline(c)) {
+                ring.add(List.of(Math.round(v[1] * 1e5) / 1e5, Math.round(v[0] * 1e5) / 1e5));
+            }
+            f.put("geometry", Map.of("type", "Polygon", "coordinates", List.of(ring)));
+            Map<String, Object> p = new LinkedHashMap<>();
+            p.put("id", c.id());
+            p.put("lat", Math.round(c.lat() * 1e5) / 1e5);
+            p.put("lon", Math.round(c.lon() * 1e5) / 1e5);
+            p.put("stations", n[0]);
+            p.put("reporting", n[1]);
+            p.put("names", names.getOrDefault(c.id(), List.of()));
+            p.put("held", store.get(c.id()).isPresent());
+            f.put("properties", p);
+            features.add(f);
+        }
+        Map<String, Object> fc = new LinkedHashMap<>();
+        fc.put("type", "FeatureCollection");
+        fc.put("features", features);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("reachKm", km);
+        meta.put("savedKm", reach.km());
+        meta.put("savedBy", reach.by());
+        meta.put("savedAt", reach.since() == null ? null : reach.since().toString());
+        meta.put("maxKm", Reach.MAX_KM);
+        meta.put("stations", stations.size());
+        meta.put("cells", features.size());
+        meta.put("byStations", List.of(byCount[0], byCount[1], byCount[2], byCount[3]));
+        meta.put("byReporting", List.of(byReporting[0], byReporting[1], byReporting[2], byReporting[3]));
+        fc.put("meta", meta);
+        return fc;
+    }
+
+    /**
+     * The reach set (W-18): written so a restart keeps it, and every hexagon re-linked to its
+     * stations at the new distance, every station given its hexagons. POST, because it changes what
+     * "now" comes from for every hexagon near a station.
+     */
+    @PostMapping(value = "/reach", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> setReach(@RequestParam double km) {
+        double set = reach.set(km, ConsoleModel.operatorName());
+        int changed = store.stationsChanged();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("reachKm", set);
+        out.put("by", reach.by());
+        out.put("since", reach.since() == null ? null : reach.since().toString());
+        out.put("hexagonsChanged", changed);
+        out.put("hexagons", store.size());
+        return out;
     }
 
     /**

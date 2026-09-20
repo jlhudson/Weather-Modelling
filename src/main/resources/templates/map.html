@@ -79,6 +79,19 @@
                     <summary>Requests <span class="muted">what drives every read</span></summary>
                     <div class="chips" data-group="asks"></div>
                 </details>
+                <!-- The coverage: how many stations count for each hexagon at a reach, and the reach turned and set (W-18). -->
+                <details class="group" id="moreCoverage">
+                    <summary>Coverage <span class="muted">stations within reach of each hexagon</span></summary>
+                    <div class="chips" data-group="coverage"></div>
+                    <div class="reach" id="reach">
+                        <label for="reachKm">Reach <b id="reachValue" th:text="${reachKm}">4.25</b> km <span class="muted">from a hexagon's edge</span></label>
+                        <input aria-label="Reach in kilometres" id="reachKm" max="30" min="0" step="0.25" type="range" th:max="${reachMaxKm}" th:value="${reachKm}">
+                        <div class="reach-row">
+                            <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-by=${reachBy},data-since=${reachSince}">set to <span th:text="${reachKm}">4.25</span> km</span>
+                            <button class="pill" id="reachSet" title="Make this the reach: every hexagon re-finds its stations, and the value survives a restart" type="button">set</button>
+                        </div>
+                    </div>
+                </details>
                 <div class="group show">
                     <div class="group-title">Show</div>
                     <div class="toggles" id="toggles">

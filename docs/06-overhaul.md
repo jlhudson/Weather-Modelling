@@ -76,6 +76,12 @@ or more.
       seen: a map with a switch for which value to colour by, a click that shows everything we hold
       for a point, per-hexagon tables (readings, history, drought, when it refreshes, how old), and
       charts of upstream spend (item 8).
+- [x] **The station reach turned on the map.** A slider for how far outside a hexagon a station
+      still counts as its own, a coverage layer that colours every hexagon by how many stations
+      count for it at that distance with the count in each cell (past one it is a blend, so bold in
+      a red ring) and, beside it, how many of those are reporting; **set** makes it the reach in
+      force and the value survives a restart (W-18). What it shows is which hexagons have a "now"
+      without an upstream call.
 
 ### 1 · Fetch readings only where they are asked for, keyed on hexagons — no grid
 

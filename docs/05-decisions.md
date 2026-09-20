@@ -185,7 +185,7 @@ whose edge is within a quarter of the width (`Grid.STATION_REACH_KM`, 4.25 km at
 near an edge, three near a corner. Before this, the hexagon beside a town's station, with the
 station a few hundred metres over its line, had nothing of its own and went to the neighbours'
 blend; now the station is "in it" for both, and where a hexagon gains two such stations they are
-blended at ring 0. The reach is a fraction of the width, not a distance, so it follows the grid (a fifth at first, a quarter the same evening).
+blended at ring 0. The reach was a fraction of the width, not a distance, so it followed the grid (a fifth at first, a quarter the same evening) — until W-18 made it a distance the console turns.
 
 ### W-14 · Nothing on a timer: the sources are read on request, whole, when an ask finds them due
 
@@ -268,3 +268,34 @@ the answer is three directions and three speeds side by side, not a colour. Five
 that is what is held behind the latest; the model an hour ahead because that is the arrow a crew
 can act on, and the change it expects because that is the one thing the forecast says that the
 ground has not yet. — James, 20 September 2026.
+
+### W-18 · The station reach is turned on the map, kept across restarts, and the coverage it gives is drawn before anything is asked for
+
+**The decision.** How far outside a hexagon a Bureau station still counts as the hexagon's own —
+the reach, a quarter of the width since W-13's addendum — is no longer a constant. It is a value in
+kilometres from a hexagon's edge, `Grid.DEFAULT_STATION_REACH_KM` (4.25 km) until the console sets
+another, held by `Reach` and written to a `setting` table (V9) so the value the map was tuned to
+survives a restart; the start log says which is in force. The map's rail gains a **Coverage** group
+with a slider (0–30 km, a quarter-kilometre step) and **set**: dragging asks
+`/console/map/coverage.geojson?reachKm=` — the same walk over every station that set will apply,
+so the preview cannot differ from the result — and draws every hexagon any station would count for
+at that distance, held or not, coloured by how many count for it (grey none, blue one, darker past
+one) with the count in each cell from zoom 8, bold in a red ring past one, where "now" is a blend.
+A second chip counts only the stations reporting. Set writes the value and re-links every hexagon
+to its stations at the new distance (`HexagonStore.stationsChanged`), giving each station its
+hexagons; nothing is reset, since no hexagon's id changes, and the hexagons a wider reach created
+stay when it narrows. The walk itself (`Grid.cellsReaching`) goes ring by ring as far as the reach
+can go — past a circumradius the second ring comes in, since a corner is exactly one edge's length
+from a second-ring corner — rather than the six neighbours only. The layer carries
+`stationsInReach` and `stationsReporting` per hexagon and `reachKm` in its meta. A lone station
+within reach is still taken as it is, unmoved (W-13): at a wide reach a hexagon well above its
+station reads the plains' temperature, and that is accepted — a reading is better than none, and
+better than a call.
+
+**Why.** The question the reach answers is "which hexagons have a 'now' from the ground without an
+upstream call?", and the answer depends on a distance nobody could see the effect of without
+editing a constant and rebuilding. Turning it on the map with the count in every cell shows the
+coverage a distance buys — and, beside it, how much of that coverage is actually reporting, which
+is the honest figure: a hexagon with a station within reach whose file has not been read for an
+hour has nothing for free. The value is kept in the database, not the properties file, because it
+is chosen by looking at the map, not by deploying. — James, 20 September 2026.

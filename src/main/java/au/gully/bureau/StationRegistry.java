@@ -3,6 +3,7 @@ package au.gully.bureau;
 import au.gully.hexagons.Cell;
 import au.gully.hexagons.Geo;
 import au.gully.hexagons.Grid;
+import au.gully.hexagons.Reach;
 import au.gully.storage.Db;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -61,12 +62,21 @@ public class StationRegistry {
      * is the window a wind change is looked for in.
      */
     public static final int RECENT = 6;
-    /** Per grid, per station: the hexagon ids it counts for. Cleared when a station's details change. */
+    /**
+     * Per grid and reach, per station: the hexagon ids it counts for. Cleared when a station's
+     * details change, and whole when the reach does (the key carries the reach, so a stale entry
+     * could not be read anyway; the clearing is so old reaches do not pile up).
+     */
     private final Map<String, Map<String, List<String>>> reach = new ConcurrentHashMap<>();
+    private final Reach stationReach;
     private volatile Instant lastUpdateAt;
 
-    public StationRegistry(JdbcClient db) {
+    public StationRegistry(JdbcClient db, Reach stationReach) {
         this.db = db;
+        this.stationReach = stationReach;
+        if (stationReach != null) {
+            stationReach.onChange(km -> reach.clear());
+        }
     }
 
     /**
@@ -279,7 +289,7 @@ public class StationRegistry {
      * The hexagon's own station: the one nearest its centre where several count for it. The others
      * are not lost - "now" is blended from all of them (Interpolation.inCell) - but one is the
      * hexagon's for the links, the logs and the drought ledger. A station counts for the hexagon it
-     * is in and for any neighbour whose edge is within {@link Grid#STATION_REACH_KM}.
+     * is in and for any neighbour whose edge is within the reach in force ({@link Reach}).
      */
     public Optional<Station> inCell(Grid grid, Cell cell) {
         return stations.values().stream()
@@ -322,12 +332,20 @@ public class StationRegistry {
     }
 
     /**
-     * The ids of the hexagons a station counts for, worked out once per station and grid: a station
-     * does not move, and the map asks this for every hexagon on every render.
+     * The ids of the hexagons a station counts for, worked out once per station, grid and reach: a
+     * station does not move, and the map asks this for every hexagon on every render.
      */
     private List<String> reaches(Grid grid, Station s) {
-        Map<String, List<String>> forGrid = reach.computeIfAbsent(grid.spec(), k -> new ConcurrentHashMap<>());
-        return forGrid.computeIfAbsent(s.id(), k -> grid.cellsReaching(s.lat(), s.lon(), Grid.STATION_REACH_KM).stream().map(Cell::id).toList());
+        double km = reachKm();
+        Map<String, List<String>> forGrid = reach.computeIfAbsent(grid.spec() + "; reach " + km, k -> new ConcurrentHashMap<>());
+        return forGrid.computeIfAbsent(s.id(), k -> grid.cellsReaching(s.lat(), s.lon(), km).stream().map(Cell::id).toList());
+    }
+
+    /**
+     * The reach in force: the console's, or the default where the register stands alone (a test).
+     */
+    public double reachKm() {
+        return stationReach == null ? Grid.DEFAULT_STATION_REACH_KM : stationReach.km();
     }
 
     /**

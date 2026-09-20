@@ -35,13 +35,15 @@ public final class Grid {
     public static final double ANCHOR_LON = 139.26558;
 
     /**
-     * How far outside a hexagon a Bureau station still counts as the hexagon's own: a quarter of the
-     * width, 4.25 km at 17 km. A station a few hundred metres over the line is as much this hexagon's
-     * weather as its neighbour's, and without a reach the hexagon beside a town's station had nothing
-     * of its own. A station reaches every hexagon whose edge is within this distance - its own and
-     * up to three neighbours at a corner - and each of them takes it as "in it".
+     * How far outside a hexagon a Bureau station still counts as the hexagon's own, until the console
+     * sets another ({@link Reach}, W-18): a quarter of the width, 4.25 km at 17 km. A station a few
+     * hundred metres over the line is as much this hexagon's weather as its neighbour's, and without
+     * a reach the hexagon beside a town's station had nothing of its own. A station reaches every
+     * hexagon whose edge is within the reach - its own and, at this default, up to three neighbours
+     * at a corner - and each of them takes it as "in it". Not part of the grid's spec: a change to
+     * the reach re-links the hexagons to their stations and resets nothing.
      */
-    public static final double STATION_REACH_KM = CELL_KM / 4;
+    public static final double DEFAULT_STATION_REACH_KM = CELL_KM / 4;
 
     private static final double SQRT3 = Math.sqrt(3);
 
@@ -172,19 +174,29 @@ public final class Grid {
     }
 
     /**
-     * The hexagons a point counts for: the one it is in, and any neighbour whose edge is within the
-     * reach. One inside, two near an edge, three near a corner.
+     * The hexagons a point counts for: the one it is in, and any hexagon whose edge is within the
+     * reach, ring by ring outwards. At a small reach that is one inside, two near an edge, three
+     * near a corner; at a reach past a circumradius (9.8 km at 17 km) the second ring comes into
+     * play, since a point on a corner is exactly one edge's length from a second-ring corner.
+     * <p>
+     * A ring is looked at while any of it could be in reach: its centres are at least {@code n·w·√3/2}
+     * from this hexagon's, the point is within a circumradius ({@code w/√3}) of that centre and a
+     * hexagon's edge within a circumradius of its own, so a ring whose nearest possible edge is past
+     * the reach ends the walk. The first ring is always looked at: a point on a corner reaches two
+     * neighbours at a reach of nothing.
      */
     public List<Cell> cellsReaching(double lat, double lon, double reachKm) {
         Cell own = cellOf(lat, lon);
         List<Cell> out = new ArrayList<>();
         out.add(own);
-        if (reachKm <= 0) {
+        if (reachKm < 0) {
             return out;
         }
-        for (Cell n : ring(own)) {
-            if (distanceKm(n, lat, lon) <= reachKm) {
-                out.add(n);
+        for (int n = 1; (n * SQRT3 / 2 - 2 / SQRT3) * cellKm() <= reachKm; n++) {
+            for (Cell c : ring(own, n)) {
+                if (distanceKm(c, lat, lon) <= reachKm) {
+                    out.add(c);
+                }
             }
         }
         return out;

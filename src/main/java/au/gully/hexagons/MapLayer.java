@@ -1,5 +1,6 @@
 package au.gully.hexagons;
 
+import au.gully.bureau.Station;
 import au.gully.bureau.StationRegistry;
 import au.gully.bureau.WindShift;
 import au.gully.cfs.Ratings;
@@ -98,6 +99,19 @@ public class MapLayer {
                 }
             });
         }
+        // The stations counting for each hexagon at the reach in force (W-18), and how many of them are
+        // reporting: what the coverage layer shows, and what the tooltip says a hexagon has for free.
+        Map<String, int[]> inReach = new HashMap<>();
+        if (at == null) {
+            for (Station s : stations.all()) {
+                boolean reporting = stations.latest(s.id()).map(o -> o.at() != null && Duration.between(o.at(), now).compareTo(FirePictures.STATION_STALE) < 0).orElse(false);
+                for (String hexagon : stations.hexagonsOf(store.grid(), s.id())) {
+                    int[] n = inReach.computeIfAbsent(hexagon, k -> new int[2]);
+                    n[0]++;
+                    if (reporting) n[1]++;
+                }
+            }
+        }
         int withShift = 0;
         List<Map<String, Object>> features = new ArrayList<>();
         int active = 0, withStation = 0, withForecast = 0, withDrought = 0, withLandUse = 0;
@@ -125,6 +139,9 @@ public class MapLayer {
             props.put("windShiftKmh", shift == null ? null : shift.deltaKmh());
             props.put("windShiftText", shift == null ? null : shift.describe());
             if (shift != null) withShift++;
+            int[] counting = inReach.get(h.id());
+            props.put("stationsInReach", at != null ? null : counting == null ? 0 : counting[0]);
+            props.put("stationsReporting", at != null ? null : counting == null ? 0 : counting[1]);
             @SuppressWarnings("unchecked")
             Object from = ((Map<String, Object>) f.get("properties")).get("from");
             nowFrom.merge(from == null ? "none" : from.toString(), 1, Integer::sum);
@@ -148,6 +165,7 @@ public class MapLayer {
         meta.put("withWindShift", withShift);
         meta.put("nowFrom", nowFrom);
         meta.put("cellKm", store.grid().cellKm());
+        meta.put("reachKm", stations.reachKm());
         meta.put("lifeMinutes", life.forecast().toMinutes());
         meta.put("version", version);
         fc.put("meta", meta);
