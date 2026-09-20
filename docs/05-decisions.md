@@ -337,3 +337,24 @@ when they were not there; and the rain a place had. Five years because that is t
 comparison, or a fire season against the last, is drawn over; six-hourly because every ten-minute
 reading for eight hundred stations is a size nobody asked for and a resolution nothing here reads.
 — James, 20 September 2026.
+
+### W-20 · The reading by name: `/now`, `/forecast` and `/drought`, beside `/readings`
+
+**The decision.** Three routes beside `/api/v1/readings`, which stays as it is for the Hub.
+`/now` is the reading cut to the ground's half — `current` and where it came from, the station and
+the neighbours' blend, the fire picture drawn from it, the warnings, the station's word on the
+forecast — with `forecast`, `drought` and `flood` null; `/forecast` is the whole reading, the days
+and hours ahead with their indices, the drought and the flood picture, by a name that says what it
+is. Both answer in the reading's shape under the one contract, so nothing new has to be kept in
+step. `/drought` has a shape of its own (`gully/drought/1`): the deficit and the drought factor as
+the reading carries them, where the inputs came from, the stations feeding the hexagon, the last so
+many days of rain and maximum the deficit was stepped with — the record W-19 keeps, each day with
+its source — and the rain those days add up to over a week, a month, a season and a year. The fire
+picture rides on `/now` because the indices of the moment are computed from the moment's
+conditions and the drought of the day; the flood picture stays on `/forecast` and `/readings`
+because it is mostly rain ahead and the river's outlook.
+
+**Why.** A caller that wants to know what the wind is doing should not have to read past seven
+days of forecast to find it, and one asking how dry the country is should get the days behind the
+number, not the number alone. The blocks already existed; the routes are the names the questions
+have. — James, 20 September 2026.

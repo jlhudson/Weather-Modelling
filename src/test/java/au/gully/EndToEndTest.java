@@ -151,6 +151,32 @@ class EndToEndTest {
         assertThat(status.getBody()).containsKeys("upstreams", "sources", "held");
     }
 
+    /**
+     * The three named routes (W-20): now is the reading cut to the ground's half, in the reading's
+     * shape; forecast is the whole reading; drought is its own shape with the days behind it. All
+     * behind the same key and scope, all honest when nothing can be fetched.
+     */
+    @Test
+    void nowForecastAndDroughtAnswerByName() {
+        ResponseEntity<Map> now = client().get().uri("/api/v1/now?lat=-34.93&lon=138.6").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(now.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(now.getBody().get("schema")).isEqualTo("gully/reading/1");
+        assertThat(now.getBody()).containsKeys("current", "currentFrom", "station", "fire", "warnings").containsEntry("forecast", null)
+                .containsEntry("drought", null).containsEntry("flood", null);
+        ResponseEntity<Map> forecast = client().get().uri("/api/v1/forecast?lat=-34.93&lon=138.6").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(forecast.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(forecast.getBody().get("schema")).isEqualTo("gully/reading/1");
+        assertThat(forecast.getBody()).containsKeys("current", "forecast", "drought", "fire", "flood");
+        ResponseEntity<Map> drought = client().get().uri("/api/v1/drought?lat=-34.93&lon=138.6&days=7").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(drought.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(drought.getBody().get("schema")).isEqualTo("gully/drought/1");
+        assertThat(drought.getBody().get("available")).as("no upstream: the spin-up cannot be fed").isEqualTo(false);
+        assertThat(drought.getBody()).containsKeys("hexagon", "stations", "days", "rain");
+        assertThat(((Map<?, ?>) drought.getBody().get("rain")).get("last7DaysMm")).as("the record does not reach a week back").isNull();
+        assertThat(client().get().uri("/api/v1/drought?lat=-34.93&lon=138.6").retrieve().toEntity(Map.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(client().get().uri("/api/v1/now?lat=-34.93&lon=10").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
     @Test
     void theLegacyRouteStillAnswersInItsOldShape() {
         ResponseEntity<Map> r = client().get().uri("/api/weather?lat=-34.93&lon=138.6&forecast=true").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);

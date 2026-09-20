@@ -167,6 +167,37 @@ The Hub treats `available == false` as "no reading" and asks again on its next s
 
 ---
 
+## 2.1a `GET /api/v1/now`, `GET /api/v1/forecast`, `GET /api/v1/drought` — the reading by name (W-20)
+
+Three routes that say what they are, for callers that want one half and not the other. `now` and
+`forecast` answer in the reading's shape (`gully/reading/1`, the same contract, the same headers);
+`drought` has a shape of its own.
+
+- `GET /api/v1/now?lat=&lon=&ref=` — what the ground says at the point and the fire picture drawn
+  from it: `current`, `currentFrom`, `station`, `nearby`, `fire`, `warnings`, `drift`; `forecast`,
+  `drought` and `flood` are null. A station hexagon answers for free; one without a station takes
+  the model's series at this moment and says so. Cached for ten minutes from a station, to the
+  model's expiry otherwise.
+- `GET /api/v1/forecast?lat=&lon=&ref=` — the whole picture: `/readings?forecast=true` by a name that
+  says what it is — now, the days and hours ahead each with their indices, the drought, the fire and
+  flood pictures, the warnings.
+- `GET /api/v1/drought?lat=&lon=&days=30&ref=` — the drought at the point and the record behind it
+  (`gully/drought/1`): `drought` as the reading carries it (KBDI, its band, the drought factor, the
+  mean annual rainfall, the spin-up's span), `from` (`stations`, `archive` or `stations+archive`),
+  `stations` — the ones feeding the hexagon's days, inside it or within reach, else the nearest within
+  75 km — `days`, the last so many days of rain and maximum the deficit was stepped with, oldest first,
+  each with its `source` (`stations`, `archive`, `recent`), and `rain`, the totals those days add up to
+  over 7, 30, 90 and 365 days (null where the record does not reach that far). `available: false`
+  with the reason when the spin-up could not yet be fed. An ask, like the reading: a new hexagon is
+  created and its drought spun up, which is the one archive call the hexagon ever makes; cached an
+  hour, since it steps once a day.
+
+```bash
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/now?lat=-35.12&lon=139.27"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/forecast?lat=-35.12&lon=139.27"
+curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/drought?lat=-35.12&lon=139.27&days=90"
+```
+
 ## 2.2 `GET /api/v1/hexagons.geojson?at=`
 
 Every hexagon held, as a `FeatureCollection` of polygons, each carrying the values a map colours by,

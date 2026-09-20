@@ -277,7 +277,7 @@ public class Drought {
     /**
      * The stations of a hexagon: those inside it, else the nearest within reach of its centre.
      */
-    List<Station> stationsFor(Cell cell) {
+    public List<Station> stationsFor(Cell cell) {
         List<Station> inside = stations.inCells(grid, List.of(cell));
         if (!inside.isEmpty()) {
             return inside;

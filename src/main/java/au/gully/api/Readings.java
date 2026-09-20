@@ -87,6 +87,17 @@ public class Readings {
                 new Reading.HistoryBlock(s.at(), s.recordedAt(), null, at), Reading.DISCLAIMER);
     }
 
+    /**
+     * The reading cut to "now" (W-20): what the ground says at the point and the fire picture drawn
+     * from it - the conditions, where they came from, the station and the neighbours, the indices,
+     * the warnings, the station's word on the forecast - and nothing of the days ahead, the drought
+     * or the flood picture. The same blocks, in the same shape, so one contract serves both.
+     */
+    public static Reading nowView(Reading r) {
+        return new Reading(r.schema(), r.available(), r.unavailable(), r.point(), r.hexagon(), r.source(), r.at(), r.current(),
+                r.currentFrom(), r.station(), r.nearby(), r.fire(), null, null, r.warnings(), null, r.drift(), r.history(), r.disclaimer());
+    }
+
     public Reading unavailable(Reading.Point point, Hexagon h, String why) {
         return new Reading(Reading.SCHEMA, false, why, point, h == null ? null : hexagon(h, point, Instant.now()), null, null,
                 null, null, h == null ? null : station(h), null, null, null, null, List.of(), null, null, null, Reading.DISCLAIMER);

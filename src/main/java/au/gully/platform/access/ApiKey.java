@@ -37,7 +37,8 @@ public record ApiKey(long id, String consumer, String keyPrefix, String keyHash,
         /** The diagnostics reads and clears only: the morning agent. */
         DIAGNOSTICS;
 
-        static final Set<String> READING_PREFIXES = Set.of("/api/v1/readings", "/api/v1/fire-indices", "/api/v1/status", "/api/v1/drift",
+        static final Set<String> READING_PREFIXES = Set.of("/api/v1/readings", "/api/v1/now", "/api/v1/forecast", "/api/v1/drought",
+                "/api/v1/fire-indices", "/api/v1/status", "/api/v1/drift",
                 "/api/v1/upstreams", "/api/weather");
 
         public static Scope parse(String name) {
