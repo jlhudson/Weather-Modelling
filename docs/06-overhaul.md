@@ -82,6 +82,17 @@ or more.
       a red ring) and, beside it, how many of those are reporting; **set** makes it the reach in
       force and the value survives a restart (W-18). What it shows is which hexagons have a "now"
       without an upstream call.
+- [x] **Three named routes** — `/now` for the ground's half, `/forecast` for the whole picture,
+      `/drought` with the days behind the number (W-20) — beside `/readings`, which stays.
+- [x] **History is the ground's.** The stations' six-hourly ledger consolidated and kept five years,
+      the model's stand-ins where no station was there, the drought's days per hexagon; the hexagon
+      snapshots gone (W-19). The archive kept raw per point, every day the Bureau's 9 am day, and a
+      drought remade from the record on demand (W-21).
+- [x] **A drought's stations by rings and height, not 75 km**; a hexagon without one takes its
+      spun-up neighbours; the operator spins one up on purpose from the map (W-22).
+- [x] **The map reworked into one side panel** — Now, Forecast, Drought — with the wind-change
+      thresholds and the drought's rule turned on it, the drought's feed drawn as spokes, and
+      outlines around regions rather than every cell (W-23).
 
 ### 1 · Fetch readings only where they are asked for, keyed on hexagons — no grid
 

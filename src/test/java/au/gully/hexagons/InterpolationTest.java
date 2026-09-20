@@ -29,7 +29,7 @@ class InterpolationTest {
      * A register with the given stations, each reporting the same moment.
      */
     private static StationRegistry registry(List<Station> stations, List<Observation> observations) {
-        return new StationRegistry(null, null) {
+        return new StationRegistry(null, null, null) {
             @Override
             public List<Station> inCells(Grid grid, java.util.Collection<Cell> cells) {
                 // As the register does: a station counts for the hexagon it is in and any it reaches.

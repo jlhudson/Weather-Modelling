@@ -76,11 +76,13 @@ public class StationRegistry {
      */
     private final Map<String, Map<String, List<String>>> reach = new ConcurrentHashMap<>();
     private final Reach stationReach;
+    private final WindChangeThresholds windChange;
     private volatile Instant lastUpdateAt;
 
-    public StationRegistry(JdbcClient db, Reach stationReach) {
+    public StationRegistry(JdbcClient db, Reach stationReach, WindChangeThresholds windChange) {
         this.db = db;
         this.stationReach = stationReach;
+        this.windChange = windChange;
         if (stationReach != null) {
             stationReach.onChange(km -> reach.clear());
         }
@@ -332,7 +334,14 @@ public class StationRegistry {
      * The wind change a station has just measured, if any, from its last readings.
      */
     public Optional<WindShift> windShift(String stationId) {
-        return WindShift.of(recent(stationId));
+        return windChange == null ? WindShift.of(recent(stationId)) : WindShift.of(recent(stationId), windChange.swingDeg(), windChange.speedKmh());
+    }
+
+    /**
+     * The widest swing and biggest speed change in a station's last readings, whatever counts (W-23).
+     */
+    public Optional<WindShift.Extent> windExtent(String stationId) {
+        return WindShift.extent(recent(stationId));
     }
 
     /**

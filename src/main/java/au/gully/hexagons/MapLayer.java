@@ -39,6 +39,7 @@ public class MapLayer {
 
     private final HexagonStore store;
     private final StationRegistry stations;
+    private final au.gully.bureau.WindChangeThresholds windChange;
     private final History history;
     private final FirePictures pictures;
     private final Life life;
@@ -166,6 +167,8 @@ public class MapLayer {
         meta.put("nowFrom", nowFrom);
         meta.put("cellKm", store.grid().cellKm());
         meta.put("reachKm", stations.reachKm());
+        meta.put("windSwingDeg", windChange.swingDeg());
+        meta.put("windSpeedKmh", windChange.speedKmh());
         meta.put("lifeMinutes", life.forecast().toMinutes());
         meta.put("version", version);
         fc.put("meta", meta);
@@ -213,6 +216,13 @@ public class MapLayer {
         // The drought as a thing of its own (W-22): where its inputs came from, how many days it runs over,
         // the rain of the last week and the window, and whether it is the hexagon's own or its neighbours'.
         DroughtState ds = h.drought();
+        if (ds != null) {
+            // The deficit and the factor are the drought's, whether or not a fire picture has been drawn from them yet.
+            au.gully.science.DroughtIndex di = ds.index();
+            p.put("droughtFactor", di.droughtFactor());
+            p.put("kbdiMm", di.kbdiMm());
+            p.put("kbdiBand", di.kbdiBand());
+        }
         p.put("droughtFrom", ds == null ? null : ds.from());
         p.put("droughtInterpolated", ds != null && ds.interpolated());
         p.put("droughtDays", ds == null ? null : ds.days());

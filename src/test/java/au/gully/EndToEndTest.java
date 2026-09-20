@@ -208,6 +208,8 @@ class EndToEndTest {
     au.gully.drought.DroughtRule droughtRule;
     @Autowired
     au.gully.drought.Drought drought;
+    @Autowired
+    au.gully.bureau.WindChangeThresholds windChange;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -340,6 +342,13 @@ class EndToEndTest {
         assertThat(drought.feed(h.cell(), h.elevationM())).as("West Terrace counts for the hexagon: ring 0").extracting(au.gully.drought.Drought.Fed::ring).contains(0);
         assertThat(store.spinDrought(-34.93, 138.6).drought()).isNull();
         droughtRule.set(au.gully.drought.DroughtRule.DEFAULT_RINGS, au.gully.drought.DroughtRule.DEFAULT_KM_PER_100M, "test");
+        // What counts as a wind change (W-23): set, written, reloaded; the register's shifts follow it.
+        windChange.set(45, 12, "test");
+        windChange.rehydrate();
+        assertThat(windChange.swingDeg()).isEqualTo(45);
+        assertThat(windChange.speedKmh()).isEqualTo(12.0);
+        assertThat(stations.windExtent("023000")).isPresent();
+        windChange.set(au.gully.bureau.WindShift.SWING_SLIGHT_DEG, au.gully.bureau.WindShift.SPEED_SLIGHT_KMH, "test");
         assertThat(history.prune(now)).as("nothing is five years old").isZero();
 
         // The drift ledger takes a blend as its judge: three stations joined is twenty characters, which the
@@ -394,7 +403,7 @@ class EndToEndTest {
             assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");
             if (page.equals("/console/map")) {
                 // The map page: its own sheet in the head, the rail, the figures, the legend and the timeline.
-                assertThat(r.getBody()).contains("/css/map.css").contains("id=\"rail\"").contains("id=\"timeline\"").contains("id=\"legend\"").contains("id=\"stats\"");
+                assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"tabs\"").contains("id=\"timeline\"").contains("id=\"legend\"").contains("id=\"droughtRule\"").contains("id=\"windChange\"");
             }
         }
         for (String feed : new String[]{"/console/map/layer.geojson", "/console/map/grid.geojson?south=-35.2&west=138.3&north=-34.7&east=138.9",

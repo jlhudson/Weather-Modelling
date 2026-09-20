@@ -40,94 +40,98 @@
     <div class="map-wrap">
         <div id="map"></div>
 
-        <!-- The rail: what to colour by. One choice, three sides. -->
-        <aside class="panel rail" id="rail">
-            <div class="rail-head">
-                <div class="rail-head-row">
-                    <div class="group-title">Show values from <span class="muted">· click to swap, or keys 1 2 3</span></div>
-                    <button class="icon-btn rail-fold" id="railFold" title="Collapse" type="button"><svg class="ico"><use href="#i-chevron"/></svg></button>
-                </div>
-                <div class="seg" id="side" role="tablist" aria-label="Show values from">
-                    <button class="on" data-side="now" role="tab" title="Now: what the ground says (key 1)" type="button"><svg class="ico"><use href="#i-station"/></svg><span>Now</span></button>
-                    <button data-side="fc" role="tab" title="Forecast: what the model says (key 2)" type="button"><svg class="ico"><use href="#i-forecast"/></svg><span>Forecast</span></button>
-                    <button data-side="diff" role="tab" title="Compare: now minus forecast (key 3)" type="button"><svg class="ico"><use href="#i-delta"/></svg><span>Compare</span></button>
+        <!-- The side panel (W-23): one tab - Now, Forecast, Drought - and everything for it: what to colour by,
+             the controls the tab turns (the reach and the wind change under Now, the drought's rule under
+             Drought), what else to draw, the figures, and the legend. The timeline stays with the map. -->
+        <aside class="panel side" id="side">
+            <div class="side-head">
+                <div class="seg" id="tabs" role="tablist" aria-label="Show">
+                    <button class="on" data-tab="now" role="tab" title="Now: what the ground says (key 1)" type="button"><svg class="ico"><use href="#i-station"/></svg><span>Now</span></button>
+                    <button data-tab="forecast" role="tab" title="Forecast: what the model says, and the fire picture (key 2)" type="button"><svg class="ico"><use href="#i-forecast"/></svg><span>Forecast</span></button>
+                    <button data-tab="drought" role="tab" title="Drought: the deficit, its inputs, and what feeds it (key 3)" type="button"><svg class="ico"><use href="#i-drought"/></svg><span>Drought</span></button>
                 </div>
                 <div class="side-caption" id="sideCaption"></div>
             </div>
             <div class="coach hidden" id="coach">
-                <b>Pick a side, then a variable.</b> <span class="muted">Now is what the stations say, Forecast is what the model says, Compare is one minus the other. The map colours by your pick; the legend at the bottom is the scale. Drag the timeline to see the forecasts hour by hour.</span>
+                <b>Pick a tab, then what to colour by.</b> <span class="muted">Now is what the stations say, Forecast is what the model says, Drought is the deficit behind the fire indices. The legend at the bottom of this panel is the scale. Drag the timeline under the map to see the hours ahead and the days behind.</span>
                 <button class="pill" id="coachOk" type="button">got it</button>
             </div>
-            <div class="rail-body">
+            <div class="side-body">
                 <div class="group" id="vars">
                     <div class="group-title" id="varsTitle">Colour by</div>
                     <div class="chips" id="varChips"></div>
                 </div>
-                <details class="group" id="moreShift" open>
-                    <summary>Wind change <span class="muted">in the last hour, by the stations</span></summary>
-                    <div class="chips" data-group="shift"></div>
-                </details>
-                <details class="group" id="moreFire">
-                    <summary>Fire <span class="muted">indices &amp; rating</span></summary>
-                    <div class="chips" data-group="fire"></div>
-                </details>
-                <details class="group" id="moreGround">
-                    <summary>Ground <span class="muted">what the hexagon is</span></summary>
-                    <div class="chips" data-group="ground"></div>
-                </details>
-                <details class="group" id="moreAsks">
-                    <summary>Requests <span class="muted">what drives every read</span></summary>
-                    <div class="chips" data-group="asks"></div>
-                </details>
-                <!-- The coverage: how many stations count for each hexagon at a reach, and the reach turned and set (W-18). -->
-                <details class="group" id="moreCoverage">
-                    <summary>Coverage <span class="muted">stations within reach of each hexagon</span></summary>
-                    <div class="chips" data-group="coverage"></div>
-                    <div class="reach" id="reach">
-                        <label for="reachKm">Reach <b id="reachValue" th:text="${reachKm}">4.25</b> km <span class="muted">from a hexagon's edge</span></label>
-                        <input aria-label="Reach in kilometres" id="reachKm" max="30" min="0" step="0.25" type="range" th:max="${reachMaxKm}" th:value="${reachKm}">
-                        <div class="reach-row">
-                            <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-by=${reachBy},data-since=${reachSince}">set to <span th:text="${reachKm}">4.25</span> km</span>
-                            <button class="pill" id="reachSet" title="Make this the reach: every hexagon re-finds its stations, and the value survives a restart" type="button">set</button>
-                        </div>
+                <!-- The reach (W-18): under Now when Coverage is chosen. -->
+                <div class="control hidden" id="reach">
+                    <label for="reachKm">Reach <b id="reachValue" th:text="${reachKm}">4.25</b> km <span class="muted">from a hexagon's edge</span></label>
+                    <input aria-label="Reach in kilometres" id="reachKm" max="30" min="0" step="0.25" type="range" th:max="${reachMaxKm}" th:value="${reachKm}">
+                    <div class="control-row">
+                        <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-by=${reachBy},data-since=${reachSince}">set to <span th:text="${reachKm}">4.25</span> km</span>
+                        <button class="pill" id="reachSet" title="Make this the reach: every hexagon re-finds its stations, and the value survives a restart" type="button">set</button>
                     </div>
+                </div>
+                <!-- What counts as a wind change (W-23): under Now when Wind change is chosen. -->
+                <div class="control hidden" id="windChange">
+                    <label for="windSwing">A change counts from a swing of <b id="windSwingValue" th:text="${windSwingDeg}">30</b>°</label>
+                    <input aria-label="Swing in degrees" id="windSwing" max="180" min="5" step="5" type="range" th:value="${windSwingDeg}">
+                    <label for="windSpeed">or a speed change of <b id="windSpeedValue" th:text="${windSpeedKmh}">10</b> km/h</label>
+                    <input aria-label="Speed change in km/h" id="windSpeed" max="60" min="2" step="1" type="range" th:value="${windSpeedKmh}">
+                    <div class="control-row">
+                        <span class="muted" id="windSaved" th:attr="data-swing=${windSwingDeg},data-speed=${windSpeedKmh},data-by=${windChangeBy},data-since=${windChangeSince}">set</span>
+                        <button class="pill" id="windSet" title="Make these the thresholds: the stations' rings and the hexagons' outlines follow, and the values survive a restart" type="button">set</button>
+                    </div>
+                </div>
+                <!-- The drought's rule (W-22): under Drought when Feed is chosen. -->
+                <div class="control hidden" id="droughtRule">
+                    <label for="droughtRings">Stations searched <b id="droughtRingsValue" th:text="${droughtRings}">3</b> rings out <span class="muted">when none counts for the hexagon</span></label>
+                    <input aria-label="Rings" id="droughtRings" max="6" min="0" step="1" type="range" th:value="${droughtRings}">
+                    <label for="droughtKm">100 m of height costs <b id="droughtKmValue" th:text="${droughtKmPer100m}">10</b> km</label>
+                    <input aria-label="Kilometres per 100 metres" id="droughtKm" max="30" min="0" step="0.5" type="range" th:value="${droughtKmPer100m}">
+                    <div class="control-row">
+                        <span class="muted" id="droughtSaved" th:attr="data-rings=${droughtRings},data-km=${droughtKmPer100m},data-by=${droughtRuleBy},data-since=${droughtRuleSince}">set</span>
+                        <button class="pill" id="droughtSet" title="Make this the rule: every drought is made again from the record under it, and the values survive a restart" type="button">set</button>
+                    </div>
+                    <div class="muted control-note">Click a hexagon on the map to spin its drought up on its own — the one archive call it ever makes.</div>
+                </div>
+                <details class="group" id="moreHexagon">
+                    <summary>Hexagon <span class="muted">the ground and the asks</span></summary>
+                    <div class="chips" data-group="hexagon"></div>
                 </details>
-                <div class="group show">
-                    <div class="group-title">Show</div>
+                <details class="group" id="moreShow">
+                    <summary>Show</summary>
                     <div class="toggles" id="toggles">
                         <button class="tog on" data-tog="stations" title="Bureau stations as points" type="button"><svg class="ico"><use href="#i-station"/></svg><span>Stations</span></button>
                         <button class="tog on" data-tog="wind" title="Wind arrows on the hexagons" type="button"><svg class="ico"><use href="#i-arrow"/></svg><span>Wind</span></button>
                         <button class="tog on" data-tog="trend" title="The wind trend at every fresh station, from zoom 8: the mean of the five readings before the latest (grey), the latest (black, or the grade of its change), and the model an hour ahead (amber)" type="button"><svg class="ico"><use href="#i-wind"/></svg><span>Trend</span></button>
                         <button class="tog on" data-tog="labels" title="Temperature, humidity, wind as labels" type="button"><svg class="ico"><use href="#i-label"/></svg><span>Labels</span></button>
-                        <button class="tog on" data-tog="borders" title="The hexagons' outlines" type="button"><svg class="ico"><use href="#i-grid"/></svg><span>Borders</span></button>
+                        <button class="tog on" data-tog="regions" title="Outlines around regions - the outermost hexagons of each class, of the drought, of a wind change - rather than around every hexagon" type="button"><svg class="ico"><use href="#i-grid"/></svg><span>Regions</span></button>
+                        <button class="tog" data-tog="borders" title="Every hexagon's own outline" type="button"><svg class="ico"><use href="#i-kind"/></svg><span>Borders</span></button>
                         <button class="tog" data-tog="grid" title="Every hexagon of the tessellation, held or not" type="button"><svg class="ico"><use href="#i-kind"/></svg><span>All hexes</span></button>
                         <button class="tog" data-tog="points" title="Hexagons as points" type="button"><svg class="ico"><use href="#i-points"/></svg><span>Points</span></button>
                         <button class="tog" data-tog="forecasts" title="Only hexagons holding a forecast" type="button"><svg class="ico"><use href="#i-forecast"/></svg><span>Forecasts</span></button>
                     </div>
-                </div>
+                </details>
+                <details class="group" id="moreFigures">
+                    <summary>Figures <span class="muted" id="figuresHint"></span></summary>
+                    <div class="tiles" id="tiles"></div>
+                </details>
             </div>
-        </aside>
-
-        <!-- The figures: what is held, and where "now" is coming from. -->
-        <aside class="panel stats" id="stats">
-            <div class="tiles" id="tiles"></div>
-            <div class="stats-foot">
+            <!-- The legend: the scale the colours mean, with the distribution of the hexagons drawn on it. -->
+            <div class="side-legend" id="legend">
+                <div class="legend-head">
+                    <span class="legend-title" id="legendTitle"></span>
+                    <span class="legend-scope">
+                        <span class="muted" id="legendCount"></span>
+                        <button aria-checked="true" class="tog on" id="inView" role="switch" title="Count only the hexagons inside the map view" type="button"><svg class="ico"><use href="#i-points"/></svg><span>in view</span></button>
+                    </span>
+                </div>
+                <div class="legend-body" id="legendBody"></div>
+            </div>
+            <div class="side-foot">
                 <button class="link-btn" id="sourcesToggle" type="button"><svg class="ico"><use href="#i-sources"/></svg> sources <span class="muted" id="sourcesHint"></span></button>
                 <span class="live" id="live" title="The layer every minute, the stations every minute, the sources every half minute; the states in view are read when due"><i></i><span id="liveText">live</span></span>
             </div>
         </aside>
-
-        <!-- The legend: the scale the colours mean, with the distribution of the hexagons drawn on it. -->
-        <div class="panel legend" id="legend">
-            <div class="legend-head">
-                <span class="legend-title" id="legendTitle"></span>
-                <span class="legend-scope">
-                    <span class="muted" id="legendCount"></span>
-                    <button aria-checked="true" class="tog on" id="inView" role="switch" title="Count only the hexagons inside the map view" type="button"><svg class="ico"><use href="#i-points"/></svg><span>in view</span></button>
-                </span>
-            </div>
-            <div class="legend-body" id="legendBody"></div>
-        </div>
 
         <!-- The timeline: a week back over the history, three days ahead over the forecasts. -->
         <div class="panel timeline" id="timeline">

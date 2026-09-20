@@ -44,6 +44,7 @@ public class Startup implements ApplicationRunner {
     private final StationRegistry stations;
     private final Reach reach;
     private final au.gully.drought.DroughtRule droughtRule;
+    private final au.gully.bureau.WindChangeThresholds windChange;
     private final Curing curing;
     private final HexagonStore store;
     private final Rivers rivers;
@@ -67,6 +68,7 @@ public class Startup implements ApplicationRunner {
             store.ensureGrid();
             reach.rehydrate();
             droughtRule.rehydrate();
+            windChange.rehydrate();
             stations.rehydrate();
             curing.rehydrate();
             rivers.rehydrate();

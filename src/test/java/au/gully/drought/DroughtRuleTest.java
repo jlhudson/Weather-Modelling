@@ -30,7 +30,7 @@ class DroughtRuleTest {
      * A register where a station counts for the hexagon it sits in and nothing more.
      */
     private static StationRegistry registry(List<Station> stations) {
-        return new StationRegistry(null, null) {
+        return new StationRegistry(null, null, null) {
             @Override
             public List<Station> inCells(Grid grid, java.util.Collection<Cell> cells) {
                 Set<String> ids = cells.stream().map(Cell::id).collect(Collectors.toSet());

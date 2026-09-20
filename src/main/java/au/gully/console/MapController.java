@@ -62,6 +62,7 @@ public class MapController {
     private final Reach reach;
     private final au.gully.drought.DroughtRule droughtRule;
     private final au.gully.drought.Drought drought;
+    private final au.gully.bureau.WindChangeThresholds windChange;
     private final Json json;
 
     @GetMapping
@@ -78,6 +79,10 @@ public class MapController {
         model.addAttribute("droughtKmPer100m", droughtRule.kmPer100m());
         model.addAttribute("droughtRuleBy", droughtRule.by());
         model.addAttribute("droughtRuleSince", droughtRule.since());
+        model.addAttribute("windSwingDeg", windChange.swingDeg());
+        model.addAttribute("windSpeedKmh", windChange.speedKmh());
+        model.addAttribute("windChangeBy", windChange.by());
+        model.addAttribute("windChangeSince", windChange.since());
         return "map";
     }
 
@@ -184,6 +189,25 @@ public class MapController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("remade", remade);
         out.put("withDrought", store.all().stream().filter(h -> h.drought() != null).count());
+        return out;
+    }
+
+    /**
+     * What counts as a wind change (W-23): a swing of at least so many degrees, or a speed change of at
+     * least so many km/h. Written so a restart keeps it; the layer is rendered again so every hexagon's
+     * outline follows, and the stations' points follow on their next read.
+     */
+    @PostMapping(value = "/wind-change", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> setWindChange(@RequestParam int swingDeg, @RequestParam double speedKmh) {
+        windChange.set(swingDeg, speedKmh, ConsoleModel.operatorName());
+        store.touch();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("swingDeg", windChange.swingDeg());
+        out.put("speedKmh", windChange.speedKmh());
+        out.put("by", windChange.by());
+        out.put("since", windChange.since() == null ? null : windChange.since().toString());
+        out.put("windShifts", stations.windShifts().size());
         return out;
     }
 
@@ -395,6 +419,10 @@ public class MapController {
             p.put("windShiftMinutes", w == null ? null : w.overMinutes());
             p.put("windShiftText", w == null ? null : w.describe());
             if (w != null) shifted++;
+            // The widest swing and biggest speed change in the last readings, whatever counts (W-23): the sliders' preview.
+            WindShift.Extent ext = stations.windExtent(s.id()).orElse(null);
+            p.put("windMaxSwingDeg", ext == null ? null : ext.maxSwingDeg());
+            p.put("windMaxDeltaKmh", ext == null ? null : ext.maxDeltaKmh());
             // The trend the map draws beside the change: the mean of the readings before the latest, the
             // latest, and - from the station's hexagon - the model's wind an hour ahead and the change it expects.
             WindTrend t = stations.windTrend(s.id()).orElse(null);
@@ -421,7 +449,7 @@ public class MapController {
         Map<String, Object> fc = new LinkedHashMap<>();
         fc.put("type", "FeatureCollection");
         fc.put("features", features);
-        fc.put("meta", Map.of("stations", features.size(), "fresh", fresh, "windShifts", shifted));
+        fc.put("meta", Map.of("stations", features.size(), "fresh", fresh, "windShifts", shifted, "windSwingDeg", windChange.swingDeg(), "windSpeedKmh", windChange.speedKmh()));
         return fc;
     }
 

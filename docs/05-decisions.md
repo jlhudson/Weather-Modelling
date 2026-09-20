@@ -418,3 +418,28 @@ three right without drawing an area by hand. And the archive is worth spending o
 that matters — the busy areas the operator knows — not once for every hexagon a fire truck drives
 through; the ones between are better served by the ones that were, weighed by where and how high
 they are. — James, 20 September 2026.
+
+### W-23 · One side panel — Now, Forecast, Drought — the controls on it, and outlines by region
+
+**The decision.** The map's four panels (the rail, the figures, the legend, the sources line) are
+one panel on the left with three tabs and everything for the tab: what to colour by, the controls
+the tab turns, what else to draw, the figures folded, the legend at the foot. Now holds the
+ground's layers, the wind change with the two sliders that say what counts — a swing of at least
+so many degrees or a speed change of at least so many km/h (`WindChangeThresholds`, in the setting
+table; the ladder of grades stays above them), previewed on the stations' rings from the widest
+swing and biggest speed change each has measured, set for the hexagons' outlines and the reading's
+`windShift` — and the coverage with the reach. Forecast holds the model's layers, the comparison,
+the drift and the fire indices. Drought holds the deficit and the factor as the drought's own
+(whether or not a fire picture has been drawn from them yet), the rain of its window, its inputs,
+the days, curing, and the feed with the rule's sliders, set, and the click that spins a hexagon
+up. The ground and the asks fold under every tab. The timeline stays with the map. Outlines are
+drawn around regions: an edge only where the hexagon across it is not in the same class, so the
+outermost hexagons of each class of a categorical layer, of the drought and of each grade of wind
+change are outlined once; a hexagon's own border is a toggle, off by default.
+
+**Why.** The panels had grown one per question and sat all over the map; the operator asked for one
+place and three questions — what the ground says, what the model says, how dry it is — with
+everything about each answered where it is asked. A threshold was a constant nobody could see the
+effect of; two sliders that light the stations as they move show it. And a purple ring around every
+one of eighty hexagons said "drought" eighty times; a line around the eighty says it once, and the
+same line around a wind change shows the front. — James, 20 September 2026.

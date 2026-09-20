@@ -653,6 +653,13 @@ public class HexagonStore {
     }
 
     /**
+     * The layer told to render again though no hexagon changed: a setting the render reads did (W-23).
+     */
+    public void touch() {
+        version.incrementAndGet();
+    }
+
+    /**
      * The grid against the one the tables were written with; a change resets the hexagon-keyed tables.
      */
     public boolean ensureGrid() {

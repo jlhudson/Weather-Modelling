@@ -276,31 +276,42 @@ there is none.
 
 ## 1.11 The console map
 
-A full-bleed map with a few panels floating over it, and one question at a time: what to colour by.
+A full-bleed map with one side panel over it (W-23), and one question at a time: what to colour by.
 
-**The rail** (top left) asks it in two steps. A side — **Now** from the ground, **Forecast** from the
-model, or **Δ**, one against the other — and a variable: for now and the forecast, where the values
-come from (or the forecast's remaining life), temperature, humidity, wind, gust, rain and age; for Δ,
-temperature, humidity and wind as now minus forecast, and the drift score with its 24-hour mean.
-Under it, the wind change of the last hour by the stations — the swing of direction, the change of
-speed, or the two together — then, folded, the fire layers (FFDI, GFDI, FBI in their rating colours, the CFS rating, the
-drought factor, KBDI, curing), the ground (elevation, land use by its largest share, which index
-leads, the burnable share) and the requests (minutes since a hexagon was last asked about, which is
-what drives every read). Then what to draw on top: the stations as a point cloud, wind arrows, the wind trend at the stations, value
-labels, the hexagons' borders, every hexagon of the tessellation (held or not), hexagons as points
-(automatic when zoomed out to the continent), and only the hexagons holding a forecast. Keys `1`,
-`2`, `3` pick the side.
+**The side panel** (left) asks it in two steps. A tab — **Now** from the ground, **Forecast** from
+the model with the fire picture, **Drought** behind the indices — and a chip. Under Now: where
+"now" comes from, temperature, humidity, wind, gust, rain and age; the wind change of the last hour
+by the stations (the two together, the swing, the change of speed) with the two sliders that say
+what counts — a swing of at least so many degrees, or a speed change of at least so many km/h,
+previewed on the stations' rings as you slide and **set** for the hexagons' outlines and the API;
+and the coverage (stations within reach, and reporting) with the reach slider and **set** (W-18).
+Under Forecast: the forecast's life, temperature, humidity, wind, gust, rain and age; now minus
+forecast for temperature, humidity and wind, and the drift with its 24-hour mean; FFDI, GFDI and FBI
+in their rating colours and the CFS rating. Under Drought: the drought factor, KBDI, the rain of the
+last 7 and 20 days, where a drought's inputs came from (stations, archive, both, or its neighbours),
+the days integrated over, curing — and the **feed**: every spun-up hexagon as a dot at its centre,
+where the archive was asked, with a spoke to each station feeding it under the sliders' rule (rings
+out and what height costs, W-22), dashed spokes from an interpolated hexagon to the ones it borrows
+from, **set** to make the rule the one in force (every drought is remade from the record), and a
+click on the map to spin a hexagon's drought up on its own. Folded under every tab, the hexagon
+itself (elevation, land use by its largest share, which index leads, the burnable share; minutes
+since last asked, asks, kind), then what to draw on top: the stations as a point cloud, wind arrows,
+the wind trend at the stations, value labels, **regions** — an outline around the outermost hexagons
+of each class of a categorical layer, of the drought, of each grade of wind change, rather than
+around every cell — the hexagons' own borders, every hexagon of the tessellation (held or not),
+hexagons as points (automatic when zoomed out to the continent), and only the hexagons holding a
+forecast; then the figures, folded. Keys `1`, `2`, `3` pick the tab.
 
-**The figures** (top right): hexagons held, how many take "now" from the ground (with the split by
-station, blend and neighbours on hover), forecasts held and their life, hexagons where the model is
-standing in, forecasts thrown out, wind changes, stations fresh, and the share of today's allowance
-used — a **live** light that ticks with the last reload — and a line to the sources
-drawer, which shows that nothing is read but on request: each source with its cadence and a bar
-filling towards its next check, when an ask last checked and read it, what it holds (a station file's
-count is the whole file), which hexagon's ask caused that; and the ledger's last reads, each against
-the hexagon it was read for.
+**The figures** (folded in the panel, the headline in the fold): hexagons held, how many take "now"
+from the ground (with the split by station, blend and neighbours on hover), forecasts held and their
+life, hexagons where the model is standing in, forecasts thrown out, wind changes, stations fresh,
+droughts held, and the share of today's allowance used. At the panel's foot, a **live** light that
+ticks with the last reload and a line to the sources drawer, which shows that nothing is read but
+on request: each source with its cadence and a bar filling towards its next check, when an ask last
+checked and read it, what it holds (a station file's count is the whole file), which hexagon's ask
+caused that; and the ledger's last reads, each against the hexagon it was read for.
 
-**The legend** (bottom left) is the scale the colours mean, with the distribution drawn on it: a
+**The legend** (the panel's foot) is the scale the colours mean, with the distribution drawn on it: a
 histogram over the ramp and the mean for a number, swatches with counts for a category — over the
 hexagons in the map view by default (it follows as you pan), or over every hexagon held with the
 "in view" switch off. Hovering a hexagon lights its bar.

@@ -42,9 +42,58 @@ public record WindShift(Instant at, Integer fromDeg, Integer toDeg, int swingDeg
     public static final double CALM_KMH = 8;
 
     /**
-     * The change in a station's recent readings, newest first, or empty when there is none worth a word.
+     * The change in a station's recent readings, newest first, or empty when there is none worth a
+     * word - at the ladder's first rungs, which is what counts until the console says otherwise.
      */
     public static Optional<WindShift> of(List<Observation> newestFirst) {
+        return of(newestFirst, SWING_SLIGHT_DEG, SPEED_SLIGHT_KMH);
+    }
+
+    /**
+     * The widest swing and the biggest speed change between the latest reading and any before it, whatever
+     * counts (W-23): what the map's sliders preview against, so a station lights up exactly when the
+     * thresholds would have it.
+     *
+     * @param maxSwingDeg  the widest swing, 0 when no pair could be compared
+     * @param maxDeltaKmh  the biggest speed change by size, signed as it was
+     */
+    public record Extent(int maxSwingDeg, double maxDeltaKmh) {
+    }
+
+    public static Optional<Extent> extent(List<Observation> newestFirst) {
+        if (newestFirst == null || newestFirst.size() < 2) {
+            return Optional.empty();
+        }
+        Observation now = newestFirst.getFirst();
+        int swing = 0;
+        double delta = 0;
+        boolean any = false;
+        for (int i = 1; i < newestFirst.size(); i++) {
+            Observation then = newestFirst.get(i);
+            boolean directionKnown = now.windDirectionDeg() != null && then.windDirectionDeg() != null
+                    && now.windSpeedKmh() != null && then.windSpeedKmh() != null
+                    && now.windSpeedKmh() >= CALM_KMH && then.windSpeedKmh() >= CALM_KMH;
+            if (directionKnown) {
+                swing = Math.max(swing, angle(then.windDirectionDeg(), now.windDirectionDeg()));
+                any = true;
+            }
+            if (now.windSpeedKmh() != null && then.windSpeedKmh() != null) {
+                double d = now.windSpeedKmh() - then.windSpeedKmh();
+                if (Math.abs(d) > Math.abs(delta)) {
+                    delta = d;
+                }
+                any = true;
+            }
+        }
+        return any ? Optional.of(new Extent(swing, Math.round(delta * 10) / 10.0)) : Optional.empty();
+    }
+
+    /**
+     * The change that counts from the given thresholds (W-23): a pair of readings is a change when its
+     * swing reaches {@code swingMinDeg} or its speed change reaches {@code speedMinKmh}; the grades stay
+     * on the fixed ladder, a change under the ladder's first rung that still counts graded slight.
+     */
+    public static Optional<WindShift> of(List<Observation> newestFirst, int swingMinDeg, double speedMinKmh) {
         if (newestFirst == null || newestFirst.size() < 2) {
             return Optional.empty();
         }
@@ -67,9 +116,9 @@ public record WindShift(Instant at, Integer fromDeg, Integer toDeg, int swingDeg
                 swing = angle(then.windDirectionDeg(), now.windDirectionDeg());
             }
             double delta = now.windSpeedKmh() != null && then.windSpeedKmh() != null ? now.windSpeedKmh() - then.windSpeedKmh() : 0;
-            String swingGrade = swing >= SWING_SHARP_DEG ? "sharp" : swing >= SWING_MARKED_DEG ? "marked" : swing >= SWING_SLIGHT_DEG ? "slight" : null;
+            String swingGrade = swing < swingMinDeg || !directionKnown ? null : swing >= SWING_SHARP_DEG ? "sharp" : swing >= SWING_MARKED_DEG ? "marked" : "slight";
             double size = Math.abs(delta);
-            String speedGrade = size >= SPEED_SHARP_KMH ? "sharp" : size >= SPEED_MARKED_KMH ? "marked" : size >= SPEED_SLIGHT_KMH ? "slight" : null;
+            String speedGrade = size < speedMinKmh ? null : size >= SPEED_SHARP_KMH ? "sharp" : size >= SPEED_MARKED_KMH ? "marked" : "slight";
             if (swingGrade == null && speedGrade == null) {
                 continue;
             }
