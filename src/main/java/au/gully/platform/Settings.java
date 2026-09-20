@@ -34,7 +34,6 @@ public class Settings {
         m.put("gully.sources.bureau", gully.sources().bureau());
         m.put("gully.sources.cfs", gully.sources().cfs());
         m.put("gully.sources.rivers", gully.sources().rivers());
-        m.put("gully.history.keep", gully.history().keep());
         m.put("gully.history.backups", gully.history().backups());
         m.put("gully.console.lockout-after", gully.console().lockoutAfter());
         m.put("gully.console.lockout-for", gully.console().lockoutFor());

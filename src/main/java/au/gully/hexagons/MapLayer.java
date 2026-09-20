@@ -85,7 +85,7 @@ public class MapLayer {
     private Rendered render(long version, Instant at) {
         Instant now = Instant.now();
         boolean ahead = at != null && at.isAfter(now);
-        Map<String, History.Snapshot> snapshots = at == null || ahead ? Map.of() : history.allAt(at);
+        Map<String, History.Then> snapshots = at == null || ahead ? Map.of() : history.allAt(store.all(), at);
         Map<String, Double> driftDay = at == null ? drifts.meanScores(Duration.ofHours(24)) : Map.of();
         // The wind changes the stations have just measured, each against every hexagon its station counts for (W-16).
         Map<String, WindShift> shifts = new HashMap<>();
@@ -174,7 +174,7 @@ public class MapLayer {
         return new Rendered(version, bytes, "W/\"" + Hashing.sha256Hex(bytes).substring(0, 20) + "\"", now);
     }
 
-    private Map<String, Object> feature(Hexagon h, Instant at, boolean ahead, History.Snapshot snapshot, Map<String, Double> driftDay, Instant now) {
+    private Map<String, Object> feature(Hexagon h, Instant at, boolean ahead, History.Then snapshot, Map<String, Double> driftDay, Instant now) {
         Map<String, Object> f = new LinkedHashMap<>();
         f.put("type", "Feature");
         f.put("id", h.id());
@@ -280,18 +280,20 @@ public class MapLayer {
     }
 
     /**
-     * The values as they were, from a snapshot: what was "now" then, from where; no forecast, no drift.
+     * The values as they were, from the ground's record (W-19): what was "now" then - the station's
+     * ledger row or the model's stand-in - and from where; no forecast, no drift, no fire picture.
      */
-    private Map<String, Object> properties(Hexagon h, History.Snapshot s, Instant now) {
+    private Map<String, Object> properties(Hexagon h, History.Then s, Instant now) {
         Map<String, Object> p = new LinkedHashMap<>();
         what(p, h);
         p.put("active", true);
-        p.put("hasForecast", true);
-        p.put("hasDrought", s.fire() != null && s.fire().droughtFactor() != null);
-        now(p, s.current(), s.currentFrom(), s.at(), now);
-        p.put("ref", s.ref());
+        p.put("hasForecast", false);
+        p.put("hasDrought", false);
+        now(p, s.conditions(), s.from(), s.at(), now);
+        p.put("recordedAt", s.recordedAt() == null ? null : s.recordedAt().toString());
+        p.put("upstream", s.upstream());
         forecast(p, null, null, now);
-        fire(p, s.fire());
+        fire(p, null);
         return p;
     }
 

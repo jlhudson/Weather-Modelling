@@ -299,3 +299,41 @@ coverage a distance buys — and, beside it, how much of that coverage is actual
 is the honest figure: a hexagon with a station within reach whose file has not been read for an
 hour has nothing for free. The value is kept in the database, not the properties file, because it
 is chosen by looking at the map, not by deploying. — James, 20 September 2026.
+
+### W-19 · History is the ground's, not the hexagon's: the stations' six-hourly ledger, the model's stand-ins, and the drought's days, kept five years
+
+**The decision.** The hexagon snapshots (W-6: a reading's conditions and fire picture, written when
+an ask carried a ref, at most every three hours) are gone, table and all (V10). What the weather
+*was* is answered from three records, none of them written on an ask:
+
+- **The stations' ledger** (`station_sample`), the six-hourly row the drought already read, now a
+  consolidation of the readings seen since the last row rather than the reading at its moment — the
+  window's temperature extremes and mean, humidity extremes, wind mean and maximum, strongest gust,
+  and how many readings made them — beside the values at the moment, the day's rain to 9 am and its
+  running maximum. Kept five years (`History.KEEP`), pruned by the hourly sweep.
+- **The model's stand-ins** (`model_now`): where a hexagon's "now" was the model — no station
+  within reach reporting, no neighbours — the series read at the moment of each fetch is kept, so
+  what stood in for the ground is not lost when the forecast expires. One row per hexagon per
+  fetch; five years.
+- **The drought's days** (`drought_day`): the daily rain and maximum a hexagon's drought was
+  stepped with, and which source supplied each — the stations, the archive, the recent-days call —
+  written as the drought reads them and read back before any source is asked. The archive is
+  fetched once for a hexagon and never again; a reset hexagon spins up from the record. The one
+  thing kept per hexagon, because rain is a place's, not a station's; five years.
+
+A reading with `at=` is the hexagon's station's ledger row nearest the time, or the model's row
+where the station was not there, within three hours either side (`History.STANDS_FOR`); the map's
+timeline behind now draws the same. No fire picture is kept for a moment — the conditions and the
+drought of the day are both there to recompute one from. `ref` is still accepted and carried on the
+ask, and writes nothing. The nightly export writes the three records' day, one file each;
+`gully.history.keep`, which nothing read, is gone.
+
+**Why.** A snapshot of a hexagon was a copy of a station's reading taken when someone happened to
+ask, keyed on the asker's reason — so a station reporting every ten minutes for a year left
+nothing unless an incident sat in its hexagon, and the archive's year of rain, paid for at
+twenty-six units a hexagon, was consumed and thrown away. The record that matters is the ground's:
+what the stations measured, consolidated to the cadence the drought already needed; what stood in
+when they were not there; and the rain a place had. Five years because that is the span a drought
+comparison, or a fire season against the last, is drawn over; six-hourly because every ten-minute
+reading for eight hundred stations is a size nobody asked for and a resolution nothing here reads.
+— James, 20 September 2026.

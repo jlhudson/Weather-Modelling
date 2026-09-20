@@ -44,11 +44,12 @@ reading has expired, served from memory otherwise, refreshed in the background w
 One point per request, always.
 
 - `forecast=true` adds the days and hours ahead.
-- `ref=<anything>` says what the reading is for — an incident id, a job number, a planning exercise —
-  which activates the hexagon's history: a snapshot of the conditions and the fire picture is written,
-  tagged with the ref, at most once every three hours per hexagon.
-- `at=<instant>` answers from history: the snapshot nearest that time for the point's hexagon, with
-  its own time in `history.at`, or `available: false` when the hexagon has none.
+- `ref=<anything>` says what the reading is for — an incident id, a job number, a planning exercise.
+  It is carried on the ask and writes nothing (W-19: history is the ground's, written as it is read).
+- `at=<instant>` answers from the ground's record: the hexagon's station's six-hourly ledger row
+  nearest that time, or the model's stand-in where the station was not there, within three hours of
+  it, with its own time in `history.at`; the conditions only (no fire picture is kept for a moment),
+  or `available: false` when nothing stands for that time.
 - `400` when lat/lon are off the Earth or outside Australia; `at` in the future is a `400` too.
 
 ```
@@ -150,7 +151,8 @@ What each block is:
 - **`warnings`** — the Bureau warnings in force for the hexagon's district.
 - **`forecast`** — only with `forecast=true`. A day arrives whole with its own `fire` and `flood`; an
   hour carries the eight fields anyone reads and its own indices.
-- **`history`** — only with `at=`: the snapshot's own time, when it was taken and the ref it was taken for.
+- **`history`** — only with `at=`: the record's own time (`at`), when it was written (`askedAt`: the
+  ledger's moment, or the fetch), `ref` always null, and `requested`, the time asked for.
 
 **When nothing can answer**, it is a `200`, not an error, in the same shape:
 
@@ -169,7 +171,8 @@ The Hub treats `available == false` as "no reading" and asks again on its next s
 
 Every hexagon held, as a `FeatureCollection` of polygons, each carrying the values a map colours by,
 with "now" and the forecast kept apart. With `at=` behind now, the values as they were, from the
-snapshots (a snapshot stands for six hours; only hexagons asked about with a ref have one). With `at=`
+ground's record (a station's ledger row or the model's stand-in stands for three hours either side;
+no fire picture). With `at=`
 ahead of now — up to 72 hours, the hourly series — the values as they are forecast to be for every
 hexagon holding a forecast: `fc*` read off the series at that hour, `ffdi`, `gfdi` and `fbi` as that
 hour's indices with that day's projected drought factor, `officialRating` as the CFS rating for that

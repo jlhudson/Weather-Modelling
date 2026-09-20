@@ -95,8 +95,7 @@ public class HexagonsController {
         out.put("reading", readings.of(h, new Reading.Point(c.lat(), c.lon()), true));
         out.put("drought", h.drought());
         out.put("river", h.river() == null ? null : h.river().river(java.time.LocalDate.now(store.zoneOf(h))));
-        out.put("history", history.of(id, 50));
-        out.put("historyCount", history.countFor(id));
+        out.put("history", history.of(h, 50));
         return out;
     }
 
@@ -133,7 +132,6 @@ public class HexagonsController {
         m.put("createdAt", h.createdAt());
         m.put("activatedAt", h.activatedAt());
         m.put("lastAskedAt", h.lastAskedAt());
-        m.put("lastSnapshotAt", h.lastSnapshotAt());
         m.put("asks", h.asks());
         return m;
     }

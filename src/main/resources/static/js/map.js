@@ -155,10 +155,10 @@
         return list[0];
     }
     function isSide(g) { return g === 'now' || g === 'fc' || g === 'diff'; }
-    // Which groups the timeline allows: behind now the snapshots hold "now" and the fire picture; ahead only the forecast.
+    // Which groups the timeline allows: behind now the ground's record holds "now" and nothing else (W-19); ahead only the forecast.
     function allowed(g) {
         if (state.mode === 'ahead') return g === 'fc' || g === 'fire' || g === 'ground';
-        if (state.mode === 'history') return g === 'now' || g === 'fire' || g === 'ground' || g === 'asks';
+        if (state.mode === 'history') return g === 'now' || g === 'ground' || g === 'asks';
         return true;
     }
     function isCoverage() { return state.group === 'coverage'; }
@@ -739,7 +739,7 @@
             html += kv([['centre', fmt(h.lat, 4) + ', ' + fmt(h.lon, 4)], ['elevation', h.elevationM != null ? h.elevationM + ' m (' + h.elevationFrom + ')' : null], ['slope', h.slopeDeg != null ? h.slopeDeg + '°' : null],
                 ['land use', lu && lu.percent ? Object.keys(lu.percent).map(function (k) { return k.replace('_', ' ') + ' ' + lu.percent[k] + '%'; }).join(', ') + (lu.leads ? ' → ' + lu.leads : '') + (lu.point ? ' · here: ' + lu.point.replace('_', ' ') : '') + (lu.source ? ' (' + lu.source + ')' : '') : null],
                 ['bureau district', h.bureauDistrict], ['station in hexagon', h.stationId], ['nearest station', h.nearestStationId ? h.nearestStationId + ' at ' + fmt(h.nearestStationKm, 1) + ' km' : null],
-                ['forecast fetched', when(h.refreshedAt)], ['forecast expires', when(h.expiresAt)], ['activated', when(h.activatedAt)], ['last asked', when(h.lastAskedAt)], ['asks this run', h.asks], ['snapshots', h.historyCount]]);
+                ['forecast fetched', when(h.refreshedAt)], ['forecast expires', when(h.expiresAt)], ['activated', when(h.activatedAt)], ['last asked', when(h.lastAskedAt)], ['asks this run', h.asks]]);
             html += '<h2>Fire</h2>';
             html += kv([['FFDI', f.ffdi != null ? f.ffdi + ' ' + f.ffdiRating + (f.peakFfdi != null ? ' (peak ' + f.peakFfdi + ')' : '') : null], ['drought factor', f.droughtFactor], ['KBDI', f.kbdiMm != null ? f.kbdiMm + ' mm ' + f.kbdiBand : null],
                 ['GFDI', g.gfdi != null ? g.gfdi + ' ' + g.gfdiRating + ' (curing ' + g.curingPct + '%, ' + g.fuelLoadTHa + ' t/ha)' : (f.leads ? 'no curing figure' : null)], ['AFDRS grass', g.fbi != null ? 'FBI ' + g.fbi + ' ' + g.afdrsRating + ' · ' + g.rateOfSpreadKmh + ' km/h · ' + g.intensityKwm + ' kW/m' : null],
@@ -760,14 +760,15 @@
                 r.forecast.days.forEach(function (x) { var df = x.fire || {}; html += '<tr><td class="mono">' + esc(x.date) + '</td><td class="num">' + fmt(x.minTemperatureC) + '/' + fmt(x.maxTemperatureC) + '</td><td class="num">' + fmt(x.minHumidityPct) + '</td><td class="num">' + fmt(x.maxWindKmh) + '</td><td class="num">' + fmt(x.precipitationMm) + '</td><td>' + (df.ffdi != null ? df.ffdi + ' ' + esc(df.ffdiRating) : '—') + '</td><td>' + (df.fbi != null ? df.fbi + ' ' + esc(df.afdrsRating) : '—') + '</td></tr>'; });
                 html += '</tbody></table>';
             }
-            if (h.history && h.history.length) {
-                html += '<h2>History <span class="muted">' + h.historyCount + ' snapshots</span></h2><table class="table table-sm"><thead><tr><th>at</th><th>ref</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th>FFDI</th></tr></thead><tbody>';
-                h.history.forEach(function (s) { var sc = s.current || {}, sf = s.fire || {}; html += '<tr><td class="mono">' + when(s.at) + '</td><td>' + esc(s.ref) + '</td><td class="num">' + fmt(sc.temperatureC) + '</td><td class="num">' + fmt(sc.humidityPct) + '</td><td class="num">' + fmt(sc.windSpeedKmh) + '</td><td>' + (sf.ffdi != null ? sf.ffdi + ' ' + esc(sf.ffdiRating) : '—') + '</td></tr>'; });
+            // The ground's record (W-19): the model's stand-ins where the hexagon has no station; the station's six-hourly ledger, consolidated, where it has.
+            if (h.history && h.history.length && h.history[0].from === 'model') {
+                html += '<h2>Model stood in <span class="muted">no station within reach; the series at each fetch</span></h2><table class="table table-sm"><thead><tr><th>at</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th class="num">gust</th><th>from</th></tr></thead><tbody>';
+                h.history.forEach(function (s) { var sc = s.conditions || {}; html += '<tr><td class="mono">' + when(s.at) + '</td><td class="num">' + fmt(sc.temperatureC, 1) + '</td><td class="num">' + fmt(sc.humidityPct) + '</td><td class="num">' + fmt(sc.windSpeedKmh) + '</td><td class="num">' + fmt(sc.windGustKmh) + '</td><td class="muted">' + esc(s.upstream || '') + '</td></tr>'; });
                 html += '</tbody></table>';
             }
             if (h.ledger && h.ledger.length) {
-                html += '<h2>Station ledger</h2><table class="table table-sm"><thead><tr><th>at</th><th class="num">°C</th><th class="num">max</th><th class="num">rain 9am</th><th class="num">rain 24h</th></tr></thead><tbody>';
-                h.ledger.forEach(function (s) { html += '<tr><td class="mono">' + when(s.at) + '</td><td class="num">' + fmt(s.temperature_c) + '</td><td class="num">' + fmt(s.max_temperature_c) + '</td><td class="num">' + fmt(s.rain_since_9am_mm) + '</td><td class="num">' + fmt(s.rain_24h_mm) + '</td></tr>'; });
+                html += '<h2>Station ledger <span class="muted">six-hourly; each row the readings since the last, consolidated</span></h2><table class="table table-sm"><thead><tr><th>at</th><th class="num">°C</th><th class="num">min·mean·max</th><th class="num">day max</th><th class="num">RH lo·hi</th><th class="num">wind mean·max</th><th class="num">gust</th><th class="num">rain 9am</th><th class="num">24h</th><th class="num">n</th></tr></thead><tbody>';
+                h.ledger.forEach(function (s) { html += '<tr><td class="mono">' + when(s.at) + '</td><td class="num">' + fmt(s.temperature_c, 1) + '</td><td class="num">' + (s.temp_min_c != null ? fmt(s.temp_min_c, 1) + '·' + fmt(s.temp_mean_c, 1) + '·' + fmt(s.temp_max_c, 1) : '—') + '</td><td class="num">' + fmt(s.max_temperature_c, 1) + '</td><td class="num">' + (s.rh_min_pct != null ? s.rh_min_pct + '·' + s.rh_max_pct : '—') + '</td><td class="num">' + (s.wind_mean_kmh != null ? fmt(s.wind_mean_kmh) + '·' + fmt(s.wind_max_kmh) : '—') + '</td><td class="num">' + fmt(s.gust_max_kmh) + '</td><td class="num">' + fmt(s.rain_since_9am_mm, 1) + '</td><td class="num">' + fmt(s.rain_24h_mm, 1) + '</td><td class="num">' + fmt(s.readings) + '</td></tr>'; });
                 html += '</tbody></table>';
             }
             html += '<button class="btn-probe" id="probe" type="button">' + icon('probe') + ' probe <span class="muted">an ask: reads what is due, spends allowance</span></button>';

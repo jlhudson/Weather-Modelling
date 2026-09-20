@@ -25,7 +25,7 @@
         <div><div class="v" th:text="${summary.logs.held}">0</div><div class="k">signatures held</div></div>
         <div><div class="v" th:text="${summary.logs.capture.dropped}">0</div><div class="k">dropped</div></div>
         <div><div class="v" th:text="${summary.gully.held.hexagons}">0</div><div class="k">hexagons</div></div>
-        <div><div class="v" th:text="${summary.gully.held.snapshots}">0</div><div class="k">snapshots</div></div>
+        <div><div class="v" th:text="${summary.gully.held.ledgerRows}">0</div><div class="k">ledger rows</div></div>
     </div>
 
     <div class="alert alert-danger py-1" th:unless="${#lists.isEmpty(summary.startup.failed)}">

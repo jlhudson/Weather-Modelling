@@ -21,7 +21,7 @@ import static au.gully.science.Numbers.round1;
 /**
  * The one translation layer between what a hexagon holds and what the API serves (docs/06 item 13).
  * Nothing here fetches, computes an index or touches the database: it reads the hexagon, the station
- * register and the snapshot and lays them out in the contract's shape.
+ * register and the ground's record and lays them out in the contract's shape.
  */
 @Service
 @RequiredArgsConstructor
@@ -62,7 +62,9 @@ public class Readings {
     }
 
     /**
-     * The reading as it was, from the snapshot nearest the time asked for.
+     * The reading as it was, from the ground's record (W-19): the hexagon's station's six-hourly
+     * ledger row nearest the time asked for, or the model's row where the station was not there.
+     * The conditions only: no fire picture is kept for a moment, and the forecast is never history.
      */
     public Reading at(double lat, double lon, Instant at, History history) {
         Reading.Point point = new Reading.Point(lat, lon);
@@ -71,15 +73,18 @@ public class Readings {
             return unavailable(point, null, "no history: nothing has been asked about this hexagon");
         }
         Hexagon h = held.get();
-        Optional<History.Snapshot> nearest = history.nearest(h.id(), at);
-        if (nearest.isEmpty()) {
-            return unavailable(point, h, "no history: nothing asked about this hexagon has carried a ref");
+        Optional<History.Then> then = history.then(h, at);
+        if (then.isEmpty()) {
+            return unavailable(point, h, h.stationId() == null
+                    ? "no history: no station within reach, and the model did not stand in for this hexagon within three hours of that time"
+                    : "no history: the station's ledger has no row within three hours of that time");
         }
-        History.Snapshot s = nearest.get();
+        History.Then s = then.get();
         Instant now = Instant.now();
-        return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, point, now), null, s.at(), s.current(), s.currentFrom(),
-                station(h), null, fire(s.fire()), null, s.drought(), warnings(s.fire()), null, null,
-                new Reading.HistoryBlock(s.at(), s.askedAt(), s.ref(), at), Reading.DISCLAIMER);
+        return new Reading(Reading.SCHEMA, true, null, point, hexagon(h, point, now),
+                s.upstream() == null ? null : new Reading.Source(s.upstream(), null, null, s.recordedAt(), null, null, false),
+                s.at(), s.conditions(), s.from(), station(h), null, null, null, null, List.of(), null, null,
+                new Reading.HistoryBlock(s.at(), s.recordedAt(), null, at), Reading.DISCLAIMER);
     }
 
     public Reading unavailable(Reading.Point point, Hexagon h, String why) {

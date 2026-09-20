@@ -22,10 +22,11 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Every Bureau station the state files have ever named, its latest values, and the compact ledger
- * behind the drought maths (docs/06 item 12): one row per station every six hours, holding the
- * day's rain to 9 am and the running maximum temperature — enough to step a soil moisture deficit
- * forward a day at a time, and nothing like the history, which stations never write.
+ * Every Bureau station the state files have ever named, its latest values, and the six-hourly ledger
+ * (docs/06 item 12, W-19): one row per station every six hours, holding the day's rain to 9 am and
+ * the running maximum temperature — enough to step a soil moisture deficit forward a day at a time —
+ * and the consolidation of the readings seen in the six hours, which is the station's history, kept
+ * five years.
  * <p>
  * The station list comes from the files themselves, never from a hand-typed table, and is kept in
  * {@code station} so a restart knows where the stations are before the first poll answers. The
@@ -56,6 +57,12 @@ public class StationRegistry {
     private final Map<String, DayMax> dayMax = new ConcurrentHashMap<>();
     /** The last few readings per station, newest first, for the wind change and the console (W-16). */
     private final Map<String, java.util.ArrayDeque<Observation>> recent = new ConcurrentHashMap<>();
+    /**
+     * The readings seen per station since its last ledger row, consolidated as they arrive (W-19):
+     * the window's extremes and means go onto the row, and the window starts again. Empty after a
+     * restart, so the first row after one consolidates what has been seen since.
+     */
+    private final Map<String, Window> windows = new ConcurrentHashMap<>();
 
     /**
      * How many readings are kept per station: six, an hour of the Bureau's ten-minute files, which
@@ -165,11 +172,12 @@ public class StationRegistry {
                     }
                 }
                 keepRecent(s, o);
+                windows.computeIfAbsent(s.id(), k -> new Window()).add(o);
             }
             trackDayMax(s, o);
             Instant last = lastLedgered.get(s.id());
             if (last == null || Duration.between(last, o.at()).compareTo(LEDGER_EVERY) >= 0) {
-                ledger(s, o);
+                ledger(s, o, windows.remove(s.id()));
                 lastLedgered.put(s.id(), o.at());
             }
         }
@@ -204,19 +212,89 @@ public class StationRegistry {
                 .param("id", s.id()).param("keep", RECENT - 1).update();
     }
 
-    private void ledger(Station s, Observation o) {
+    /**
+     * The ledger row: the values at the moment, the day's rain and running maximum, and the window's
+     * consolidation - what the readings since the last row did between them (W-19).
+     */
+    private void ledger(Station s, Observation o, Window w) {
         DayMax max = dayMax.get(s.id());
         Double dayMaximum = max == null ? o.maxTemperatureC() : Double.valueOf(max.maxC());
+        if (w == null) {
+            w = new Window();
+            w.add(o);
+        }
         db.sql("""
                 insert into station_sample (station_id, at, temperature_c, max_temperature_c, min_temperature_c,
-                  rain_since_9am_mm, rain_24h_mm, humidity_pct, wind_speed_kmh, wind_direction_deg, wind_gust_kmh, pressure_hpa)
-                values (:id, :at, :t, :max, :min, :rain, :rain24, :rh, :wind, :dir, :gust, :p)
+                  rain_since_9am_mm, rain_24h_mm, humidity_pct, wind_speed_kmh, wind_direction_deg, wind_gust_kmh, pressure_hpa,
+                  readings, temp_min_c, temp_max_c, temp_mean_c, rh_min_pct, rh_max_pct, wind_mean_kmh, wind_max_kmh, gust_max_kmh)
+                values (:id, :at, :t, :max, :min, :rain, :rain24, :rh, :wind, :dir, :gust, :p,
+                  :n, :tmin, :tmax, :tmean, :rhmin, :rhmax, :wmean, :wmax, :gmax)
                 on conflict (station_id, at) do nothing""")
                 .param("id", s.id()).param("at", Db.ts(o.at())).param("t", o.temperatureC()).param("max", dayMaximum)
                 .param("min", o.minTemperatureC()).param("rain", o.rainSince9amMm()).param("rain24", o.rain24hMm())
                 .param("rh", o.humidityPct()).param("wind", o.windSpeedKmh()).param("dir", o.windDirectionDeg())
                 .param("gust", o.windGustKmh()).param("p", o.pressureMslHpa())
+                .param("n", w.readings).param("tmin", w.tMin()).param("tmax", w.tMax()).param("tmean", w.tMean())
+                .param("rhmin", w.rhMin).param("rhmax", w.rhMax).param("wmean", w.wMean()).param("wmax", w.wMax).param("gmax", w.gMax)
                 .update();
+    }
+
+    /**
+     * The readings since a station's last ledger row, consolidated as they arrive: how many, the
+     * temperature's extremes and mean, the humidity's extremes, the wind's mean and maximum, the
+     * strongest gust. Nulls where no reading in the window had the value.
+     */
+    static final class Window {
+        int readings;
+        private double tSum;
+        private int tN;
+        private Double tMin, tMax;
+        Integer rhMin, rhMax;
+        private double wSum;
+        private int wN;
+        Double wMax, gMax;
+
+        void add(Observation o) {
+            readings++;
+            Double t = o.temperatureC();
+            if (t != null) {
+                tSum += t;
+                tN++;
+                tMin = tMin == null ? t : Double.valueOf(Math.min(tMin, t));
+                tMax = tMax == null ? t : Double.valueOf(Math.max(tMax, t));
+            }
+            Integer rh = o.humidityPct();
+            if (rh != null) {
+                rhMin = rhMin == null ? rh : Integer.valueOf(Math.min(rhMin, rh));
+                rhMax = rhMax == null ? rh : Integer.valueOf(Math.max(rhMax, rh));
+            }
+            Double w = o.windSpeedKmh();
+            if (w != null) {
+                wSum += w;
+                wN++;
+                wMax = wMax == null ? w : Double.valueOf(Math.max(wMax, w));
+            }
+            Double g = o.windGustKmh();
+            if (g != null) {
+                gMax = gMax == null ? g : Double.valueOf(Math.max(gMax, g));
+            }
+        }
+
+        Double tMin() {
+            return tMin;
+        }
+
+        Double tMax() {
+            return tMax;
+        }
+
+        Double tMean() {
+            return tN == 0 ? null : Math.round(tSum / tN * 10) / 10.0;
+        }
+
+        Double wMean() {
+            return wN == 0 ? null : Math.round(wSum / wN * 10) / 10.0;
+        }
     }
 
     // ---------------------------------------------------------------- reads
@@ -426,7 +504,8 @@ public class StationRegistry {
      * The ledger, most recent first, for the console.
      */
     public List<Map<String, Object>> recentSamples(String stationId, int limit) {
-        return db.sql("select at, temperature_c, max_temperature_c, rain_since_9am_mm, rain_24h_mm, humidity_pct, wind_speed_kmh"
+        return db.sql("select at, temperature_c, max_temperature_c, rain_since_9am_mm, rain_24h_mm, humidity_pct, wind_speed_kmh,"
+                        + " readings, temp_min_c, temp_max_c, temp_mean_c, rh_min_pct, rh_max_pct, wind_mean_kmh, wind_max_kmh, gust_max_kmh"
                         + " from station_sample where station_id = :id order by at desc limit :n")
                 .param("id", stationId).param("n", Math.max(1, Math.min(limit, 500))).query().listOfRows();
     }

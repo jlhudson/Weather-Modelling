@@ -23,8 +23,7 @@ Secrets never appear in the yml. They arrive from `.env`.
 | `gully.sources.bureau` | `true` | The Bureau's station files (every ten minutes) and warnings (every five). |
 | `gully.sources.cfs` | `true` | The CFS district ratings (hourly) and fire ban district shapes (daily). |
 | `gully.sources.rivers` | `true` | GloFAS river discharge, once a day per river cell. |
-| `gully.history.keep` | `365d` | How far back the history is rebuilt into memory. Nothing is ever deleted from the table. |
-| `gully.history.backups` | *(empty)* | The directory the nightly export goes to; empty for none. `WEATHER_BACKUPS_DIR`; `/backups` in the container. |
+| `gully.history.backups` | *(empty)* | The directory the nightly export of the ground's record goes to; empty for none. `WEATHER_BACKUPS_DIR`; `/backups` in the container. The record itself is kept five years by the service (`History.KEEP`). |
 | `gully.console.code` | `12345678` | The one console user's 8-digit code. `WEATHER_CONSOLE_CODE`. |
 | `gully.console.lockout-after` / `lockout-for` | `5` / `15m` | Consecutive failures before the lockout, and how long. |
 | `gully.api.cors-origins` | *(empty)* | Browser origins allowed to call the API. Never `*`. `WEATHER_CORS_ORIGINS`. |
@@ -71,8 +70,8 @@ pixels across a hexagon (96), counting lattice (48) and how many years back the 
 for (3) (`DeaLandCover`); the drought window (365 days), the archive lag (5 days) and the
 station reach (75 km) (`Drought`); a forecast's life (3 h, 5 h once the day's allowance is 70% spent,
 `Life`), the drift tolerances (3 °C, 20 points, 15 km/h, 5 mm, `Drift`) and the hour before a forecast
-thrown out for drift is fetched again (`HexagonStore.REFETCH_AFTER_DRIFT`); the river cells (5 km) (`Rivers`); the history's
-"current" window (three hours, `History.CURRENT_FOR`); the grassland fuel load (4.5 t/ha,
+thrown out for drift is fetched again (`HexagonStore.REFETCH_AFTER_DRIFT`); the river cells (5 km) (`Rivers`); how long a
+row of the ground's record stands for (three hours either side, `History.STANDS_FOR`) and how long the record is kept (five years, `History.KEEP`); the grassland fuel load (4.5 t/ha,
 `FirePictures`); the wind-change window (48 hours); the refresh executor and the tile cache.
 
 ## 3.5 Environment variables

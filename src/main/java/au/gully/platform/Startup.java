@@ -52,6 +52,7 @@ public class Startup implements ApplicationRunner {
     private final Ratings ratings;
     private final Districts districts;
     private final Ledger ledger;
+    private final au.gully.hexagons.History ground;
     private final GullyProperties properties;
     private final StartupHistory history;
     private final TaskScheduler scheduler;
@@ -83,7 +84,8 @@ public class Startup implements ApplicationRunner {
         districts.onUpdate(at -> store.districtsChanged());
 
         // Housekeeping only. Every source is read on request, when an ask finds it older than its cadence.
-        scheduler.scheduleWithFixedDelay(guarded("sweep", () -> store.sweep() + ledger.prune()), soon.plusSeconds(60), Duration.ofHours(1));
+        // The ground's record is kept five years (W-19); the sweep prunes what is older.
+        scheduler.scheduleWithFixedDelay(guarded("sweep", () -> store.sweep() + ledger.prune() + ground.prune(Instant.now())), soon.plusSeconds(60), Duration.ofHours(1));
         log.info("timers: none but the hourly sweep; the Bureau files (every {}), warnings ({}), CFS ratings ({}) and shapes ({}) are read on request",
                 StationReader.EVERY, WarningsReader.EVERY, Ratings.EVERY, Districts.EVERY);
     }

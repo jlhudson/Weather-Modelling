@@ -123,6 +123,12 @@ time, with its own time, or says there is none. Only hexagons that had an incide
 migration script rather than the framework's automatic schema updates; nothing is ever deleted from
 it. The Hub sends the incident's start time when it asks late.
 
+*Reshaped by W-19 (20 September 2026):* history is the ground's, not the hexagon's. The snapshots
+are gone; what was "now" is answered from the station's six-hourly ledger — each row the readings
+since the last, consolidated — kept five years, and from the model's stand-in where no station was
+there, kept from each fetch. The one thing kept per hexagon is rain: the daily rain and maximum the
+drought was stepped with, so the archive is fetched once and never again. `ref` writes nothing.
+
 ### 3 · A proper version 1 of the API
 
 Today the API is built by hand from maps of names to values, so there is no schema, no way to

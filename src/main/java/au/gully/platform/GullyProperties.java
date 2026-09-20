@@ -60,14 +60,11 @@ public record GullyProperties(
     }
 
     /**
-     * The history.
+     * The history: the ground's record (W-19), kept five years by the service itself ({@code History.KEEP}).
      *
-     * @param keep    how long a reading snapshot is kept. Nothing is ever deleted from the table by the
-     *                service (docs/06 item 2); this bounds what is rebuilt into memory at start
-     * @param backups the directory the nightly export of the history is written to, or empty for none
+     * @param backups the directory the nightly export of the record is written to, or empty for none
      */
-    public record History(@DefaultValue("365d") Duration keep,
-                          @DefaultValue("") String backups) {
+    public record History(@DefaultValue("") String backups) {
     }
 
     /**

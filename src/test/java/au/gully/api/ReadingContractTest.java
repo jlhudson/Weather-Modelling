@@ -115,7 +115,7 @@ class ReadingContractTest {
         Reading f = full();
         Reading past = new Reading(f.schema(), true, null, f.point(), f.hexagon(), null, f.at(), f.current(), f.currentFrom(), f.station(),
                 null, f.fire(), null, f.drought(), f.warnings(), null, null,
-                new Reading.HistoryBlock(f.at(), Instant.parse("2026-09-18T13:52:00Z"), "INC0103", Instant.parse("2026-09-18T12:00:00Z")),
+                new Reading.HistoryBlock(f.at(), Instant.parse("2026-09-18T13:52:00Z"), null, Instant.parse("2026-09-18T12:00:00Z")),
                 f.disclaimer());
         assertMatches(past);
     }

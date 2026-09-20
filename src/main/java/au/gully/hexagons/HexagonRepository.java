@@ -34,9 +34,10 @@ public class HexagonRepository {
     /**
      * The grid the hexagon-keyed tables were written with, against the grid the code has. A change to
      * the width or the anchor ({@code Grid}'s constants) changes every hexagon's id, so the hexagons,
-     * the history and the river cells are reset — they are rebuilt from the sources
-     * as they are asked about; the history is the one real loss, and re-gridding accepts it. Called
-     * before anything is rehydrated.
+     * the per-hexagon record (the drought's days, the model's stand-ins) and the river cells are reset —
+     * they are rebuilt from the sources as they are asked about; the drought days are the one real loss
+     * (the archive is asked again), and re-gridding accepts it. The stations' ledger is theirs and stays.
+     * Called before anything is rehydrated.
      *
      * @return whether the tables were reset
      */
@@ -51,12 +52,13 @@ public class HexagonRepository {
         if (held.equals(spec)) {
             return false;
         }
-        long hexagons = count("hexagon"), snapshots = count("reading_snapshot"), rivers = count("river_discharge"), drifts = count("forecast_drift");
-        // Everything keyed by a hexagon id goes, the drift ledger included: an old id would otherwise be read as a new hexagon's.
-        db.sql("truncate table hexagon, reading_snapshot, river_discharge, forecast_drift").update();
+        long hexagons = count("hexagon"), days = count("drought_day"), models = count("model_now"), rivers = count("river_discharge"), drifts = count("forecast_drift");
+        // Everything keyed by a hexagon id goes, the drift ledger and the ground's per-hexagon record included: an old id
+        // would otherwise be read as a new hexagon's. The stations' ledger is keyed on stations and stays.
+        db.sql("truncate table hexagon, drought_day, model_now, river_discharge, forecast_drift").update();
         db.sql("update grid_spec set spec = :spec, since = :at where id = 1").param("spec", spec).param("at", Db.ts(Instant.now())).update();
-        log.warn("grid changed from [{}] to [{}]: every hexagon id changed, so {} hexagons, {} snapshots, {} river cells and {} drift rows were reset",
-                held, spec, hexagons, snapshots, rivers, drifts);
+        log.warn("grid changed from [{}] to [{}]: every hexagon id changed, so {} hexagons, {} drought days, {} model rows, {} river cells and {} drift rows were reset",
+                held, spec, hexagons, days, models, rivers, drifts);
         return true;
     }
 
@@ -109,9 +111,8 @@ public class HexagonRepository {
     }
 
     public void saveActivity(Hexagon h) {
-        db.sql("update hexagon set activated_at = :activated, last_asked_at = :asked, last_snapshot_at = :snap where id = :id")
-                .param("id", h.id()).param("activated", Db.ts(h.activatedAt())).param("asked", Db.ts(h.lastAskedAt()))
-                .param("snap", Db.ts(h.lastSnapshotAt())).update();
+        db.sql("update hexagon set activated_at = :activated, last_asked_at = :asked where id = :id")
+                .param("id", h.id()).param("activated", Db.ts(h.activatedAt())).param("asked", Db.ts(h.lastAskedAt())).update();
     }
 
     public void saveDrought(Hexagon h) {
@@ -185,7 +186,7 @@ public class HexagonRepository {
                 drought == null ? null : json.read(drought, DroughtState.class),
                 river == null ? null : json.read(river, RiverState.class),
                 null, Db.instant(row.get("created_at")), Db.instant(row.get("activated_at")),
-                Db.instant(row.get("last_asked_at")), Db.instant(row.get("last_snapshot_at")), 0, 0);
+                Db.instant(row.get("last_asked_at")), 0, 0);
     }
 
     private static String text(Object column) {

@@ -68,7 +68,7 @@ class EndToEndTest {
         // The legacy row is still there, with the hash of the plaintext the init script planted.
         String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
         assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "reading_snapshot", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent", "setting"}) {
+        for (String table : new String[]{"hexagon", "drought_day", "model_now", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent", "setting"}) {
             Long n = db.sql("select count(*) from " + table).query(Long.class).single();
             assertThat(n).as(table).isNotNull();
         }
@@ -174,6 +174,8 @@ class EndToEndTest {
     au.gully.hexagons.Drifts drifts;
     @Autowired
     au.gully.hexagons.Reach reach;
+    @Autowired
+    au.gully.drought.DroughtDays droughtDays;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -264,13 +266,28 @@ class EndToEndTest {
         assertThat(h.stationId()).as("Adelaide West Terrace is inside this hexagon").isEqualTo("023000");
         assertThat(hexagons.loadAll(store.grid())).extracting(au.gully.hexagons.Hexagon::id).contains(h.id());
         assertThat(hexagons.loadAll(store.grid()).stream().filter(x -> x.id().equals(h.id())).findFirst().get().stationId()).isEqualTo("023000");
-        // The station answers "now", so a snapshot was written for the incident and is found nearest its time.
-        assertThat(history.countFor(h.id())).isEqualTo(1);
-        assertThat(history.nearest(h.id(), now)).isPresent();
-        assertThat(history.nearest(h.id(), now).get().ref()).isEqualTo("INC0001");
-        assertThat(history.allAt(now.plusSeconds(60))).containsKey(h.id());
-        assertThat(store.ask(-34.93, 138.6, false, "INC0001").lastSnapshotAt()).as("inside three hours: one snapshot").isEqualTo(h.lastSnapshotAt());
-        assertThat(history.countFor(h.id())).isEqualTo(1);
+        // History is the ground's (W-19): the ask wrote nothing, and what was "now" at that moment is the
+        // station's ledger row - the first file's reading, consolidated - found within three hours of it,
+        // for the reading and for the map's timeline alike.
+        assertThat(history.then(h, now)).isPresent();
+        assertThat(history.then(h, now).get().from()).isEqualTo("station");
+        assertThat(history.then(h, now).get().stationId()).isEqualTo("023000");
+        assertThat(history.then(h, now).get().conditions().temperatureC())
+                .isEqualTo(fresh.stream().filter(x -> x.station().id().equals("023000")).findFirst().get().observation().temperatureC());
+        assertThat(history.allAt(store.all(), now.plusSeconds(60))).containsKey(h.id());
+        assertThat(history.then(h, now.plus(Duration.ofHours(4)))).as("nothing stands beyond three hours").isEmpty();
+        assertThat(history.of(h, 5)).hasSize(1);
+        assertThat(history.modelRows()).as("the model never stood in: no upstream is enabled").isZero();
+        // The consolidation: the second file's reading went into the window after the row was written, so the
+        // row counts the one reading it was made from.
+        assertThat(stations.recentSamples("023000", 1).getFirst().get("readings")).isEqualTo(1);
+        // The drought's days are the hexagon's record: nothing could be spun up with no upstream, so none yet.
+        assertThat(history.droughtDays()).isZero();
+        assertThat(droughtDays.save(h.id(), java.util.List.of(new au.gully.drought.DroughtDays.Day(day, 2.5, 24.0, "archive")), now)).isEqualTo(1);
+        assertThat(droughtDays.of(h.id(), day, day).get(day).source()).isEqualTo("archive");
+        assertThat(droughtDays.save(h.id(), java.util.List.of(new au.gully.drought.DroughtDays.Day(day, 9.9, 30.0, "stations")), now)).as("a day held is left as it was").isZero();
+        assertThat(droughtDays.recent(h.id(), 10)).hasSize(1);
+        assertThat(history.prune(now)).as("nothing is five years old").isZero();
 
         // The drift ledger takes a blend as its judge: three stations joined is twenty characters, which the
         // first shape of the table refused, and with it the reading (V8).

@@ -42,7 +42,9 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>A hexagon with a Bureau station in it is always alive: its "now" is the station's, free,
  *       every ten minutes, and the upstream is called for its forecast only, when a forecast is asked for.</li>
  *   <li>A caller that keeps asking keeps its hexagons warm; they go cold on their own when it stops.</li>
- *   <li>History is written only when an ask carries a ref - what the reading is for.</li>
+ *   <li>History is the ground's (W-19): the stations' ledger, written as their files are read; the
+ *       model's "now" for a hexagon where nothing on the ground answered, written on the fetch; and
+ *       the drought's days per hexagon. Nothing is written on an ask.</li>
  * </ul>
  */
 @Slf4j
@@ -119,7 +121,8 @@ public class HexagonStore {
      *
      * @param wantForecast whether the series is wanted; a station hexagon is not fetched without it
      * @param ref          what the reading is for, when the caller says - an incident id, a job number,
-     *                     anything - which is what writes history; null otherwise
+     *                     anything; carried on the ask and nothing more since W-19 (history is the
+     *                     ground's, written as it is read, not on asks); null otherwise
      * @return the hexagon as it stands after the ask; its reading may be stale, and says so, when no
      * upstream could answer
      */
@@ -169,13 +172,6 @@ public class HexagonStore {
         if (h.forecast() != null && !stationFresh && life.expired(h.forecast(), now)) {
             stale.incrementAndGet();
         }
-        if (ref != null && !ref.isBlank()) {
-            Optional<FirePictures.Now> current = pictures.now(h, now);
-            if (current.isPresent() && history.snapshot(h, current.get(), ref.trim(), now)) {
-                h = replace(h.id(), old -> old.snapshotted(now));
-                repository.saveActivity(h);
-            }
-        }
         return h;
     }
 
@@ -203,7 +199,7 @@ public class HexagonStore {
                 inside.map(Station::id).orElse(null),
                 nearest.map(n -> n.station().id()).orElse(null),
                 nearest.map(n -> au.gully.science.Numbers.round1(n.distanceKm())).orElse(null),
-                null, null, null, null, now, null, null, null, 0, 0);
+                null, null, null, null, now, null, null, 0, 0);
         repository.insert(h);
         version.incrementAndGet();
         log.debug("hexagon {} created at {},{}: {} station, district {}", cell.id(), cell.lat(), cell.lon(),
@@ -243,6 +239,12 @@ public class HexagonStore {
             repository.saveForecast(after, life.expiresAt(forecast));
             discarded.remove(id);
             fetched.incrementAndGet();
+            // The model standing in is recorded (W-19): where nothing on the ground answers for this hexagon
+            // right now, the series at this moment is what "now" is, and the record keeps it.
+            Optional<FirePictures.Now> current = pictures.now(after, now);
+            if (current.isPresent() && "model".equals(current.get().from())) {
+                history.modelNow(after, current.get().conditions(), now, forecast.upstream(), forecast.model());
+            }
             // Judged the moment it arrives: a fresh forecast that already disagrees with the station is the
             // comparison most worth having.
             checkDrift(after, now);

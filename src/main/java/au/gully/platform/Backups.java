@@ -23,9 +23,10 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * A nightly export of the history (docs/06 item 11): the day's snapshots as one JSON-lines file in
- * {@code gully.history.backups}, kept for thirty days. Nothing is ever deleted from the table; this
- * is the copy that survives the table.
+ * A nightly export of the history (docs/06 item 11): the day's rows of the ground's record (W-19) -
+ * the stations' ledger, the model's stand-ins, the drought's days - as one JSON-lines file each in
+ * {@code gully.history.backups}, kept for thirty days. The tables keep five years; this is the copy
+ * that leaves the database.
  */
 @Slf4j
 @Component
@@ -63,29 +64,31 @@ public class Backups implements ApplicationRunner {
     }
 
     /**
-     * The snapshots asked for on a UTC day, one JSON object per line.
+     * The record's rows for a UTC day, one JSON object per line, one file per table; the ledger's
+     * file is the one returned.
      */
     public Path write(Path dir, LocalDate day) throws IOException {
         Files.createDirectories(dir);
-        Path file = dir.resolve("reading-snapshots-" + day + ".jsonl");
         Instant from = day.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant to = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        List<Map<String, Object>> rows = history.rowsSince(from);
-        int written = 0;
-        try (BufferedWriter w = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
-            for (Map<String, Object> row : rows) {
-                Instant asked = au.gully.storage.Db.instant(row.get("asked_at"));
-                if (asked == null || !asked.isBefore(to)) {
-                    continue;
+        Path first = null;
+        for (String[] table : new String[][]{{"station_sample", "at"}, {"model_now", "at"}, {"drought_day", "written_at"}}) {
+            Path file = dir.resolve(table[0].replace('_', '-') + "-" + day + ".jsonl");
+            int written = 0;
+            try (BufferedWriter w = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+                for (Map<String, Object> row : history.rowsOn(table[0], table[1], from, to)) {
+                    w.write(json.write(row));
+                    w.newLine();
+                    written++;
                 }
-                w.write(json.write(row));
-                w.newLine();
-                written++;
+            }
+            log.info("history backup: {} {} rows to {}", written, table[0], file.getFileName());
+            if (first == null) {
+                first = file;
             }
         }
         prune(dir);
-        log.info("history backup: {} snapshots to {}", written, file.getFileName());
-        return file;
+        return first;
     }
 
     private static void prune(Path dir) throws IOException {
@@ -93,9 +96,9 @@ public class Backups implements ApplicationRunner {
         try (Stream<Path> files = Files.list(dir)) {
             for (Path p : files.toList()) {
                 String name = p.getFileName().toString();
-                if (name.startsWith("reading-snapshots-") && name.endsWith(".jsonl")) {
+                if (name.endsWith(".jsonl") && name.length() > 16) {
                     try {
-                        LocalDate d = LocalDate.parse(name.substring("reading-snapshots-".length(), name.length() - ".jsonl".length()));
+                        LocalDate d = LocalDate.parse(name.substring(name.length() - 16, name.length() - ".jsonl".length()));
                         if (d.isBefore(cutoff)) {
                             Files.deleteIfExists(p);
                         }

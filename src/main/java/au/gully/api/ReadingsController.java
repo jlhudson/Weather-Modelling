@@ -42,9 +42,10 @@ public class ReadingsController {
 
     @GetMapping
     @Operation(summary = "The reading at a point",
-            description = "Now by default. With `at`, the snapshot nearest that time for the point's hexagon — "
-                    + "only hexagons asked about with a ref have history. With `ref`, the ask writes history "
-                    + "(at most once every three hours per hexagon).")
+            description = "Now by default. With `at`, what the ground recorded nearest that time for the point's hexagon: "
+                    + "its station's six-hourly ledger row, or the model's stand-in where the station was not there, "
+                    + "within three hours of the time. `ref` says what the reading is for and is carried on the ask; "
+                    + "it writes nothing.")
     public ResponseEntity<Reading> at(
             @Parameter(description = "latitude, -90..90") @RequestParam double lat,
             @Parameter(description = "longitude, -180..180") @RequestParam double lon,

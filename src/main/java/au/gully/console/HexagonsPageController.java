@@ -1,6 +1,7 @@
 package au.gully.console;
 
 import au.gully.api.HexagonsController;
+import au.gully.bureau.StationRegistry;
 import au.gully.hexagons.Hexagon;
 import au.gully.hexagons.HexagonStore;
 import au.gully.hexagons.History;
@@ -27,6 +28,7 @@ public class HexagonsPageController {
 
     private final HexagonStore store;
     private final History history;
+    private final StationRegistry stations;
 
     @GetMapping
     public String page(Model model) {
@@ -38,7 +40,9 @@ public class HexagonsPageController {
         model.addAttribute("active", store.all().stream().filter(Hexagon::active).count());
         model.addAttribute("withStation", store.all().stream().filter(Hexagon::hasStation).count());
         model.addAttribute("withForecast", store.all().stream().filter(Hexagon::hasForecast).count());
-        model.addAttribute("snapshots", history.count());
+        model.addAttribute("ledgerRows", stations.ledgerRows());
+        model.addAttribute("modelNowRows", history.modelRows());
+        model.addAttribute("droughtDays", history.droughtDays());
         model.addAttribute("served", store.servedCount());
         model.addAttribute("fetched", store.fetchedCount());
         model.addAttribute("stale", store.staleCount());

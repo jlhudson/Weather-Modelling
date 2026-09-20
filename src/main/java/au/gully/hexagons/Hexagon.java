@@ -22,7 +22,6 @@ import java.time.Instant;
  * @param nearestStationId the nearest station, inside or not, whose values ride on every reading
  * @param activatedAt    when The Hub (or anyone) first asked about it; null on a station-only hexagon
  * @param lastAskedAt    the last ask, which is what keeps it warm
- * @param lastSnapshotAt when history was last written for it
  * @param fire           the computed picture, or null until there is enough to compute one
  * @param version        bumped on every replacement, for the map layer's fingerprint
  */
@@ -45,7 +44,6 @@ public record Hexagon(
         Instant createdAt,
         Instant activatedAt,
         Instant lastAskedAt,
-        Instant lastSnapshotAt,
         long asks,
         long version
 ) {
@@ -85,7 +83,7 @@ public record Hexagon(
                 elevationFrom == null || "model".equals(elevationFrom) ? (f == null || f.modelElevationM() == null ? elevationM : f.modelElevationM()) : elevationM,
                 elevationFrom == null && f != null && f.modelElevationM() != null ? "model" : elevationFrom,
                 slopeDeg, landUse, fireBanDistrict, bureauDistrict, stationId, nearestStationId, nearestStationKm,
-                f, drought, river, fire, createdAt, activatedAt, lastAskedAt, lastSnapshotAt, asks, version + 1);
+                f, drought, river, fire, createdAt, activatedAt, lastAskedAt, asks, version + 1);
     }
 
     /**
@@ -94,7 +92,7 @@ public record Hexagon(
     public Hexagon withElevation(Double metres, String from) {
         return new Hexagon(cell, zone, metres, from, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt, activatedAt,
-                lastAskedAt, lastSnapshotAt, asks, version + 1);
+                lastAskedAt, asks, version + 1);
     }
 
     /**
@@ -103,49 +101,43 @@ public record Hexagon(
     public Hexagon withLandUse(LandUse use) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, use, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt, activatedAt,
-                lastAskedAt, lastSnapshotAt, asks, version + 1);
+                lastAskedAt, asks, version + 1);
     }
 
     public Hexagon withDrought(DroughtState d) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, d, river, fire, createdAt, activatedAt,
-                lastAskedAt, lastSnapshotAt, asks, version + 1);
+                lastAskedAt, asks, version + 1);
     }
 
     public Hexagon withRiver(RiverState r) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, drought, r, fire, createdAt, activatedAt,
-                lastAskedAt, lastSnapshotAt, asks, version + 1);
+                lastAskedAt, asks, version + 1);
     }
 
     public Hexagon withFire(FirePicture p) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, drought, river, p, createdAt, activatedAt,
-                lastAskedAt, lastSnapshotAt, asks, version + 1);
+                lastAskedAt, asks, version + 1);
     }
 
     public Hexagon asked(Instant now) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt,
-                activatedAt == null ? now : activatedAt, now, lastSnapshotAt, asks + 1, version);
-    }
-
-    public Hexagon snapshotted(Instant now) {
-        return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
-                stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt, activatedAt,
-                lastAskedAt, now, asks, version);
+                activatedAt == null ? now : activatedAt, now, asks + 1, version);
     }
 
     public Hexagon withDistrict(String fireBan) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBan, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, forecast, drought, river, fire, createdAt, activatedAt,
-                lastAskedAt, lastSnapshotAt, asks, version + 1);
+                lastAskedAt, asks, version + 1);
     }
 
     public Hexagon withStations(String stationInside, String nearest, Double nearestKm, String district) {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict,
                 district == null ? bureauDistrict : district, stationInside, nearest, nearestKm, forecast, drought,
-                river, fire, createdAt, activatedAt, lastAskedAt, lastSnapshotAt, asks, version + 1);
+                river, fire, createdAt, activatedAt, lastAskedAt, asks, version + 1);
     }
 
     /**
@@ -154,6 +146,6 @@ public record Hexagon(
     public Hexagon cold() {
         return new Hexagon(cell, zone, elevationM, elevationFrom, slopeDeg, landUse, fireBanDistrict, bureauDistrict,
                 stationId, nearestStationId, nearestStationKm, null, drought, river, null, createdAt, activatedAt,
-                lastAskedAt, lastSnapshotAt, asks, version + 1);
+                lastAskedAt, asks, version + 1);
     }
 }

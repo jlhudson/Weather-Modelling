@@ -30,7 +30,7 @@ import java.util.Map;
  * @param nearby      how the stations' values were blended and brought here, when they were (ring 0 is
  *                    the hexagon's own stations); null otherwise
  * @param drift       the station in the hexagon against the forecast it holds (W-12); null without both
- * @param history     present when the reading is a snapshot answered for a past time
+ * @param history     present when the reading is answered for a past time, from the ground's record
  */
 public record Reading(
         String schema,
@@ -201,9 +201,11 @@ public record Reading(
     }
 
     /**
-     * @param at       the snapshot's own time, which may be hours from the time asked for
-     * @param askedAt  when the snapshot was taken
-     * @param ref      the reference the ask carried: what the reading was for
+     * The record the answer came from (W-19): the ground's, not a snapshot of an ask.
+     *
+     * @param at       the moment the values describe - the ledger row's or the fetch's - which may be up to three hours from the time asked for
+     * @param askedAt  when the row was written: the ledger's moment for a station, the fetch for the model
+     * @param ref      always null: nothing is written on an ask any more, so no ask is attached to a moment
      */
     public record HistoryBlock(Instant at, Instant askedAt, String ref, Instant requested) {
     }

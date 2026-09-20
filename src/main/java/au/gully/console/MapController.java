@@ -370,8 +370,7 @@ public class MapController {
         out.put("reading", readings.of(h, new Reading.Point(h.cell().lat(), h.cell().lon()), true));
         out.put("drought", h.drought());
         out.put("river", h.river() == null ? null : h.river().river(LocalDate.now(store.zoneOf(h))));
-        out.put("history", history.of(id, 24));
-        out.put("historyCount", history.countFor(id));
+        out.put("history", history.of(h, 24));
         out.put("ledger", h.stationId() == null ? List.of() : stations.recentSamples(h.stationId(), 12));
         return ResponseEntity.ok(out);
     }

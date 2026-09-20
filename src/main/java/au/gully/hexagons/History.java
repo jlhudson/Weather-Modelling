@@ -1,6 +1,5 @@
 package au.gully.hexagons;
 
-import au.gully.platform.Json;
 import au.gully.science.Conditions;
 import au.gully.storage.Db;
 import lombok.extern.slf4j.Slf4j;
@@ -9,123 +8,206 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.time.Period;
+import java.util.*;
 
 /**
- * What the weather <em>was</em> (docs/06 item 2): a snapshot of a hexagon's current conditions and
- * fire picture — never the forecast — taken when an ask about the hexagon carries a ref (what the
- * reading is for: an incident id, a job number, anything the caller names), at most once every
- * {@link #CURRENT_FOR}. Nothing is ever deleted from the table.
+ * What the weather <em>was</em> (docs/06 item 2, reshaped by W-19): the ground's record, never the
+ * hexagon's. A station's readings are consolidated every six hours into the ledger
+ * ({@code station_sample}, the station register writes it) and kept five years; a hexagon whose
+ * "now" was the model - no station within reach reporting, no neighbours - has the series the
+ * model gave at each fetch kept in {@code model_now}, so what stood in is not lost; and the daily
+ * rain and maximum the drought was stepped with are kept per hexagon in {@code drought_day} - the
+ * one thing kept per hexagon, because rain is a place's, not a station's.
  * <p>
- * A Bureau station updating every ten minutes never writes history on its own; its latest values
- * are simply kept. Only hexagons asked about with a ref have history.
+ * A reading as it was is answered from these: the hexagon's station's ledger row nearest the
+ * moment, or the model's row where the station was not there. A row stands for {@link #STANDS_FOR}
+ * either side of its moment; beyond that there is no answer. No fire picture is kept: the indices
+ * of a moment are the conditions and the drought of that day, and both are here to recompute from.
  */
 @Slf4j
 @Repository
 public class History {
 
     /**
-     * How long a snapshot counts as current: a hexagon asked about at 06:00 and again at 12:00 has
-     * two entries, one asked about repeatedly inside three hours has one.
+     * How long the ground's record is kept: five years, then pruned by the hourly sweep.
      */
-    public static final Duration CURRENT_FOR = Duration.ofHours(3);
+    public static final Period KEEP = Period.ofYears(5);
 
     /**
-     * How long a snapshot stands for the hexagon when the map asks for a past instant: twice the
-     * writing interval, so a hexagon asked about every three hours is continuous and one asked
-     * about once is a point.
+     * How far either side of its moment a row answers for: half the ledger's cadence, so a
+     * six-hourly record is continuous and a lone fetch is a point.
      */
-    public static final Duration STANDS_FOR = Duration.ofHours(6);
+    public static final Duration STANDS_FOR = Duration.ofHours(3);
 
     private final JdbcClient db;
-    private final Json json;
 
-    public History(JdbcClient db, Json json) {
+    public History(JdbcClient db) {
         this.db = db;
-        this.json = json;
     }
 
     /**
-     * Writes a snapshot, unless one inside {@link #CURRENT_FOR} already stands for this hexagon.
+     * One moment as the record has it.
      *
-     * @return whether one was written
+     * @param at         the time the values describe
+     * @param recordedAt when the row was written: the ledger's moment, or the fetch
+     * @param from       {@code station} or {@code model}
+     * @param stationId  the station whose ledger answered, or null for the model
+     * @param upstream   the model's upstream, or null for a station
      */
-    public boolean snapshot(Hexagon h, FirePictures.Now now, String ref, Instant askedAt) {
-        if (h.lastSnapshotAt() != null && Duration.between(h.lastSnapshotAt(), askedAt).compareTo(CURRENT_FOR) < 0) {
-            return false;
+    public record Then(Instant at, Instant recordedAt, String from, String stationId, Conditions conditions, String upstream) {
+    }
+
+    // ---------------------------------------------------------------- writes
+
+    /**
+     * The model's "now" for a hexagon on a fetch when nothing on the ground answered: the series
+     * read at the moment. A second fetch at the same moment is ignored.
+     */
+    public void modelNow(Hexagon h, Conditions c, Instant fetchedAt, String upstream, String model) {
+        if (c == null || c.at() == null) {
+            return;
         }
-        Snapshot s = new Snapshot(h.id(), now.at(), askedAt, ref, now.conditions(), now.from(),
-                h.stationId() != null ? h.stationId() : h.nearestStationId(), h.fire(),
-                h.drought() == null ? null : h.drought().index(), h.forecast() == null ? null : h.forecast().upstream());
-        db.sql("insert into reading_snapshot (hexagon_id, at, asked_at, ref, payload) values (:h, :at, :asked, :ref, :p::jsonb)")
-                .param("h", h.id()).param("at", Db.ts(now.at())).param("asked", Db.ts(askedAt))
-                .param("ref", ref == null ? null : ref.substring(0, Math.min(128, ref.length())))
-                .param("p", json.write(s)).update();
-        return true;
+        db.sql("""
+                insert into model_now (hexagon_id, at, fetched_at, upstream, model, temperature_c, apparent_temperature_c, dew_point_c,
+                  humidity_pct, wind_speed_kmh, wind_direction_deg, wind_gust_kmh, precipitation_mm, pressure_msl_hpa, cloud_cover_pct, condition)
+                values (:h, :at, :fetched, :upstream, :model, :t, :app, :dew, :rh, :w, :dir, :g, :rain, :p, :cloud, :cond)
+                on conflict (hexagon_id, at) do nothing""")
+                .param("h", h.id()).param("at", Db.ts(c.at())).param("fetched", Db.ts(fetchedAt)).param("upstream", upstream).param("model", model)
+                .param("t", c.temperatureC()).param("app", c.apparentTemperatureC()).param("dew", c.dewPointC()).param("rh", c.humidityPct())
+                .param("w", c.windSpeedKmh()).param("dir", c.windDirectionDeg()).param("g", c.windGustKmh()).param("rain", c.precipitationMm())
+                .param("p", c.pressureMslHpa()).param("cloud", c.cloudCoverPct()).param("cond", c.condition()).update();
     }
 
     /**
-     * The snapshot nearest an instant for a hexagon, or empty when it has none.
+     * The rows older than {@link #KEEP}, gone: the model's and the ledger's.
      */
-    public Optional<Snapshot> nearest(String hexagonId, Instant at) {
-        return db.sql("select payload from reading_snapshot where hexagon_id = :h"
+    public int prune(Instant now) {
+        // Years are a calendar's, not an instant's: the cutoff is worked out on the calendar and read back.
+        java.time.ZonedDateTime cutoffDay = now.atZone(java.time.ZoneOffset.UTC).minus(KEEP);
+        Instant cutoff = cutoffDay.toInstant();
+        int n = db.sql("delete from model_now where at < :cutoff").param("cutoff", Db.ts(cutoff)).update();
+        n += db.sql("delete from station_sample where at < :cutoff").param("cutoff", Db.ts(cutoff)).update();
+        n += db.sql("delete from drought_day where day < :day").param("day", cutoffDay.toLocalDate()).update();
+        return n;
+    }
+
+    // ---------------------------------------------------------------- reads
+
+    /**
+     * What was "now" for a hexagon at a moment: its station's ledger row nearest the moment, else the
+     * model's row nearest it, either within {@link #STANDS_FOR}; empty when neither has one.
+     */
+    public Optional<Then> then(Hexagon h, Instant at) {
+        Instant from = at.minus(STANDS_FOR), to = at.plus(STANDS_FOR);
+        if (h.stationId() != null) {
+            Optional<Then> station = db.sql("select * from station_sample where station_id = :s and at >= :from and at <= :to"
+                            + " order by abs(extract(epoch from (at - :at))) limit 1")
+                    .param("s", h.stationId()).param("from", Db.ts(from)).param("to", Db.ts(to)).param("at", Db.ts(at))
+                    .query().listOfRows().stream().findFirst().map(History::fromLedger);
+            if (station.isPresent()) {
+                return station;
+            }
+        }
+        return db.sql("select * from model_now where hexagon_id = :h and at >= :from and at <= :to"
                         + " order by abs(extract(epoch from (at - :at))) limit 1")
-                .param("h", hexagonId).param("at", Db.ts(at))
-                .query().listOfRows().stream().findFirst()
-                .map(row -> json.read(row.get("payload").toString(), Snapshot.class));
+                .param("h", h.id()).param("from", Db.ts(from)).param("to", Db.ts(to)).param("at", Db.ts(at))
+                .query().listOfRows().stream().findFirst().map(History::fromModel);
     }
 
     /**
-     * Every snapshot a hexagon has, newest first, at most {@code limit}.
+     * What was "now" for every hexagon at a moment, for the map's timeline: one ledger query and one
+     * model query over the window, the nearest row per station and per hexagon, each hexagon taking
+     * its station's, or the model's where it has no station.
      */
-    public List<Snapshot> of(String hexagonId, int limit) {
-        return db.sql("select payload from reading_snapshot where hexagon_id = :h order by at desc limit :n")
-                .param("h", hexagonId).param("n", Math.max(1, Math.min(limit, 1000)))
-                .query().listOfRows().stream()
-                .map(row -> json.read(row.get("payload").toString(), Snapshot.class)).toList();
-    }
-
-    /**
-     * The latest snapshot per hexagon at or before an instant, for the map's time slider.
-     */
-    public Map<String, Snapshot> allAt(Instant at) {
-        Map<String, Snapshot> out = new java.util.HashMap<>();
-        // The latest snapshot at or before the instant, and only one taken inside the window: a snapshot
-        // from last week does not stand for yesterday afternoon.
-        db.sql("select distinct on (hexagon_id) hexagon_id, payload from reading_snapshot where at <= :at and at > :since"
-                        + " order by hexagon_id, at desc")
-                .param("at", Db.ts(at)).param("since", Db.ts(at.minus(STANDS_FOR))).query().listOfRows()
-                .forEach(row -> out.put((String) row.get("hexagon_id"), json.read(row.get("payload").toString(), Snapshot.class)));
+    public Map<String, Then> allAt(Collection<Hexagon> hexagons, Instant at) {
+        Instant from = at.minus(STANDS_FOR), to = at.plus(STANDS_FOR);
+        Map<String, Then> byStation = new HashMap<>();
+        db.sql("select distinct on (station_id) * from station_sample where at >= :from and at <= :to"
+                        + " order by station_id, abs(extract(epoch from (at - :at)))")
+                .param("from", Db.ts(from)).param("to", Db.ts(to)).param("at", Db.ts(at))
+                .query().listOfRows().forEach(row -> byStation.put((String) row.get("station_id"), fromLedger(row)));
+        Map<String, Then> byModel = new HashMap<>();
+        db.sql("select distinct on (hexagon_id) * from model_now where at >= :from and at <= :to"
+                        + " order by hexagon_id, abs(extract(epoch from (at - :at)))")
+                .param("from", Db.ts(from)).param("to", Db.ts(to)).param("at", Db.ts(at))
+                .query().listOfRows().forEach(row -> byModel.put((String) row.get("hexagon_id"), fromModel(row)));
+        Map<String, Then> out = new HashMap<>();
+        for (Hexagon h : hexagons) {
+            Then t = h.stationId() == null ? null : byStation.get(h.stationId());
+            if (t == null) {
+                t = byModel.get(h.id());
+            }
+            if (t != null) {
+                out.put(h.id(), t);
+            }
+        }
         return out;
     }
 
-    public long count() {
-        Long n = db.sql("select count(*) from reading_snapshot").query(Long.class).single();
+    /**
+     * A hexagon's record, newest first: its station's ledger where it has one, else the model's rows.
+     */
+    public List<Then> of(Hexagon h, int limit) {
+        int n = Math.max(1, Math.min(limit, 1000));
+        if (h.stationId() != null) {
+            return db.sql("select * from station_sample where station_id = :s order by at desc limit :n")
+                    .param("s", h.stationId()).param("n", n).query().listOfRows().stream().map(History::fromLedger).toList();
+        }
+        return db.sql("select * from model_now where hexagon_id = :h order by at desc limit :n")
+                .param("h", h.id()).param("n", n).query().listOfRows().stream().map(History::fromModel).toList();
+    }
+
+    public long modelRows() {
+        Long n = db.sql("select count(*) from model_now").query(Long.class).single();
         return n == null ? 0 : n;
     }
 
-    public long countFor(String hexagonId) {
-        Long n = db.sql("select count(*) from reading_snapshot where hexagon_id = :h").param("h", hexagonId).query(Long.class).single();
+    public long droughtDays() {
+        Long n = db.sql("select count(*) from drought_day").query(Long.class).single();
         return n == null ? 0 : n;
     }
 
     /**
-     * The rows since an instant, as maps, for the nightly export.
+     * A table's rows written on a UTC day, as maps, for the nightly export.
      */
-    public List<Map<String, Object>> rowsSince(Instant since) {
-        return db.sql("select id, hexagon_id, at, asked_at, ref, payload from reading_snapshot where asked_at >= :since order by id")
-                .param("since", Db.ts(since)).query().listOfRows();
+    public List<Map<String, Object>> rowsOn(String table, String column, Instant from, Instant to) {
+        if (!Set.of("station_sample", "model_now", "drought_day").contains(table)) {
+            throw new IllegalArgumentException("not a history table: " + table);
+        }
+        return db.sql("select * from " + table + " where " + column + " >= :from and " + column + " < :to order by " + column)
+                .param("from", Db.ts(from)).param("to", Db.ts(to)).query().listOfRows();
     }
 
-    /**
-     * One reading as it was: the conditions, where they came from, and the picture computed from them.
-     *
-     * @param at the time the conditions describe — the snapshot's own time, which the API reports
-     */
-    public record Snapshot(String hexagonId, Instant at, Instant askedAt, String ref, Conditions current,
-                           String currentFrom, String stationId, FirePicture fire,
-                           au.gully.science.DroughtIndex drought, String upstream) {
+    private static Then fromLedger(Map<String, Object> row) {
+        Instant at = Db.instant(row.get("at"));
+        Conditions c = Conditions.at(at)
+                .temperature(Db.dbl(row.get("temperature_c")))
+                .humidity(Db.integer(row.get("humidity_pct")))
+                .wind(Db.dbl(row.get("wind_speed_kmh")))
+                .windDirection(Db.integer(row.get("wind_direction_deg")))
+                .gust(Db.dbl(row.get("wind_gust_kmh")))
+                .precipitation(Db.dbl(row.get("rain_since_9am_mm")))
+                .pressure(Db.dbl(row.get("pressure_hpa")))
+                .build();
+        return new Then(at, at, "station", (String) row.get("station_id"), c, null);
+    }
+
+    private static Then fromModel(Map<String, Object> row) {
+        Instant at = Db.instant(row.get("at"));
+        Conditions c = Conditions.at(at)
+                .temperature(Db.dbl(row.get("temperature_c")))
+                .apparent(Db.dbl(row.get("apparent_temperature_c")))
+                .dewPoint(Db.dbl(row.get("dew_point_c")))
+                .humidity(Db.integer(row.get("humidity_pct")))
+                .wind(Db.dbl(row.get("wind_speed_kmh")))
+                .windDirection(Db.integer(row.get("wind_direction_deg")))
+                .gust(Db.dbl(row.get("wind_gust_kmh")))
+                .precipitation(Db.dbl(row.get("precipitation_mm")))
+                .pressure(Db.dbl(row.get("pressure_msl_hpa")))
+                .cloud(Db.integer(row.get("cloud_cover_pct")))
+                .condition((String) row.get("condition"))
+                .build();
+        return new Then(at, Db.instant(row.get("fetched_at")), "model", null, c, (String) row.get("upstream"));
     }
 }

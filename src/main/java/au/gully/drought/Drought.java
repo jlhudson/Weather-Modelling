@@ -29,9 +29,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * The inputs are the Bureau stations inside the hexagon (or the nearest within reach) — the day's
  * rain to 9 am and the day's maximum, which the station ledger has for every day the service has
- * been running — and, for the days they do not cover, Open-Meteo's archive at the hexagon's centre:
- * one archive fetch per hexagon, about six allowance units, once. After a year of the ledger the
- * archive is never asked again.
+ * been running — then the days already kept for the hexagon ({@link DroughtDays}, W-19), and only
+ * for the days neither covers, Open-Meteo's archive at the hexagon's centre: one archive fetch per
+ * hexagon, about twenty-six allowance units, once — every day it supplies is kept, so a hexagon
+ * reset, or the whole table, spins up again from the record and the archive is never asked twice.
  */
 @Slf4j
 @Service
@@ -71,13 +72,15 @@ public class Drought {
     private final Grid grid;
     private final StationRegistry stations;
     private final Upstreams upstreams;
+    private final DroughtDays record;
     private final Map<String, Object> locks = new ConcurrentHashMap<>();
     private final Map<String, Instant> attempts = new ConcurrentHashMap<>();
 
-    public Drought(Grid grid, StationRegistry stations, Upstreams upstreams) {
+    public Drought(Grid grid, StationRegistry stations, Upstreams upstreams, DroughtDays days) {
         this.grid = grid;
         this.stations = stations;
         this.upstreams = upstreams;
+        this.record = days;
     }
 
     /**
@@ -121,10 +124,12 @@ public class Drought {
         SortedMap<LocalDate, Input> days = new TreeMap<>();
         stations.daily(around, from, to).forEach((d, in) -> {
             if (in.rainMm() != null && in.maxTemperatureC() != null) {
-                days.put(d, new Input(in.rainMm(), in.maxTemperatureC()));
+                days.put(d, new Input(in.rainMm(), in.maxTemperatureC(), "stations"));
             }
         });
         int fromStations = days.size();
+        // The days already held for this hexagon (W-19) - a reset hexagon, or one spun up before - before any source is asked.
+        record.of(cell.id(), from, to).forEach((d, held) -> days.putIfAbsent(d, new Input(held.rainMm(), held.maxTemperatureC(), held.source())));
         fillGaps(cell, days, from, to, today);
         if (days.size() < Kbdi.WINDOW_DAYS) {
             // The archive did not answer (it said so, once, at warn) or is out of allowance: deferred, not lost.
@@ -147,6 +152,7 @@ public class Drought {
         for (int i = Math.max(0, rain.length - Kbdi.WINDOW_DAYS); i < rain.length; i++) {
             window.add(rain[i]);
         }
+        keep(cell, days);
         String source = fromStations == days.size() ? "stations" : fromStations == 0 ? "archive" : "stations+archive";
         DroughtState state = new DroughtState(series[series.length - 1], annual, dates.getFirst(), dates.getLast(),
                 dates.size(), window, source);
@@ -170,9 +176,10 @@ public class Drought {
         SortedMap<LocalDate, Input> days = new TreeMap<>();
         stations.daily(around, from, upTo).forEach((d, in) -> {
             if (in.rainMm() != null && in.maxTemperatureC() != null) {
-                days.put(d, new Input(in.rainMm(), in.maxTemperatureC()));
+                days.put(d, new Input(in.rainMm(), in.maxTemperatureC(), "stations"));
             }
         });
+        record.of(cell.id(), from, upTo).forEach((d, held) -> days.putIfAbsent(d, new Input(held.rainMm(), held.maxTemperatureC(), held.source())));
         boolean gap = false;
         for (LocalDate d = from; !d.isAfter(upTo); d = d.plusDays(1)) {
             if (!days.containsKey(d)) {
@@ -185,22 +192,34 @@ public class Drought {
             upstreams.recentDays(cell.lat(), cell.lon(), Math.min(92, pastDays)).ifPresent(rows -> {
                 for (OpenMeteo.DailyRow r : rows) {
                     if (!days.containsKey(r.date()) && r.rainMm() != null && r.maxTemperatureC() != null) {
-                        days.put(r.date(), new Input(r.rainMm(), r.maxTemperatureC()));
+                        days.put(r.date(), new Input(r.rainMm(), r.maxTemperatureC(), "recent"));
                     }
                 }
             });
         }
         DroughtState current = state;
         double interceptionLeft = interceptionLeft(state.recentRainMm());
+        SortedMap<LocalDate, Input> stepped = new TreeMap<>();
         for (LocalDate d = from; !d.isAfter(upTo); d = d.plusDays(1)) {
             Input in = days.get(d);
             if (in == null) {
                 break;
             }
+            stepped.put(d, in);
             current = current.step(d, in.rainMm(), in.maxTemperatureC(), interceptionLeft);
             interceptionLeft = in.rainMm() > 0 ? Math.max(0, interceptionLeft - Math.min(in.rainMm(), interceptionLeft)) : Kbdi.INTERCEPTION_MM;
         }
+        keep(cell, stepped);
         return current;
+    }
+
+    /**
+     * The days the drought was stepped with, kept (W-19): a day already held is left as it was.
+     */
+    private void keep(Cell cell, SortedMap<LocalDate, Input> used) {
+        List<DroughtDays.Day> rows = new ArrayList<>();
+        used.forEach((d, in) -> rows.add(new DroughtDays.Day(d, in.rainMm(), in.maxTemperatureC(), in.source())));
+        record.save(cell.id(), rows, Instant.now());
     }
 
     /**
@@ -238,19 +257,19 @@ public class Drought {
             }
         }
         if (missingOld) {
-            upstreams.archive(cell.lat(), cell.lon(), from, archiveEnd).ifPresent(rows -> put(days, rows));
+            upstreams.archive(cell.lat(), cell.lon(), from, archiveEnd).ifPresent(rows -> put(days, rows, "archive"));
         }
         if (missingRecent) {
-            upstreams.recentDays(cell.lat(), cell.lon(), ARCHIVE_LAG_DAYS + 2).ifPresent(rows -> put(days, rows));
+            upstreams.recentDays(cell.lat(), cell.lon(), ARCHIVE_LAG_DAYS + 2).ifPresent(rows -> put(days, rows, "recent"));
         }
         days.headMap(from).clear();
         days.tailMap(to.plusDays(1)).clear();
     }
 
-    private static void put(SortedMap<LocalDate, Input> days, List<OpenMeteo.DailyRow> rows) {
+    private static void put(SortedMap<LocalDate, Input> days, List<OpenMeteo.DailyRow> rows, String source) {
         for (OpenMeteo.DailyRow r : rows) {
             if (r.date() != null && !days.containsKey(r.date()) && r.rainMm() != null && r.maxTemperatureC() != null) {
-                days.put(r.date(), new Input(r.rainMm(), r.maxTemperatureC()));
+                days.put(r.date(), new Input(r.rainMm(), r.maxTemperatureC(), source));
             }
         }
     }
@@ -267,6 +286,10 @@ public class Drought {
                 .limit(1).map(StationRegistry.Nearest::station).toList();
     }
 
-    private record Input(double rainMm, double maxTemperatureC) {
+    /**
+     * One day's inputs and which source supplied them: the stations, the table (a day already held),
+     * the archive or the recent-days call.
+     */
+    private record Input(double rainMm, double maxTemperatureC, String source) {
     }
 }
