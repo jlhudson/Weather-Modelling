@@ -120,7 +120,8 @@ is the one choice: which are on, and in what order.
 Per upstream, three plain mechanisms and no governor: a **budget** counted from the `upstream_call`
 table against the published allowance at a 90% guard, a **breaker** that stops calling after three
 consecutive failures — or at once when a refusal names the window that ran out — for the pause the
-upstream asked for, and a **pacer** holding calls to the real per-minute limit. When Open-Meteo's
+upstream asked for, and a **pacer** holding calls to the real per-minute limit, each weighed at what
+it costs (a year of the archive is twenty-six slots, not one). When Open-Meteo's
 allowance for the day is used up or it is not answering, the fetch goes to Google on the same hexagon
 with the same shape of answer, and Google's spend is counted and capped the same way.
 
@@ -152,7 +153,13 @@ anywhere), the change of speed graded the same from 10, 20 and 30 km/h, and the 
 higher. On a fire a swing turns a flank into a head — the south-westerly behind a northerly is the
 classic — which is why the map lights it up unasked: the station pulses, the hexagon's outline goes
 yellow, orange or red, and the reading's `station.windShift` says so in words, with the last readings
-beside it.
+beside it. Beside the change the map draws the **trend** (`WindTrend`, W-17): the mean of the five readings
+before the latest — a vector mean of direction, so 350° and 10° average to north — against the latest,
+and against the model an hour ahead from the station's hexagon, as three arrows from one point at every
+fresh station: grey where the wind has mostly been, black (or the grade's colour) where it is, amber and
+dashed where the model says it is going. A steady wind is one arrow; a change is a fan. The station's
+tooltip and the hexagon's drawer give the three in numbers, with the model's wind at one, three and six
+hours and the change the forecast expects, when one is still to come.
 
 The same server carries the warnings: one listing per state, read on request at five minutes, and the
 product each item points at, read once per issue. A warning names the public weather districts it covers, a
@@ -187,7 +194,9 @@ nearest within 75 km).
 
 Starting a hexagon's drought fetches only the days the stations do not cover: running for 30 days and
 needing 365, it asks Open-Meteo's archive at the hexagon's centre for the year behind the ledger and
-nothing else — one fetch, about six units, once per hexagon. After that it is free: an ask that finds
+nothing else — one fetch, twenty-six units (a fortnight of daily data is one call in Open-Meteo's
+weighting), given ninety seconds to answer because the archive sometimes takes fifteen, once per
+hexagon. After that it is free: an ask that finds
 the hexagon's last complete day behind the last closed rain day (9:10 am in its zone) steps it forward
 from the ledger, exactly once per day, and a hexagon nobody asks about is not stepped at all. The
 state is kept on the hexagon's row so a quiet hexagon picks up where it left off. A reading with no drought state has no fire index.
@@ -263,7 +272,7 @@ Under it, the wind change of the last hour by the stations — the swing of dire
 speed, or the two together — then, folded, the fire layers (FFDI, GFDI, FBI in their rating colours, the CFS rating, the
 drought factor, KBDI, curing), the ground (elevation, land use by its largest share, which index
 leads, the burnable share) and the requests (minutes since a hexagon was last asked about, which is
-what drives every read). Then what to draw on top: the stations as a point cloud, wind arrows, value
+what drives every read). Then what to draw on top: the stations as a point cloud, wind arrows, the wind trend at the stations, value
 labels, the hexagons' borders, every hexagon of the tessellation (held or not), hexagons as points
 (automatic when zoomed out to the continent), and only the hexagons holding a forecast. Keys `1`,
 `2`, `3` pick the side.

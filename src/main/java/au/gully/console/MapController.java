@@ -9,6 +9,10 @@ import au.gully.bureau.StationRegistry;
 import au.gully.bureau.States;
 import au.gully.bureau.WarningsReader;
 import au.gully.bureau.WindShift;
+import au.gully.bureau.WindTrend;
+import au.gully.science.Conditions;
+import au.gully.science.WindChange;
+import au.gully.upstreams.Forecast;
 import au.gully.hexagons.*;
 import au.gully.platform.Json;
 import au.gully.upstreams.Ledger;
@@ -149,6 +153,17 @@ public class MapController {
             p.put("windShiftMinutes", w == null ? null : w.overMinutes());
             p.put("windShiftText", w == null ? null : w.describe());
             if (w != null) shifted++;
+            // The trend the map draws beside the change: the mean of the readings before the latest, the
+            // latest, and - from the station's hexagon - the model's wind an hour ahead and the change it expects.
+            WindTrend t = stations.windTrend(s.id()).orElse(null);
+            p.put("windMeanDeg", t == null ? null : t.meanDeg());
+            p.put("windMeanKmh", t == null ? null : t.meanKmh());
+            p.put("windMeanGustKmh", t == null ? null : t.meanGust());
+            p.put("windMeanOver", t == null ? null : t.readings());
+            p.put("windMeanMinutes", t == null ? null : t.overMinutes());
+            p.put("windTrendSwingDeg", t == null ? null : t.swingDeg());
+            p.put("windTrendDeltaKmh", t == null ? null : t.deltaKmh());
+            forecastWind(p, store.get((String) p.get("hexagon")).orElse(null), now);
             List<List<Object>> recent = new ArrayList<>();
             for (Observation r : stations.recent(s.id())) {
                 recent.add(java.util.Arrays.asList(r.at() == null ? null : r.at().toString(), r.temperatureC(), r.humidityPct(), r.windSpeedKmh(), r.windDirectionDeg(), r.windGustKmh()));
@@ -166,6 +181,34 @@ public class MapController {
         fc.put("features", features);
         fc.put("meta", Map.of("stations", features.size(), "fresh", fresh, "windShifts", shifted));
         return fc;
+    }
+
+    /**
+     * The hours ahead the station point carries: the model's wind at each, read off the hexagon's
+     * hourly series, so the map can draw where the wind is going beside where it has been.
+     */
+    static final int[] AHEAD_HOURS = {1, 3, 6};
+
+    /**
+     * The model's wind for the station's hexagon: an hour, three and six ahead, and the wind change
+     * the forecast expects when it is still to come. Nulls where the hexagon holds no forecast.
+     */
+    static void forecastWind(Map<String, Object> p, Hexagon h, Instant now) {
+        Forecast fc = h == null ? null : h.forecast();
+        for (int hours : AHEAD_HOURS) {
+            Conditions c = fc == null ? null : fc.at(now.plus(Duration.ofHours(hours)));
+            p.put("fc" + hours + "hWindDeg", c == null ? null : c.windDirectionDeg());
+            p.put("fc" + hours + "hWindKmh", c == null ? null : c.windSpeedKmh());
+            p.put("fc" + hours + "hGustKmh", c == null ? null : c.windGustKmh());
+        }
+        WindChange change = h == null || h.fire() == null || h.fire().wind() == null ? null : h.fire().wind().change();
+        boolean ahead = change != null && change.at() != null && change.at().isAfter(now);
+        p.put("fcChangeAt", ahead ? change.at().toString() : null);
+        p.put("fcChangeFromDeg", ahead ? change.fromDeg() : null);
+        p.put("fcChangeToDeg", ahead ? change.toDeg() : null);
+        p.put("fcChangeKmh", ahead ? change.speedKmh() : null);
+        p.put("fcChangeGustKmh", ahead ? change.gustKmh() : null);
+        p.put("fcChangeInMinutes", ahead ? Duration.between(now, change.at()).toMinutes() : null);
     }
 
     /**

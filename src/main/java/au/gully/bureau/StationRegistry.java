@@ -247,6 +247,14 @@ public class StationRegistry {
         return WindShift.of(recent(stationId));
     }
 
+    /**
+     * Where a station's wind has mostly been against where it is now: the mean of its readings
+     * before the latest, and the latest, from the same last readings.
+     */
+    public Optional<WindTrend> windTrend(String stationId) {
+        return WindTrend.of(recent(stationId));
+    }
+
     public Optional<Observation> latest(String stationId) {
         return Optional.ofNullable(stationId == null ? null : latest.get(stationId));
     }

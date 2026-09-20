@@ -210,6 +210,42 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .hx-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font: 500 10px/1.15 var(--g-mono); white-space: nowrap;
     color: var(--bs-body-color); background: color-mix(in srgb, var(--bs-body-bg) 75%, transparent); padding: 0 3px; border-radius: 2px; }
 .hx-label.fc { color: #f59e0b; }
+/* The wind trend at a station: three arrows from one point - the mean of the five before (grey), the
+   latest (black, or the grade of the change it has measured), the model an hour ahead (amber, dashed). */
+.wt-glyph { pointer-events: none; background: none; border: 0; }
+.wt { display: block; overflow: visible; }
+.wt line, .wt polyline, .wt circle { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.4;
+    filter: drop-shadow(0 0 1.5px var(--bs-body-bg)) drop-shadow(0 0 1.5px var(--bs-body-bg)); }
+.wt .mean line, .wt .mean polyline, .wt circle.mean { stroke: #6b7280; stroke-width: 3.2; opacity: .55; }
+.wt circle.mean { fill: #6b7280; }
+.wt .latest line, .wt .latest polyline, .wt circle.latest { stroke: var(--bs-body-color); stroke-width: 3.2; }
+.wt circle.latest { fill: var(--bs-body-color); }
+.wt .latest.slight line, .wt .latest.slight polyline { stroke: #eab308; }
+.wt .latest.marked line, .wt .latest.marked polyline { stroke: #f97316; }
+.wt .latest.sharp line, .wt .latest.sharp polyline { stroke: #ef4444; }
+.wt .fc line, .wt .fc polyline, .wt circle.fc { stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 2.5 3.5; filter: none; }
+.wt circle.fc { fill: #f59e0b; }
+.wt.big { width: 88px; height: 88px; flex: 0 0 auto; }
+.hx-tip .trend { display: flex; flex-direction: column; gap: .1rem; margin-top: .3rem; padding-top: .3rem; border-top: 1px solid var(--p-line); }
+.hx-tip .trend .mean, .legend .wt-key .mean { color: #6b7280; }
+.hx-tip .trend .fc, .legend .wt-key .fc { color: #d97706; }
+.hx-tip .trend .latest.slight { color: #ca8a04; }
+.hx-tip .trend .latest.marked { color: #ea580c; }
+.hx-tip .trend .latest.sharp { color: #dc2626; }
+.hx-tip .trend .change b { color: #d97706; }
+.legend .wt-key { align-items: center; gap: .3rem; }
+.legend .wt-key .wt { width: 34px; height: 34px; }
+.drawer .wt-row { display: flex; align-items: center; gap: .6rem; }
+.drawer .trend-table { margin: 0; }
+.drawer .trend-table td.dir { font-family: var(--g-mono); white-space: nowrap; }
+.drawer .trend-table .arrow { display: inline-block; transform-origin: 50% 50%; }
+.drawer .trend-table tr.mean td { color: #6b7280; }
+.drawer .trend-table tr.fc td { color: #d97706; }
+.drawer .trend-table tr.latest td { font-weight: 600; }
+.drawer .trend-table tr.latest.slight td { color: #ca8a04; }
+.drawer .trend-table tr.latest.marked td { color: #ea580c; }
+.drawer .trend-table tr.latest.sharp td { color: #dc2626; }
+.drawer .shift-note.fc { border-color: #f59e0b; }
 .leaflet-container { font: inherit; }
 .leaflet-tooltip-pane { z-index: 1200; }
 .leaflet-tooltip.hx-tip { background: var(--p-bg-solid); color: var(--p-fg); border: 1px solid var(--p-line-strong); border-radius: 8px; box-shadow: var(--p-shadow); font-size: .78rem; line-height: 1.35; padding: .4rem .55rem; width: max-content; max-width: 26rem; white-space: normal; }

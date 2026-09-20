@@ -135,7 +135,7 @@ had meant 51 archive fetches).
 
 **Reversed, 19 September 2026.** The hexagons grew to 25 km the same day, which is already the scale a
 drought factor describes, and the areas were complexity for nothing: the drought is the hexagon's, like
-everything else the hexagon holds — spun up once per hexagon at its centre, about six units, stepped
+everything else the hexagon holds — spun up once per hexagon at its centre, twenty-six units, stepped
 daily from the station ledger for free, kept on the hexagon's row. `V4` dropped the areas' table. — James.
 
 ### W-12 · The station in the hexagon judges the forecast, on the four things it measures
@@ -246,3 +246,25 @@ change happens in and the files come every ten minutes; kept in the database bec
 fire season should not need an hour to see again. **What it costs.** Six small rows per station per
 hour of reading, and a swatch of colour on a map that is otherwise calm. — James, 19 September 2026.
 
+
+### W-17 · The wind as a trend: the five before, the latest, and the model an hour ahead, as one glyph
+
+**The decision.** Beside the change W-16 flags, the map draws where the wind has been, is and is
+going, at every fresh station, from zoom 8, as three arrows from one point: the mean of the five
+readings before the latest (grey; a vector mean of direction, so 350° and 10° average to north, and
+a calm is left out of it), the latest (black, or the grade's colour when the station has measured a
+change), and the model's wind an hour ahead from the station's hexagon (amber, dashed, on top, so
+where the model agrees its dashes ride the black arrow). A steady wind is one arrow; a change is a
+fan; a calm is a dot. The station's tooltip and the hexagon's drawer give the same three in numbers,
+with the model at one, three and six hours and the change the forecast expects when one is still to
+come. `WindTrend` is the arithmetic; the station point carries it (`windMean*`, `windTrend*`,
+`fc1h*`, `fc3h*`, `fc6h*`, `fcChange*`); a Trend toggle on the rail turns it off. The reading's
+contract is unchanged: the trend is the map's, computed here from the readings the reading already
+carries, and goes onto the API only when a consumer asks for it.
+
+**Why.** W-16 answers "has the wind changed?" with a flag and a grade. The question on a fireground
+is the one before it — "which way has it been, which way is it now, and which way will it be?" — and
+the answer is three directions and three speeds side by side, not a colour. Five readings because
+that is what is held behind the latest; the model an hour ahead because that is the arrow a crew
+can act on, and the change it expects because that is the one thing the forecast says that the
+ground has not yet. — James, 20 September 2026.

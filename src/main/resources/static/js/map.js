@@ -134,7 +134,7 @@
     var stationLayer = L.layerGroup().addTo(map);
     var glyphLayer = L.layerGroup().addTo(map);
     var state = {side: 'now', group: 'now', id: 'from', hours: 0, mode: 'now', playing: null};
-    var togs = {stations: true, wind: true, labels: true, borders: true, grid: false, points: false, forecasts: false};
+    var togs = {stations: true, wind: true, trend: true, labels: true, borders: true, grid: false, points: false, forecasts: false};
     var inView = true;
     var etag = null, lastFc = null, lastStations = null, lastSources = null;
 
@@ -291,6 +291,8 @@
             var pal = v.kind === 'rating' ? PALETTES.RATING : PALETTES[v.palette], keys = Object.keys(pal), h2 = '<div class="swatches">';
             if (v.kind === 'rating') { counts = {}; props.forEach(function (p) { var r = p[v.ratingOf]; if (r) counts[r] = (counts[r] || 0) + 1; }); keys = v.id === 'fbi' ? ['No Rating', 'Moderate', 'High', 'Extreme', 'Catastrophic'] : ['LOW-MODERATE', 'HIGH', 'VERY HIGH', 'SEVERE', 'EXTREME', 'CATASTROPHIC']; }
             keys.forEach(function (k) { h2 += '<span class="swatch"><i style="background:' + pal[k] + '"></i>' + esc(k.replace('_', ' ').toLowerCase()) + ' <b>' + (counts[k] || 0) + '</b></span>'; });
+            // The station glyph's key: the three arrows the trend toggle draws at every fresh station.
+            if (state.group === 'shift') h2 += '<span class="swatch wt-key">' + trendGlyph({windMeanDeg: 335, windMeanKmh: 22, windDirectionDeg: 250, windSpeedKmh: 30, fc1hWindDeg: 225, fc1hWindKmh: 34}) + '<span class="mean">mean of the five before</span> · <span class="latest">latest</span> · <span class="fc">model an hour ahead</span>' + (togs.trend ? '' : ' <span class="muted">(Trend is off)</span>') + '</span>';
             body.innerHTML = h2 + '</div>';
             return;
         }
@@ -339,9 +341,12 @@
     function atIso() { return state.hours === 0 ? null : new Date(Date.now() + state.hours * 3600000).toISOString(); }
     function load() {
         var at = atIso();
-        state.mode = state.hours === 0 ? 'now' : state.hours > 0 ? 'ahead' : 'history';
+        var mode = state.hours === 0 ? 'now' : state.hours > 0 ? 'ahead' : 'history', modeMoved = mode !== state.mode;
+        state.mode = mode;
         $('timeline').classList.toggle('ahead', state.mode === 'ahead');
         reconcile();
+        // The trend glyphs are a "now" thing: they go when the timeline leaves now and come back with it.
+        if (modeMoved) stations();
         if (loading) { wanted = at; return; }
         loading = true;
         var url = '/console/map/layer.geojson' + (at ? '?at=' + encodeURIComponent(at) : '');
@@ -423,6 +428,48 @@
         return '<svg class="hx-arrow ' + cls + '" width="24" height="24" viewBox="-12 -12 24 24" style="transform:rotate(' + to + 'deg)">'
             + '<line x1="0" y1="' + h + '" x2="0" y2="' + (-h) + '"/><polyline points="-3.5,' + (-h + 4) + ' 0,' + (-h) + ' 3.5,' + (-h + 4) + '"/></svg>';
     }
+    // ---- the wind trend at a station: three arrows from one point, each the way the wind blows and as
+    // long as it is strong - where it has mostly been (the mean of the readings before the latest, grey),
+    // where it is (the latest, black, or the grade's colour when the station has measured a change), and
+    // where the model says it is going (an hour ahead, amber, dashed). A steady wind is one arrow; a
+    // change is a fan. A calm is a dot.
+    function trendArrow(deg, kmh, cls) {
+        if (deg == null || kmh == null) return '';
+        if (kmh < 1) return '<circle class="' + cls + '" r="2.2"/>';
+        var len = 9 + Math.min(1, kmh / 60) * 17, to = (deg + 180) % 360;
+        return '<g class="' + cls + '" transform="rotate(' + to + ')"><line x1="0" y1="0" x2="0" y2="' + (-len) + '"/><polyline points="-3.6,' + (-len + 4.5) + ' 0,' + (-len) + ' 3.6,' + (-len + 4.5) + '"/></g>';
+    }
+    function trendGlyph(p) {
+        var latest = trendArrow(p.windDirectionDeg, p.windSpeedKmh, 'latest' + (p.windShift ? ' ' + p.windShift : ''));
+        if (!latest) return '';
+        // Mean under, latest over it, the model on top: where they agree the amber dashes ride the black arrow.
+        return '<svg class="wt" width="56" height="56" viewBox="-28 -28 56 56">'
+            + trendArrow(p.windMeanDeg, p.windMeanKmh, 'mean') + latest + trendArrow(p.fc1hWindDeg, p.fc1hWindKmh, 'fc') + '</svg>';
+    }
+    // The three in words, for the tooltip and the drawer: "mean of 5 (50 min) 355° 25 → now 225° 30 g 45 → +1 h 230° 28".
+    function dirWord(deg) { return deg == null ? '—' : ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(deg / 22.5) % 16]; }
+    function windWords(deg, kmh, gust) { return deg == null && kmh == null ? '—' : (deg != null ? dirWord(deg) + ' ' + deg + '°' : '—') + ' ' + (kmh != null ? Math.round(kmh) : '—') + (gust != null ? ' <span class="muted">g ' + Math.round(gust) + '</span>' : ''); }
+    function trendLines(p) {
+        if (p.windMeanOver == null && p.fc1hWindKmh == null && p.fcChangeAt == null) return '';
+        var s = '<div class="trend">';
+        if (p.windMeanOver != null) s += '<span class="mean">mean of ' + p.windMeanOver + ' <span class="muted">(' + p.windMeanMinutes + ' min)</span> ' + windWords(p.windMeanDeg, p.windMeanKmh, p.windMeanGustKmh) + '</span>';
+        s += '<span class="latest' + (p.windShift ? ' ' + esc(p.windShift) : '') + '">now ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh)
+            + (p.windTrendSwingDeg != null || p.windTrendDeltaKmh != null ? ' <span class="muted">' + (p.windTrendSwingDeg != null ? 'swung ' + p.windTrendSwingDeg + '°' : '') + (p.windTrendDeltaKmh != null ? (p.windTrendSwingDeg != null ? ', ' : '') + (p.windTrendDeltaKmh > 0 ? '+' : '') + Math.round(p.windTrendDeltaKmh) + ' km/h' : '') + ' on the mean</span>' : '') + '</span>';
+        if (p.fc1hWindKmh != null || p.fc3hWindKmh != null || p.fc6hWindKmh != null) s += '<span class="fc">model +1 h ' + windWords(p.fc1hWindDeg, p.fc1hWindKmh, p.fc1hGustKmh) + ' <span class="muted">· +3 h</span> ' + windWords(p.fc3hWindDeg, p.fc3hWindKmh, null) + ' <span class="muted">· +6 h</span> ' + windWords(p.fc6hWindDeg, p.fc6hWindKmh, null) + '</span>';
+        if (p.fcChangeAt) s += '<span class="fc change"><b>change expected ' + clock(p.fcChangeAt) + '</b> <span class="muted">(' + in_(p.fcChangeAt) + ')</span> ' + dirWord(p.fcChangeFromDeg) + ' ' + p.fcChangeFromDeg + '° → ' + dirWord(p.fcChangeToDeg) + ' ' + p.fcChangeToDeg + '° at ' + Math.round(p.fcChangeKmh) + ' km/h' + (p.fcChangeGustKmh != null ? ' <span class="muted">g ' + Math.round(p.fcChangeGustKmh) + '</span>' : '') + '</span>';
+        return s + '</div>';
+    }
+
+    // The station point the map holds, by id, for the drawer.
+    function stationProps(id) {
+        if (!id || !lastStations) return null;
+        for (var i = 0; i < lastStations.features.length; i++) if (lastStations.features[i].properties.id === id) return lastStations.features[i].properties;
+        return null;
+    }
+    function trendRow(label, cls, deg, kmh, gust) {
+        return '<tr class="' + cls + '"><td>' + label + '</td><td class="dir">' + (deg != null ? '<span class="arrow" style="transform:rotate(' + ((deg + 180) % 360) + 'deg)">↑</span> ' + dirWord(deg) + ' ' + deg + '°' : '—') + '</td><td class="num">' + (kmh != null ? Math.round(kmh) : '—') + '</td><td class="num">' + (gust != null ? Math.round(gust) : '—') + '</td></tr>';
+    }
+
     function glyphs() {
         glyphLayer.clearLayers();
         var z = map.getZoom();
@@ -480,11 +527,18 @@
                 var px = Math.round(r * 7);
                 L.marker(ll, {icon: L.divIcon({className: 'st-shift ' + p.windShift, html: '<i></i>', iconSize: [px, px], iconAnchor: [px / 2, px / 2]}), interactive: false, keyboard: false}).addTo(stationLayer);
             }
+            // The trend: the three arrows at the station, on the map as it is now (a snapshot has no "last five"), from zoom 8.
+            if (togs.trend && p.fresh && state.mode === 'now' && z >= 8) {
+                var g = trendGlyph(p);
+                if (g) L.marker(ll, {icon: L.divIcon({className: 'wt-glyph', html: g, iconSize: [56, 56], iconAnchor: [28, 28]}), interactive: false, keyboard: false}).addTo(stationLayer);
+            }
             if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
             L.circleMarker(ll, {renderer: canvas, radius: r, color: c, weight: p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0})
                 .bindTooltip(function () {
                     return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + ' · ' + esc((p.state || '').toUpperCase()) + (p.heightM != null ? ' · ' + p.heightM + ' m' : '') + '</span><br>'
                         + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + esc(fmt(p.windSpeedKmh)) + ' km/h' + (p.windDirectionDeg != null ? ' from ' + p.windDirectionDeg + '°' : '') + (p.windGustKmh != null ? ' gust ' + p.windGustKmh : '') + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + '<br><span class="muted">' + when(p.at) + '</span>'
+                            + (p.windShift ? '<br><span class="shift-line ' + esc(p.windShift) + '"><b>wind change</b> ' + esc(p.windShiftText || p.windShift) + '</span>' : '')
+                            + trendLines(p)
                             : '<span class="muted">' + (p.at ? 'last read ' + ago(p.at) + ': ' : '') + 'the file for its state has not been asked for lately</span>');
                 }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.hexagon); })
@@ -555,6 +609,18 @@
                 html += '<div class="muted" style="font-size:.74rem">' + esc(fmt(dr.temperatureC, 1)) + ' °C of 3 · ' + esc(fmt(dr.humidityPct)) + ' pts of 20 · ' + esc(fmt(dr.windKmh, 1)) + ' km/h of 15 · ' + esc(fmt(dr.rainMm, 1)) + ' mm of 5 · judged by ' + esc(dr.stationId) + ' at ' + clock(dr.at) + '</div>';
             }
             if (st.windShift) html += '<div class="shift-note ' + esc(st.windShift.grade) + '"><b>Wind change at ' + esc(st.id) + '</b> · ' + esc(st.windShift.description) + '</div>';
+            // The wind as a trend: where it has been, is and is going, from the station point the map already holds.
+            var sp = stationProps(st.id);
+            if (sp && sp.fresh && (sp.windMeanOver != null || sp.fc1hWindKmh != null)) {
+                html += '<h2>Wind at ' + esc(st.id) + ' <span class="muted">where it has been, is, and is going</span></h2>';
+                html += '<div class="wt-row">' + trendGlyph(sp).replace('class="wt"', 'class="wt big"') + '<table class="table table-sm trend-table"><thead><tr><th></th><th>from</th><th class="num">km/h</th><th class="num">gust</th></tr></thead><tbody>'
+                    + trendRow('mean of ' + sp.windMeanOver + ' <span class="muted">' + sp.windMeanMinutes + ' min</span>', 'mean', sp.windMeanDeg, sp.windMeanKmh, sp.windMeanGustKmh)
+                    + trendRow('now <span class="muted">' + clock(sp.at) + '</span>', 'latest' + (sp.windShift ? ' ' + esc(sp.windShift) : ''), sp.windDirectionDeg, sp.windSpeedKmh, sp.windGustKmh)
+                    + trendRow('model +1 h', 'fc', sp.fc1hWindDeg, sp.fc1hWindKmh, sp.fc1hGustKmh) + trendRow('model +3 h', 'fc', sp.fc3hWindDeg, sp.fc3hWindKmh, sp.fc3hGustKmh) + trendRow('model +6 h', 'fc', sp.fc6hWindDeg, sp.fc6hWindKmh, sp.fc6hGustKmh)
+                    + '</tbody></table></div>';
+                if (sp.windTrendSwingDeg != null || sp.windTrendDeltaKmh != null) html += '<div class="muted" style="font-size:.74rem">the latest against the mean: ' + (sp.windTrendSwingDeg != null ? 'swung ' + sp.windTrendSwingDeg + '°' : 'no usable swing') + (sp.windTrendDeltaKmh != null ? ', ' + (sp.windTrendDeltaKmh > 0 ? '+' : '') + sp.windTrendDeltaKmh + ' km/h' : '') + '</div>';
+                if (sp.fcChangeAt) html += '<div class="shift-note fc"><b>Change expected ' + clock(sp.fcChangeAt) + '</b> <span class="muted">' + in_(sp.fcChangeAt) + '</span> · ' + dirWord(sp.fcChangeFromDeg) + ' ' + sp.fcChangeFromDeg + '° → ' + dirWord(sp.fcChangeToDeg) + ' ' + sp.fcChangeToDeg + '° at ' + Math.round(sp.fcChangeKmh) + ' km/h' + (sp.fcChangeGustKmh != null ? ', gusts ' + Math.round(sp.fcChangeGustKmh) : '') + ' <span class="muted">· the model\'s</span></div>';
+            }
             if (nb && nb.stations) {
                 html += '<h2>' + (nb.ring === 0 ? 'Stations in it, blended' : 'Neighbours') + ' <span class="muted">' + (nb.ring === 0 ? 'inside the hexagon' : 'ring ' + nb.ring) + ' · ' + (nb.elevationApplied ? 'brought to ' + Math.round(nb.elevationM) + ' m at ' + nb.lapseTemperatureCPerKm + ' °C/km (dew point ' + nb.lapseDewPointCPerKm + ')' : 'not moved for height') + '</span></h2><table class="table table-sm"><thead><tr><th>station</th><th class="num">km</th><th class="num">height</th><th class="num">weight</th></tr></thead><tbody>';
                 nb.stations.forEach(function (x) { html += '<tr><td>' + esc(x.id) + ' <span class="muted">' + esc(x.name || '') + '</span></td><td class="num">' + fmt(x.distanceKm, 1) + '</td><td class="num">' + fmt(x.heightM) + '</td><td class="num">' + fmt(x.weight, 2) + '</td></tr>'; });
@@ -664,7 +730,7 @@
     document.querySelectorAll('.tog').forEach(function (b) {
         b.addEventListener('click', function () {
             var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]);
-            if (k === 'grid') grid(); else if (k === 'stations') stations(); else if (k === 'borders') restyle(); else if (k === 'points' || k === 'forecasts') { draw(); legend(); tiles(); } else glyphs();
+            if (k === 'grid') grid(); else if (k === 'stations' || k === 'trend') stations(); else if (k === 'borders') restyle(); else if (k === 'points' || k === 'forecasts') { draw(); legend(); tiles(); } else glyphs();
         });
     });
     $('railFold').addEventListener('click', function () { $('rail').classList.toggle('folded'); });
