@@ -137,8 +137,23 @@ class UpstreamsTest {
     }
 
     @Test
+    void thePacerWeighsACallAtWhatItCosts() {
+        Pacer pacer = new Pacer();
+        // Thirty a minute: a year of the archive at twenty-six leaves room for one forecast at five, not two.
+        assertThat(pacer.acquire("z", 30, OpenMeteo.ARCHIVE_UNITS)).isTrue();
+        assertThat(pacer.acquire("z", 30, OpenMeteo.SPEC.unitsPerFetch())).as("26 + 5 > 30: the minute is full").isFalse();
+        assertThat(pacer.acquire("z", 30, OpenMeteo.SMALL_UNITS)).as("26 + 1 fits").isTrue();
+        assertThat(pacer.inLastMinute("z")).as("counted as calls for the console").isEqualTo(2);
+        // A call heavier than the whole limit goes through on an empty minute rather than never.
+        assertThat(pacer.acquire("y", 5, OpenMeteo.ARCHIVE_UNITS)).isTrue();
+    }
+
+    @Test
     void theSpecsSayWhatTheyCost() {
         assertThat(OpenMeteo.SPEC.unitsPerFetch()).isEqualTo(5.0);
+        // Open-Meteo's weighting: a fortnight of up to ten variables is one call, so a year of two is 26.
+        assertThat(OpenMeteo.ARCHIVE_UNITS).isEqualTo(Math.floor(365 / 14.0));
+        assertThat(OpenMeteo.ARCHIVE_PATIENCE).isGreaterThan(Duration.ofSeconds(30));
         assertThat(OpenMeteo.SPEC.limits().perDay()).isEqualTo(10_000);
         assertThat(OpenMeteo.SPEC.bills()).isFalse();
         assertThat(GoogleWeather.SPEC.unitsPerFetch()).isEqualTo(3.0);

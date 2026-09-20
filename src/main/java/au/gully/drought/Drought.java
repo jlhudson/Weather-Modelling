@@ -127,7 +127,8 @@ public class Drought {
         int fromStations = days.size();
         fillGaps(cell, days, from, to, today);
         if (days.size() < Kbdi.WINDOW_DAYS) {
-            log.warn("drought spin-up for {}: only {} days available", cell.id(), days.size());
+            // The archive did not answer (it said so, once, at warn) or is out of allowance: deferred, not lost.
+            log.info("drought spin-up for {} deferred: only {} days available, tried again in {}", cell.id(), days.size(), RETRY_AFTER);
             return Optional.empty();
         }
         List<LocalDate> dates = new ArrayList<>(days.keySet());

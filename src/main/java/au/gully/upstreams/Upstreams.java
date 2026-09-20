@@ -88,7 +88,7 @@ public class Upstreams {
                 return f;
             } catch (UpstreamException | RuntimeException e) {
                 Duration latency = Duration.ofNanos(System.nanoTime() - started);
-                failed(u, e, latency, "forecast " + cell.id());
+                failed(u, e, latency, "forecast " + cell.id(), u.spec().unitsPerFetch());
                 skipped.add(id + ": " + e.getMessage());
             }
         }
@@ -134,8 +134,8 @@ public class Upstreams {
             breaker.succeeded(openMeteo.id());
             return Optional.of(out);
         } catch (UpstreamException | RuntimeException e) {
-            failed(openMeteo, e, Duration.ofNanos(System.nanoTime() - started), what);
-            log.warn("{} failed: {}", what, e.getMessage());
+            // failed() writes the ledger, tells the breaker and logs the one warning.
+            failed(openMeteo, e, Duration.ofNanos(System.nanoTime() - started), what, units);
             return Optional.empty();
         }
     }
@@ -156,16 +156,20 @@ public class Upstreams {
         if (!d.allowed()) {
             return d.reason();
         }
-        if (!pacer.acquire(u.id(), u.spec().perMinute())) {
+        if (!pacer.acquire(u.id(), u.spec().perMinute(), units)) {
             return "at the per-minute limit";
         }
         return null;
     }
 
-    private void failed(Upstream u, Exception e, Duration latency, String what) {
+    /**
+     * A call that failed is still a call made: charged at what it would have cost, counted by the
+     * breaker, and the one warning about it.
+     */
+    private void failed(Upstream u, Exception e, Duration latency, String what, double units) {
         int status = e instanceof UpstreamException ue ? ue.status() : 0;
         String detail = e.getMessage() == null ? e.toString() : e.getMessage();
-        ledger.record(u.id(), u.spec().unitsPerFetch(), false, latency, what + ": " + detail);
+        ledger.record(u.id(), units, false, latency, what + ": " + detail);
         Duration pause = u.pauseAfter(detail, status);
         boolean named = !pause.equals(u.spec().pauseAfterFailure());
         breaker.failed(u.id(), detail, pause, named);

@@ -1,6 +1,8 @@
 package au.gully.platform;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -9,6 +11,7 @@ import org.springframework.web.client.RestClient;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -19,18 +22,30 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link #getIfChanged} is the conditional read the Bureau asks for — the file's ETag and
  * Last-Modified are remembered per URL and sent back, so a file that has not changed costs a
  * {@code 304} and no body.
+ * <p>
+ * Every read is given the {@code spring.http.clients} timeouts (thirty seconds to answer whole),
+ * except one that says how long it will wait ({@link #get(URI, Duration)}): a year of the archive is
+ * one such read, and a slow answer is still an answer.
  */
 @Slf4j
 @Component
 public class HttpFetcher {
 
+    private final RestClient.Builder builder;
+    private final ClientHttpRequestFactoryBuilder<?> factories;
+    private final HttpClientSettings settings;
     private final RestClient client;
+    private final Map<Duration, RestClient> patient = new ConcurrentHashMap<>();
     private final Map<String, Validators> validators = new ConcurrentHashMap<>();
 
-    public HttpFetcher(RestClient.Builder builder, GullyProperties properties) {
+    public HttpFetcher(RestClient.Builder builder, ClientHttpRequestFactoryBuilder<?> factories, HttpClientSettings settings,
+                       GullyProperties properties) {
         String contact = properties.contact() == null || properties.contact().isBlank()
                 ? "https://github.com/jlhudson/Weather-Modelling" : properties.contact().trim();
-        this.client = builder.defaultHeader(HttpHeaders.USER_AGENT, "Gully/1.0 (+" + contact + ")").build();
+        this.builder = builder.defaultHeader(HttpHeaders.USER_AGENT, "Gully/1.0 (+" + contact + ")");
+        this.factories = factories;
+        this.settings = settings;
+        this.client = this.builder.build();
     }
 
     /**
@@ -46,12 +61,22 @@ public class HttpFetcher {
             return "";
         }
         String text = new String(body, 0, Math.min(body.length, 200), StandardCharsets.UTF_8)
-                .replaceAll("\\s+", " ").trim();
+                .replaceAll("\s+", " ").trim();
         return text.isEmpty() ? "" : ": " + text;
     }
 
     public Fetched get(URI uri) throws UpstreamException {
-        return get(uri, null, null);
+        return get(client, uri, null, null);
+    }
+
+    /**
+     * A GET that will wait {@code patience} for the whole answer instead of the configured read
+     * timeout: the same client otherwise, built once per distinct patience.
+     */
+    public Fetched get(URI uri, Duration patience) throws UpstreamException {
+        RestClient c = patient.computeIfAbsent(patience, p ->
+                builder.clone().requestFactory(factories.build(settings.withReadTimeout(p))).build());
+        return get(c, uri, null, null);
     }
 
     /**
@@ -68,6 +93,10 @@ public class HttpFetcher {
     }
 
     public Fetched get(URI uri, String etag, String lastModified) throws UpstreamException {
+        return get(client, uri, etag, lastModified);
+    }
+
+    private static Fetched get(RestClient client, URI uri, String etag, String lastModified) throws UpstreamException {
         try {
             ResponseEntity<byte[]> response = client.get()
                     .uri(uri)

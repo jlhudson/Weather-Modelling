@@ -24,7 +24,7 @@ drop table if exists weather_anchor, weather_call, drought_cell, river_cell;
 
 The drought cells were the ones the old docs said never to lose. They are not worth keeping now: the
 new drought state is per hexagon area and is rebuilt from the Bureau's station ledger and the archive
-on first ask, at about six allowance units per area, once.
+on first ask, at twenty-six allowance units per hexagon, once.
 
 Gully's own tables: `hexagon`, `reading_snapshot`, `station`, `station_sample`, `upstream_call`,
 `grass_curing`, `river_discharge`, since `V5` `forecast_drift` (every comparison of a station against

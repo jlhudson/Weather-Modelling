@@ -46,6 +46,8 @@ server:
 
 springdoc:
   api-docs:
+    # Deliberately served (README, docs/02): said so, or springdoc warns at every start that it is on.
+    enabled: true
     path: /api/v1/openapi.json
   paths-to-match: /api/v1/**
   swagger-ui:

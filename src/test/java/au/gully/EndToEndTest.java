@@ -170,6 +170,8 @@ class EndToEndTest {
     au.gully.hexagons.History history;
     @Autowired
     au.gully.hexagons.HexagonStore store;
+    @Autowired
+    au.gully.hexagons.Drifts drifts;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -252,6 +254,14 @@ class EndToEndTest {
         assertThat(history.allAt(now.plusSeconds(60))).containsKey(h.id());
         assertThat(store.ask(-34.93, 138.6, false, "INC0001").lastSnapshotAt()).as("inside three hours: one snapshot").isEqualTo(h.lastSnapshotAt());
         assertThat(history.countFor(h.id())).isEqualTo(1);
+
+        // The drift ledger takes a blend as its judge: three stations joined is twenty characters, which the
+        // first shape of the table refused, and with it the reading (V8).
+        db.sql("""
+                insert into forecast_drift (hexagon_id, at, station_id, upstream, temperature_c, humidity_pct, wind_kmh, rain_mm, score, worst, drifted, created_at)
+                values (:h, :at, :s, :u, 1.5, -4, 2.0, null, 0.5, 'temperature', false, :at)""")
+                .param("h", h.id()).param("at", au.gully.storage.Db.ts(now)).param("s", "023000+023034+023090").param("u", "open-meteo").update();
+        assertThat(drifts.recent(h.id(), 5)).extracting(au.gully.hexagons.Drift::stationId).contains("023000+023034+023090");
     }
 
     @Test

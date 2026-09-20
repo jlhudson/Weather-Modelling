@@ -55,10 +55,21 @@ public class OpenMeteo implements Upstream {
      */
     public static final int PAST_HOURS = 24;
 
-    /** The archive fetch behind a drought spin-up: a year of daily rain and temperature. */
-    public static final double ARCHIVE_UNITS = 6.0;
+    /**
+     * The archive fetch behind a drought spin-up: a year of daily rain and temperature. Open-Meteo's
+     * published weighting counts a fortnight of up to ten variables as one call, so 365 days is 26,
+     * whatever the number of variables under ten - and a burst of spin-ups charged at six met the
+     * minute limit long before the ledger said so.
+     */
+    public static final double ARCHIVE_UNITS = 26.0;
     /** A few past days from the forecast endpoint, and one river discharge series. */
     public static final double SMALL_UNITS = 1.0;
+    /**
+     * How long the archive is given to answer. A year of reanalysis at one point usually comes back in
+     * a second and sometimes in fifteen; the thirty seconds every other read gets was cutting off one
+     * in twenty, and a spin-up that loses its year waits a quarter of an hour to ask again.
+     */
+    public static final Duration ARCHIVE_PATIENCE = Duration.ofSeconds(90);
 
 
     private static final List<String> CURRENT = List.of("temperature_2m", "relative_humidity_2m",
@@ -213,7 +224,7 @@ public class OpenMeteo implements Upstream {
         String url = ARCHIVE + "?latitude=" + fixed(lat) + "&longitude=" + fixed(lon)
                 + "&start_date=" + start + "&end_date=" + end
                 + "&daily=precipitation_sum,temperature_2m_max&timezone=auto";
-        return daily(read(url));
+        return daily(read(url, ARCHIVE_PATIENCE));
     }
 
     /**
@@ -290,7 +301,14 @@ public class OpenMeteo implements Upstream {
     }
 
     private JsonNode read(String url) throws UpstreamException {
-        Fetched fetched = http.get(URI.create(url));
+        return read(http.get(URI.create(url)));
+    }
+
+    private JsonNode read(String url, Duration patience) throws UpstreamException {
+        return read(http.get(URI.create(url), patience));
+    }
+
+    private JsonNode read(Fetched fetched) throws UpstreamException {
         JsonNode root = mapper.readTree(fetched.bodyAsString());
         // Open-Meteo answers a bad request with 200-shaped JSON carrying error and reason.
         if (Boolean.TRUE.equals(Nodes.bool(root, "error"))) {

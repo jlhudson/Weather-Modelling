@@ -74,14 +74,22 @@ public class Drifts {
         return latest.size();
     }
 
+    /**
+     * The comparison written. The ledger is never read to answer a request, so a row it refuses must
+     * not fail one either: the comparison is still held in memory, and the loss is logged.
+     */
     private void record(String hexagonId, Drift d) {
-        db.sql("""
-                insert into forecast_drift (hexagon_id, at, station_id, upstream, temperature_c, humidity_pct, wind_kmh, rain_mm, score, worst, drifted, created_at)
-                values (:h, :at, :s, :u, :t, :rh, :w, :rain, :score, :worst, :drifted, :now)""")
-                .param("h", hexagonId).param("at", Db.ts(d.at())).param("s", d.stationId()).param("u", d.upstream())
-                .param("t", d.temperatureC()).param("rh", d.humidityPct()).param("w", d.windKmh()).param("rain", d.rainMm())
-                .param("score", d.score()).param("worst", d.worst()).param("drifted", d.drifted()).param("now", Db.ts(Instant.now()))
-                .update();
+        try {
+            db.sql("""
+                    insert into forecast_drift (hexagon_id, at, station_id, upstream, temperature_c, humidity_pct, wind_kmh, rain_mm, score, worst, drifted, created_at)
+                    values (:h, :at, :s, :u, :t, :rh, :w, :rain, :score, :worst, :drifted, :now)""")
+                    .param("h", hexagonId).param("at", Db.ts(d.at())).param("s", d.stationId()).param("u", d.upstream())
+                    .param("t", d.temperatureC()).param("rh", d.humidityPct()).param("w", d.windKmh()).param("rain", d.rainMm())
+                    .param("score", d.score()).param("worst", d.worst()).param("drifted", d.drifted()).param("now", Db.ts(Instant.now()))
+                    .update();
+        } catch (RuntimeException e) {
+            log.warn("drift for {} against {} not written: {}", hexagonId, d.stationId(), e.getMessage());
+        }
     }
 
     /**
