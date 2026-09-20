@@ -470,7 +470,7 @@ public class HexagonStore {
         ZoneId zone = zoneOf(h);
         DroughtState state;
         try {
-            state = drought.ensure(h.cell(), h.drought(), zone, LocalDate.now(zone)).orElse(null);
+            state = drought.ensure(h.cell(), h.drought(), zone, LocalDate.now(zone), h.elevationM(), this::around).orElse(null);
         } catch (RuntimeException e) {
             log.warn("drought for {} not computed: {}", h.id(), e.getMessage());
             return h;
@@ -495,13 +495,13 @@ public class HexagonStore {
         int remade = 0;
         for (String id : hexagons.keySet()) {
             Hexagon h = hexagons.get(id);
-            if (h == null || h.drought() == null) {
+            if (h == null || h.drought() == null || h.drought().interpolated()) {
                 continue;
             }
             ZoneId zone = zoneOf(h);
             Optional<DroughtState> state;
             try {
-                state = drought.respin(h.cell(), LocalDate.now(zone));
+                state = drought.respin(h.cell(), LocalDate.now(zone), h.elevationM());
             } catch (RuntimeException e) {
                 log.warn("drought for {} not remade: {}", id, e.getMessage());
                 continue;
@@ -514,8 +514,59 @@ public class HexagonStore {
             recompute(id, now);
             remade++;
         }
+        // The interpolated ones follow: made again from the hexagons around them, as they now stand.
+        for (String id : hexagons.keySet()) {
+            Hexagon h = hexagons.get(id);
+            if (h == null || h.drought() == null || !h.drought().interpolated()) {
+                continue;
+            }
+            Optional<DroughtState> made = drought.interpolate(h.cell(), h.elevationM(), this::around);
+            if (made.isPresent()) {
+                Hexagon after = replace(id, old -> old.withDrought(made.get()));
+                repository.saveDrought(after);
+                recompute(id, now);
+                remade++;
+            }
+        }
         log.info("droughts remade from the record: {}", remade);
         return remade;
+    }
+
+    /**
+     * A hexagon around another, as the drought's interpolation asks for it (W-22): the drought it
+     * holds and its height, or empty when nothing is held there.
+     */
+    private Optional<Drought.Neighbour> around(Cell cell) {
+        Hexagon h = hexagons.get(cell.id());
+        return h == null || h.drought() == null ? Optional.empty() : Optional.of(new Drought.Neighbour(h.drought(), h.elevationM()));
+    }
+
+    /**
+     * The operator's spin-up (W-22): a drought of the hexagon's own for the point, whatever it holds -
+     * the hexagon created if need be, its elevation read, the year fetched. The one way to spend an
+     * archive call on purpose.
+     *
+     * @return the hexagon as it stands after, its drought its own when the year could be fed
+     */
+    public Hexagon spinDrought(double lat, double lon) {
+        Instant now = Instant.now();
+        Cell cell = grid.cellOf(lat, lon);
+        Hexagon h = hexagons.computeIfAbsent(cell.id(), k -> create(cell, now));
+        h = ensureElevation(h, now);
+        ZoneId zone = zoneOf(h);
+        Optional<DroughtState> state;
+        try {
+            state = drought.spinOwn(h.cell(), LocalDate.now(zone), h.elevationM());
+        } catch (RuntimeException e) {
+            log.warn("drought for {} not spun up: {}", h.id(), e.getMessage());
+            return h;
+        }
+        if (state.isEmpty()) {
+            return h;
+        }
+        Hexagon after = replace(h.id(), old -> old.withDrought(state.get()));
+        repository.saveDrought(after);
+        return recompute(h.id(), now);
     }
 
     private Hexagon ensureRiver(Hexagon h, double lat, double lon, Instant now) {

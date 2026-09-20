@@ -23,8 +23,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static au.gully.science.Numbers.round1;
-
 /**
  * {@code GET /api/v1/drought?lat=&lon=&days=} (W-20): the drought at a point, and the record behind
  * it - the soil moisture deficit and the drought factor as the reading carries them, where the
@@ -49,21 +47,36 @@ public class DroughtController {
     private final HexagonStore store;
     private final Drought drought;
     private final DroughtDays days;
+    private final au.gully.drought.DroughtRule rule;
 
     /**
-     * @param from     where the deficit's inputs came from: {@code stations}, {@code archive} or {@code stations+archive}
-     * @param stations the stations feeding the hexagon's days - inside it or within its reach, else the nearest within 75 km
-     * @param days     the record, oldest first, as many as asked for
-     * @param rain     the rain the record adds up to over the last 7, 30, 90 and 365 days, where the record covers them
+     * @param from         where the deficit's inputs came from: {@code stations}, {@code archive}, {@code stations+archive} -
+     *                     or {@code interpolated}, from the spun-up hexagons around it (W-22)
+     * @param fromHexagons the hexagons an interpolated drought was made from, nearest first; empty otherwise
+     * @param stations     the stations feeding the hexagon's days under the rule in force: those counting for it (ring 0),
+     *                     else the one nearest by effective distance in the nearest ring that has any
+     * @param rule         the rule in force: rings searched and what a hundred metres of height costs in kilometres
+     * @param days         the record, oldest first, as many as asked for
+     * @param rain         the rain the record adds up to over the last 7, 30, 90 and 365 days, where the record covers them
      */
     public record DroughtReading(String schema, boolean available, String unavailable, Reading.Point point, HexagonRef hexagon,
-                                 DroughtIndex drought, String from, List<StationRef> stations, List<Day> days, Rain rain, String disclaimer) {
+                                 DroughtIndex drought, String from, List<String> fromHexagons, List<StationRef> stations, Rule rule,
+                                 List<Day> days, Rain rain, String disclaimer) {
     }
 
-    public record HexagonRef(String id, double lat, double lon, double widthKm, String zone, String fireBanDistrict, String stationId) {
+    public record Rule(int rings, double kmPer100m) {
     }
 
-    public record StationRef(String id, String name, double distanceKm, Double heightM) {
+    public record HexagonRef(String id, double lat, double lon, double widthKm, Double elevationM, String zone, String fireBanDistrict, String stationId) {
+    }
+
+    /**
+     * @param ring        0 counting for the hexagon; else the ring it was found in
+     * @param effectiveKm the ground distance plus what the height between costs, which ranked it
+     * @param heightDiffM the station's height less the hexagon's mean elevation; null when either is unknown
+     * @param maxOffsetC  what its daily maximum is moved by to reach the hexagon's elevation
+     */
+    public record StationRef(String id, String name, double distanceKm, Double heightM, int ring, double effectiveKm, Double heightDiffM, double maxOffsetC) {
     }
 
     public record Day(LocalDate date, double rainMm, double maxTemperatureC, String source) {
@@ -92,10 +105,11 @@ public class DroughtController {
         Hexagon h = store.ask(lat, lon, false, ref);
         Reading.Point point = new Reading.Point(lat, lon);
         Grid grid = store.grid();
-        HexagonRef hex = new HexagonRef(h.id(), round(h.cell().lat()), round(h.cell().lon()), grid.cellKm(), h.zone(), h.fireBanDistrict(), h.stationId());
-        List<StationRef> feeding = drought.stationsFor(h.cell()).stream()
-                .map(s -> new StationRef(s.id(), s.name(), round1(Grid.planarMetres(h.cell().lat(), h.cell().lon(), s.lat(), s.lon()) / 1000), s.heightM()))
+        HexagonRef hex = new HexagonRef(h.id(), round(h.cell().lat()), round(h.cell().lon()), grid.cellKm(), h.elevationM(), h.zone(), h.fireBanDistrict(), h.stationId());
+        List<StationRef> feeding = drought.feed(h.cell(), h.elevationM()).stream()
+                .map(f -> new StationRef(f.station().id(), f.station().name(), f.km(), f.station().heightM(), f.ring(), f.effectiveKm(), f.heightDiffM(), f.maxOffsetC()))
                 .toList();
+        Rule inForce = new Rule(rule.rings(), rule.kmPer100m());
         List<DroughtDays.Day> record = this.days.recent(h.id(), DAYS_MAX);
         List<Day> recent = record.stream().skip(Math.max(0, record.size() - n))
                 .map(d -> new Day(d.day(), d.rainMm(), d.maxTemperatureC(), d.source())).toList();
@@ -103,9 +117,9 @@ public class DroughtController {
         DroughtReading out;
         if (h.drought() == null) {
             out = new DroughtReading(SCHEMA, false, "no drought yet: the spin-up needs a year of days and could not be fed - the archive is "
-                    + "out of allowance or the upstream is off; it is tried again on a later ask", point, hex, null, null, feeding, recent, rain, Reading.DISCLAIMER);
+                    + "out of allowance or the upstream is off; it is tried again on a later ask", point, hex, null, null, List.of(), feeding, inForce, recent, rain, Reading.DISCLAIMER);
         } else {
-            out = new DroughtReading(SCHEMA, true, null, point, hex, h.drought().index(), h.drought().from(), feeding, recent, rain, Reading.DISCLAIMER);
+            out = new DroughtReading(SCHEMA, true, null, point, hex, h.drought().index(), h.drought().from(), h.drought().fromHexagons(), feeding, inForce, recent, rain, Reading.DISCLAIMER);
         }
         // Stepped once a day: an hour is a safe age for a client's copy.
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate()).body(out);
@@ -122,7 +136,7 @@ public class DroughtController {
         for (int i = record.size() - lastDays; i < record.size(); i++) {
             total += record.get(i).rainMm();
         }
-        return round1(total);
+        return Math.round(total * 10) / 10.0;
     }
 
     private static double round(double v) {

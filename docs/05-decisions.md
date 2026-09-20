@@ -387,3 +387,34 @@ drought factor. One day, the Bureau's, ends that. And a year of reanalysis paid 
 twenty-six units and consumed into a number could not be looked at, let alone used again when the
 rule for choosing stations changed; kept raw, per point, it is the rain the place had, which is the
 thing worth keeping. — James, 20 September 2026.
+
+### W-22 · A drought's stations by rings and height, not a radius; a hexagon without one takes its spun-up neighbours; the operator spins one up on purpose
+
+**The decision.** The 75 km radius that found a station for a hexagon with none of its own is
+gone. A drought's stations are those counting for the hexagon (ring 0, the reach) or, when none
+does, the one station of the nearest ring that has any — up to *rings* rings out (3 by default,
+about 51 km) — ranked by *effective distance*: the ground distance plus *k* kilometres for every
+hundred metres between the station's height and the hexagon's mean elevation (10 by default). Both
+are settings (`DroughtRule`), turned on the map and kept in the setting table; a change remakes
+every drought from the record (W-21). Rain is taken as measured; the station's daily maximum is
+brought to the hexagon's elevation by the lapse rate before it is used. `/drought` says which
+station feeds a hexagon, from which ring, at what effective distance, and what its maximum was
+moved by.
+
+A hexagon with no drought of its own is not spun up first: it takes the spun-up hexagons within
+the same rings, each weighted by the inverse square of the same effective distance — deficit,
+mean annual rainfall and the twenty-day window blended, `from: interpolated`, the sources named
+nearest first — and it is never stepped, it is made again from theirs whenever it is stale. Only
+a hexagon with none near pays for its own year. The operator spins a hexagon up on purpose from
+the map (**spin up here**, `POST /console/map/drought/spin`), which is the one deliberate way to
+spend an archive call, and the drought feed layer draws every spun-up hexagon as a point at its
+centre with a spoke to each station feeding it under the sliders' rule, and each interpolated one
+with spokes to the hexagons it was made from.
+
+**Why.** Adelaide, the Hills and Murray Bridge sit inside 75 km of each other and are three
+different droughts; a radius cannot tell them apart and a station 700 m up the range is the
+wrong station for the plain however close it is. Height as distance is one number that gets all
+three right without drawing an area by hand. And the archive is worth spending once for a place
+that matters — the busy areas the operator knows — not once for every hexagon a fire truck drives
+through; the ones between are better served by the ones that were, weighed by where and how high
+they are. — James, 20 September 2026.

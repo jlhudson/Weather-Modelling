@@ -184,8 +184,10 @@ Three routes that say what they are, for callers that want one half and not the 
 - `GET /api/v1/drought?lat=&lon=&days=30&ref=` — the drought at the point and the record behind it
   (`gully/drought/1`): `drought` as the reading carries it (KBDI, its band, the drought factor, the
   mean annual rainfall, the spin-up's span), `from` (`stations`, `archive` or `stations+archive`),
-  `stations` — the ones feeding the hexagon's days, inside it or within reach, else the nearest within
-  75 km — `days`, the last so many days of rain and maximum the deficit was stepped with, oldest first,
+  `fromHexagons` (the spun-up hexagons an interpolated drought was made from, nearest first),
+  `stations` — the ones feeding the hexagon's days under `rule` (rings and km per 100 m): those counting
+  for it at ring 0, else the one nearest by effective distance in the nearest ring that has any, each with
+  its `ring`, `effectiveKm`, `heightDiffM` and `maxOffsetC` — `days`, the last so many days of rain and maximum the deficit was stepped with, oldest first,
   each with its `source` (`stations`, `archive`, `recent`) — every day the Bureau's rain day, 9 am to
   9 am local (W-21) — and `rain`, the totals those days add up to
   over 7, 30, 90 and 365 days (null where the record does not reach that far). `available: false`

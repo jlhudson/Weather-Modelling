@@ -450,6 +450,15 @@ public class StationRegistry {
      * @param to   inclusive
      */
     public SortedMap<LocalDate, DailyInput> daily(List<Station> of, LocalDate from, LocalDate to) {
+        return daily(of, from, to, Map.of());
+    }
+
+    /**
+     * The same, with each station's maximum moved by an offset before the stations are combined: the
+     * lapse rate bringing a station's day to the hexagon's elevation (W-22). A station not in the
+     * map is taken as it is.
+     */
+    public SortedMap<LocalDate, DailyInput> daily(List<Station> of, LocalDate from, LocalDate to, Map<String, Double> maxOffsetC) {
         SortedMap<LocalDate, DailyInput> out = new TreeMap<>();
         if (of.isEmpty()) {
             return out;
@@ -482,6 +491,7 @@ public class StationRegistry {
                     // Two nullable values: never a mixed ternary, which unboxes the null.
                     Double candidate = max == null ? t : t == null ? max : Double.valueOf(Math.max(max, t));
                     if (candidate != null) {
+                        candidate = candidate + maxOffsetC.getOrDefault(id, 0.0);
                         // The maximum belongs to the rain day too (W-21): a sample before 9 am is still the day before's.
                         LocalDate maxDay = local.toLocalTime().isBefore(RAIN_DAY_ENDS) ? day.minusDays(1) : day;
                         maxByDay.computeIfAbsent(maxDay, d -> new HashMap<>()).merge(id, candidate, Math::max);

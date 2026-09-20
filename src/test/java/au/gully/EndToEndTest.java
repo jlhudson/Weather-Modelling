@@ -204,6 +204,10 @@ class EndToEndTest {
     au.gully.drought.DroughtDays droughtDays;
     @Autowired
     au.gully.drought.ArchiveDays archiveDays;
+    @Autowired
+    au.gully.drought.DroughtRule droughtRule;
+    @Autowired
+    au.gully.drought.Drought drought;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -325,6 +329,17 @@ class EndToEndTest {
         assertThat(archiveDays.of(h.cell().lat(), h.cell().lon(), day, day).get(day).rainMm()).isEqualTo(3.0);
         assertThat(archiveDays.count()).isEqualTo(2);
         assertThat(store.respinDroughts()).as("no hexagon holds a drought to remake").isZero();
+        // The drought's rule (W-22): set, it is written, survives a reload, and the feed follows it; the operator's
+        // spin-up with no upstream finds no year and leaves the hexagon without a drought, honestly.
+        assertThat(droughtRule.isDefault()).isTrue();
+        droughtRule.set(2, 5.5, "test");
+        droughtRule.rehydrate();
+        assertThat(droughtRule.rings()).isEqualTo(2);
+        assertThat(droughtRule.kmPer100m()).isEqualTo(5.5);
+        assertThat(droughtRule.by()).isEqualTo("test");
+        assertThat(drought.feed(h.cell(), h.elevationM())).as("West Terrace counts for the hexagon: ring 0").extracting(au.gully.drought.Drought.Fed::ring).contains(0);
+        assertThat(store.spinDrought(-34.93, 138.6).drought()).isNull();
+        droughtRule.set(au.gully.drought.DroughtRule.DEFAULT_RINGS, au.gully.drought.DroughtRule.DEFAULT_KM_PER_100M, "test");
         assertThat(history.prune(now)).as("nothing is five years old").isZero();
 
         // The drift ledger takes a blend as its judge: three stations joined is twenty characters, which the
@@ -383,7 +398,7 @@ class EndToEndTest {
             }
         }
         for (String feed : new String[]{"/console/map/layer.geojson", "/console/map/grid.geojson?south=-35.2&west=138.3&north=-34.7&east=138.9",
-                "/console/map/stations.geojson", "/console/map/coverage.geojson?reachKm=10", "/console/map/sources.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+                "/console/map/stations.geojson", "/console/map/coverage.geojson?reachKm=10", "/console/map/drought-feed.geojson?rings=2&kmPer100m=5", "/console/map/sources.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }

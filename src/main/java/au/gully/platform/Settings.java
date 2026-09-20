@@ -47,6 +47,8 @@ public class Settings {
         m.put("grid.cell-km (constant)", Grid.CELL_KM);
         m.put("grid.anchor (constant)", Grid.ANCHOR_LAT + "," + Grid.ANCHOR_LON);
         m.put("grid.station-reach-km (default; the console may hold another, read with the registers)", Grid.DEFAULT_STATION_REACH_KM);
+        m.put("drought.rings (default; the console may hold another)", au.gully.drought.DroughtRule.DEFAULT_RINGS);
+        m.put("drought.km-per-100m (default; the console may hold another)", au.gully.drought.DroughtRule.DEFAULT_KM_PER_100M);
         return m;
     }
 

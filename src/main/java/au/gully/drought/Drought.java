@@ -50,11 +50,6 @@ public class Drought {
     static final int ARCHIVE_LAG_DAYS = 5;
 
     /**
-     * When a hexagon has no station in it, the nearest within this reach stands in.
-     */
-    static final double STATION_REACH_KM = 75;
-
-    /**
      * Used for the equation's mean annual rainfall only when the window is too short to derive it.
      */
     static final double DEFAULT_ANNUAL_RAIN_MM = 550;
@@ -74,15 +69,30 @@ public class Drought {
     private final Upstreams upstreams;
     private final DroughtDays record;
     private final ArchiveDays archive;
+    private final DroughtRule rule;
     private final Map<String, Object> locks = new ConcurrentHashMap<>();
     private final Map<String, Instant> attempts = new ConcurrentHashMap<>();
 
-    public Drought(Grid grid, StationRegistry stations, Upstreams upstreams, DroughtDays days, ArchiveDays archive) {
+    public Drought(Grid grid, StationRegistry stations, Upstreams upstreams, DroughtDays days, ArchiveDays archive, DroughtRule rule) {
         this.grid = grid;
         this.stations = stations;
         this.upstreams = upstreams;
         this.record = days;
         this.archive = archive;
+        this.rule = rule;
+    }
+
+    /**
+     * A hexagon around another, as the interpolation sees it: its drought and its height.
+     */
+    public record Neighbour(DroughtState drought, Double elevationM) {
+    }
+
+    /**
+     * What the store knows about the hexagons around a cell, asked one cell at a time.
+     */
+    public interface Around {
+        Optional<Neighbour> at(Cell cell);
     }
 
     /**
@@ -92,7 +102,7 @@ public class Drought {
      * day's inputs not in yet — is tried again after a while, not on every ask. Empty when the
      * hexagon has nothing and nothing could be made.
      */
-    public Optional<DroughtState> ensure(Cell cell, DroughtState held, ZoneId zone, LocalDate today) {
+    public Optional<DroughtState> ensure(Cell cell, DroughtState held, ZoneId zone, LocalDate today, Double elevationM, Around around) {
         synchronized (locks.computeIfAbsent(cell.id(), k -> new Object())) {
             // The last complete rain day: yesterday once today's 9 am total is in the files, the day before until then.
             ZonedDateTime local = Instant.now().atZone(zone);
@@ -100,16 +110,95 @@ public class Drought {
             if (held != null && !held.computedFor().isBefore(yesterday)) {
                 return Optional.of(held);
             }
+            // A hexagon with no drought of its own takes the spun-up hexagons around it (W-22), and keeps
+            // taking them: an interpolated state is never stepped, it is made again from theirs.
+            if (held == null || held.interpolated()) {
+                Optional<DroughtState> made = interpolate(cell, elevationM, around);
+                if (made.isPresent()) {
+                    return made;
+                }
+                if (held != null) {
+                    return Optional.of(held);
+                }
+            }
             Instant last = attempts.get(cell.id());
             if (last != null && Instant.now().isBefore(last.plus(RETRY_AFTER))) {
                 return Optional.ofNullable(held);
             }
             attempts.put(cell.id(), Instant.now());
             if (held == null) {
-                return spinUp(cell, today, true);
+                return spinUp(cell, today, true, elevationM);
             }
-            return Optional.of(stepTo(cell, held, yesterday));
+            return Optional.of(stepTo(cell, held, yesterday, elevationM));
         }
+    }
+
+    /**
+     * A drought of the hexagon's own, spun up now whatever it holds (W-22): the operator's spin-up
+     * from the map, for a place worth its own year. Costs the archive call the hexagon has not made.
+     */
+    public Optional<DroughtState> spinOwn(Cell cell, LocalDate today, Double elevationM) {
+        synchronized (locks.computeIfAbsent(cell.id(), k -> new Object())) {
+            attempts.put(cell.id(), Instant.now());
+            return spinUp(cell, today, true, elevationM);
+        }
+    }
+
+    /**
+     * The drought interpolated from the spun-up hexagons within the rule's rings (W-22), each
+     * weighted by the inverse square of its effective distance - ground distance plus what the height
+     * between costs - or empty when none is near. The deficit, the mean annual rainfall and the
+     * twenty-day window are blended; the state says which hexagons it came from, nearest first.
+     */
+    public Optional<DroughtState> interpolate(Cell cell, Double elevationM, Around around) {
+        if (around == null || rule.rings() == 0) {
+            return Optional.empty();
+        }
+        record Source(String id, DroughtState state, double effectiveKm) {
+        }
+        List<Source> sources = new ArrayList<>();
+        for (int r = 1; r <= rule.rings(); r++) {
+            for (Cell c : grid.ring(cell, r)) {
+                Optional<Neighbour> n = around.at(c);
+                if (n.isEmpty() || n.get().drought() == null || n.get().drought().interpolated()) {
+                    continue;
+                }
+                double km = Grid.planarMetres(cell.lat(), cell.lon(), c.lat(), c.lon()) / 1000;
+                sources.add(new Source(c.id(), n.get().drought(), Math.max(0.5, rule.effectiveKm(km, n.get().elevationM(), elevationM))));
+            }
+        }
+        if (sources.isEmpty()) {
+            return Optional.empty();
+        }
+        sources.sort(Comparator.comparingDouble(Source::effectiveKm));
+        double weightSum = 0, kbdi = 0, annual = 0;
+        int windowLength = sources.getFirst().state().recentRainMm().size();
+        double[] window = new double[windowLength];
+        double windowWeight = 0;
+        LocalDate computedFor = null, spunUpFrom = null;
+        int days = Integer.MAX_VALUE;
+        for (Source src : sources) {
+            double w = 1 / (src.effectiveKm() * src.effectiveKm());
+            weightSum += w;
+            kbdi += w * src.state().kbdiMm();
+            annual += w * src.state().meanAnnualRainfallMm();
+            if (src.state().recentRainMm().size() == windowLength) {
+                windowWeight += w;
+                for (int i = 0; i < windowLength; i++) {
+                    Double v = src.state().recentRainMm().get(i);
+                    window[i] += w * (v == null ? 0 : v);
+                }
+            }
+            computedFor = computedFor == null || src.state().computedFor().isBefore(computedFor) ? src.state().computedFor() : computedFor;
+            spunUpFrom = spunUpFrom == null || src.state().spunUpFrom().isAfter(spunUpFrom) ? src.state().spunUpFrom() : spunUpFrom;
+            days = Math.min(days, src.state().days());
+        }
+        List<Double> blended = new ArrayList<>();
+        for (double v : window) {
+            blended.add(windowWeight == 0 ? 0 : Math.round(v / windowWeight * 10) / 10.0);
+        }
+        return Optional.of(new DroughtState(kbdi / weightSum, annual / weightSum, spunUpFrom, computedFor, days, blended,
+                "interpolated", sources.stream().map(Source::id).toList()));
     }
 
     // ---------------------------------------------------------------- the maths
@@ -119,12 +208,12 @@ public class Drought {
      * have it and the archive at the centre for the rest, integrated into a deficit. Empty when
      * neither could supply enough days.
      */
-    Optional<DroughtState> spinUp(Cell cell, LocalDate today, boolean mayFetch) {
+    Optional<DroughtState> spinUp(Cell cell, LocalDate today, boolean mayFetch, Double elevationM) {
         LocalDate from = today.minusDays(SPIN_UP_DAYS);
         LocalDate to = today.minusDays(1);
-        List<Station> around = stationsFor(cell);
+        List<Fed> feeding = feed(cell, elevationM);
         SortedMap<LocalDate, Input> days = new TreeMap<>();
-        stations.daily(around, from, to).forEach((d, in) -> {
+        stations.daily(feeding.stream().map(Fed::station).toList(), from, to, offsets(feeding)).forEach((d, in) -> {
             if (in.rainMm() != null && in.maxTemperatureC() != null) {
                 days.put(d, new Input(in.rainMm(), in.maxTemperatureC(), "stations"));
             }
@@ -162,7 +251,7 @@ public class Drought {
                 dates.size(), window, source);
         log.info("drought {}: KBDI {} mm, DF {}, from {} days ({} from {} stations)", cell.id(),
                 Math.round(state.kbdiMm()), au.gully.science.Numbers.round1(state.droughtFactor()), dates.size(),
-                fromStations, around.size());
+                fromStations, feeding.size());
         return Optional.of(state);
     }
 
@@ -171,14 +260,14 @@ public class Drought {
      * with the recent-days call at the centre filling any day they missed. Stops at the first day
      * nothing can supply, and says how far it got.
      */
-    DroughtState stepTo(Cell cell, DroughtState state, LocalDate upTo) {
+    DroughtState stepTo(Cell cell, DroughtState state, LocalDate upTo, Double elevationM) {
         LocalDate from = state.computedFor().plusDays(1);
         if (from.isAfter(upTo)) {
             return state;
         }
-        List<Station> around = stationsFor(cell);
+        List<Fed> feeding = feed(cell, elevationM);
         SortedMap<LocalDate, Input> days = new TreeMap<>();
-        stations.daily(around, from, upTo).forEach((d, in) -> {
+        stations.daily(feeding.stream().map(Fed::station).toList(), from, upTo, offsets(feeding)).forEach((d, in) -> {
             if (in.rainMm() != null && in.maxTemperatureC() != null) {
                 days.put(d, new Input(in.rainMm(), in.maxTemperatureC(), "stations"));
             }
@@ -221,9 +310,9 @@ public class Drought {
      * stations, or to the reach, calls for on every hexagon holding one. Empty when the record
      * cannot supply the year, in which case the state held stands.
      */
-    public Optional<DroughtState> respin(Cell cell, LocalDate today) {
+    public Optional<DroughtState> respin(Cell cell, LocalDate today, Double elevationM) {
         synchronized (locks.computeIfAbsent(cell.id(), k -> new Object())) {
-            return spinUp(cell, today, false);
+            return spinUp(cell, today, false, elevationM);
         }
     }
 
@@ -301,15 +390,72 @@ public class Drought {
     }
 
     /**
-     * The stations of a hexagon: those inside it, else the nearest within reach of its centre.
+     * A station feeding a hexagon's drought, and how it was chosen (W-22).
+     *
+     * @param ring        0 inside the hexagon or within its reach; else the ring it was found in
+     * @param km          the ground distance from the hexagon's centre
+     * @param effectiveKm the ground distance plus what the height between costs, which ranked it
+     * @param heightDiffM the station's height less the hexagon's mean elevation; null when either is unknown
+     * @param maxOffsetC  what is added to the station's daily maximum to bring it to the hexagon's elevation
      */
-    public List<Station> stationsFor(Cell cell) {
-        List<Station> inside = stations.inCells(grid, List.of(cell));
+    public record Fed(Station station, int ring, double km, double effectiveKm, Double heightDiffM, double maxOffsetC) {
+    }
+
+    /**
+     * The stations feeding a hexagon under the rule in force: every station counting for the hexagon
+     * (ring 0) - or, when none does, the one station of the nearest ring that has any, nearest by
+     * effective distance. Empty when no ring within the rule has a station.
+     */
+    public List<Fed> feed(Cell cell, Double elevationM) {
+        return feed(cell, elevationM, rule.rings(), rule.kmPer100m());
+    }
+
+    /**
+     * The same under a rule that is not the one in force: the map's preview as the sliders move.
+     */
+    public List<Fed> feed(Cell cell, Double elevationM, int rings, double kmPer100m) {
+        List<Fed> inside = new ArrayList<>();
+        for (Station s : stations.inCells(grid, List.of(cell))) {
+            inside.add(fed(cell, s, 0, elevationM, kmPer100m));
+        }
         if (!inside.isEmpty()) {
+            inside.sort(Comparator.comparingDouble(Fed::effectiveKm));
             return inside;
         }
-        return stations.within(cell.lat(), cell.lon(), STATION_REACH_KM).stream()
-                .limit(1).map(StationRegistry.Nearest::station).toList();
+        Set<String> seen = new HashSet<>();
+        for (int r = 1; r <= rings; r++) {
+            Fed best = null;
+            for (Station s : stations.inCells(grid, grid.ring(cell, r))) {
+                if (!seen.add(s.id())) {
+                    continue;
+                }
+                Fed f = fed(cell, s, r, elevationM, kmPer100m);
+                if (best == null || f.effectiveKm() < best.effectiveKm()) {
+                    best = f;
+                }
+            }
+            if (best != null) {
+                return List.of(best);
+            }
+        }
+        return List.of();
+    }
+
+    private static Fed fed(Cell cell, Station s, int ring, Double elevationM, double kmPer100m) {
+        double km = Grid.planarMetres(cell.lat(), cell.lon(), s.lat(), s.lon()) / 1000;
+        Double diff = elevationM == null || s.heightM() == null ? null : s.heightM() - elevationM;
+        double effective = diff == null ? km : km + kmPer100m * Math.abs(diff) / 100.0;
+        // The lapse rate brings the station's maximum to the hexagon's elevation: a station below it reads warm.
+        double offset = diff == null ? 0 : Math.round(au.gully.hexagons.Interpolation.LAPSE_TEMPERATURE_C_PER_KM * (-diff) / 1000 * 10) / 10.0;
+        return new Fed(s, ring, Math.round(km * 10) / 10.0, Math.round(effective * 10) / 10.0, diff == null ? null : Math.round(diff * 10) / 10.0, offset);
+    }
+
+    private static Map<String, Double> offsets(List<Fed> feeding) {
+        Map<String, Double> out = new HashMap<>();
+        for (Fed f : feeding) {
+            out.put(f.station().id(), f.maxOffsetC());
+        }
+        return out;
     }
 
     /**

@@ -67,8 +67,8 @@ cadence (six hours) and the rain day (9 am); the CFS URLs and the same ages (`Ra
 rings (2), share (0.30 — 2 of 6, 6 of 18), power (2) and lapse rates (−6.5 and −2.0 °C/km,
 `Interpolation`); the elevation lattice (7 across, `HexagonStore`); the land-cover service, coverage,
 pixels across a hexagon (96), counting lattice (48) and how many years back the latest map is looked
-for (3) (`DeaLandCover`); the drought window (365 days), the archive lag (5 days) and the
-station reach (75 km) (`Drought`); a forecast's life (3 h, 5 h once the day's allowance is 70% spent,
+for (3) (`DeaLandCover`); the drought window (365 days) and the archive lag (5 days) (`Drought`) — the drought's rings and
+height cost are settings turned on the map (`DroughtRule`, W-22: 3 rings and 10 km per 100 m until set); a forecast's life (3 h, 5 h once the day's allowance is 70% spent,
 `Life`), the drift tolerances (3 °C, 20 points, 15 km/h, 5 mm, `Drift`) and the hour before a forecast
 thrown out for drift is fetched again (`HexagonStore.REFETCH_AFTER_DRIFT`); the river cells (5 km) (`Rivers`); how long a
 row of the ground's record stands for (three hours either side, `History.STANDS_FOR`) and how long the record is kept (five years, `History.KEEP`); the grassland fuel load (4.5 t/ha,

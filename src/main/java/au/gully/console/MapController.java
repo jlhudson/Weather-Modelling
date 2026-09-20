@@ -13,6 +13,7 @@ import au.gully.bureau.WindTrend;
 import au.gully.science.Conditions;
 import au.gully.science.WindChange;
 import au.gully.upstreams.Forecast;
+import au.gully.drought.Drought;
 import au.gully.hexagons.*;
 import au.gully.platform.Json;
 import au.gully.upstreams.Ledger;
@@ -59,6 +60,8 @@ public class MapController {
     private final Upstreams upstreams;
     private final Life life;
     private final Reach reach;
+    private final au.gully.drought.DroughtRule droughtRule;
+    private final au.gully.drought.Drought drought;
     private final Json json;
 
     @GetMapping
@@ -71,6 +74,10 @@ public class MapController {
         model.addAttribute("reachMaxKm", Reach.MAX_KM);
         model.addAttribute("reachBy", reach.by());
         model.addAttribute("reachSince", reach.since());
+        model.addAttribute("droughtRings", droughtRule.rings());
+        model.addAttribute("droughtKmPer100m", droughtRule.kmPer100m());
+        model.addAttribute("droughtRuleBy", droughtRule.by());
+        model.addAttribute("droughtRuleSince", droughtRule.since());
         return "map";
     }
 
@@ -178,6 +185,130 @@ public class MapController {
         out.put("remade", remade);
         out.put("withDrought", store.all().stream().filter(h -> h.drought() != null).count());
         return out;
+    }
+
+    /**
+     * The drought's rule set (W-22) - the rings searched for a station and what height costs -
+     * written so a restart keeps it, and every drought made again from the record under it.
+     */
+    @PostMapping(value = "/drought/rule", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> setDroughtRule(@RequestParam int rings, @RequestParam double kmPer100m) {
+        droughtRule.set(rings, kmPer100m, ConsoleModel.operatorName());
+        int remade = store.respinDroughts();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("rings", droughtRule.rings());
+        out.put("kmPer100m", droughtRule.kmPer100m());
+        out.put("by", droughtRule.by());
+        out.put("since", droughtRule.since() == null ? null : droughtRule.since().toString());
+        out.put("remade", remade);
+        return out;
+    }
+
+    /**
+     * The operator's spin-up (W-22): a drought of its own for the hexagon at a point - the year
+     * fetched, the one archive call the hexagon makes - for a place worth watching on its own rather
+     * than through its neighbours. POST, because it spends allowance.
+     */
+    @PostMapping(value = "/drought/spin", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> spinDrought(@RequestParam double lat, @RequestParam double lon) {
+        if (!Geo.plausible(lat, lon) || !Geo.inAustralia(lat, lon)) {
+            return ResponseEntity.badRequest().build();
+        }
+        Hexagon h = store.spinDrought(lat, lon);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", h.id());
+        out.put("from", h.drought() == null ? null : h.drought().from());
+        out.put("kbdiMm", h.drought() == null ? null : h.drought().index().kbdiMm());
+        out.put("droughtFactor", h.drought() == null ? null : h.drought().index().droughtFactor());
+        out.put("days", h.drought() == null ? null : h.drought().days());
+        out.put("spunUp", h.drought() != null && !h.drought().interpolated());
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * The drought's feed (W-22): every hexagon holding a drought as a point at its centre - where the
+     * archive was asked - with a spoke to each station feeding it under the rule on the sliders (the
+     * same walk the step uses, so the preview is the rule), and, for a hexagon whose drought is
+     * interpolated, a spoke to each hexagon it was made from as it stands.
+     */
+    @GetMapping(value = "/drought-feed.geojson", produces = "application/geo+json")
+    @ResponseBody
+    public Map<String, Object> droughtFeed(@RequestParam(required = false) Integer rings, @RequestParam(required = false) Double kmPer100m) {
+        int r = rings == null ? droughtRule.rings() : au.gully.drought.DroughtRule.clampRings(rings);
+        double k = kmPer100m == null ? droughtRule.kmPer100m() : au.gully.drought.DroughtRule.clampHeight(kmPer100m);
+        List<Map<String, Object>> features = new ArrayList<>();
+        int own = 0, interpolated = 0, unfed = 0;
+        for (Hexagon h : store.all()) {
+            if (h.drought() == null) {
+                continue;
+            }
+            boolean interp = h.drought().interpolated();
+            if (interp) interpolated++; else own++;
+            List<Drought.Fed> feeding = interp ? List.of() : drought.feed(h.cell(), h.elevationM(), r, k);
+            if (!interp && feeding.isEmpty()) unfed++;
+            Map<String, Object> p = new LinkedHashMap<>();
+            p.put("id", h.id());
+            p.put("lat", Math.round(h.cell().lat() * 1e5) / 1e5);
+            p.put("lon", Math.round(h.cell().lon() * 1e5) / 1e5);
+            p.put("elevationM", h.elevationM());
+            p.put("from", h.drought().from());
+            p.put("interpolated", interp);
+            p.put("fromHexagons", h.drought().fromHexagons());
+            p.put("kbdiMm", h.drought().index().kbdiMm());
+            p.put("droughtFactor", h.drought().index().droughtFactor());
+            p.put("days", h.drought().days());
+            p.put("computedFor", h.drought().computedFor().toString());
+            p.put("stations", feeding.stream().map(f -> f.station().id() + " " + f.station().name() + " · ring " + f.ring() + " · " + f.km() + " km"
+                    + (f.heightDiffM() == null ? "" : " · " + (f.heightDiffM() > 0 ? "+" : "") + Math.round(f.heightDiffM()) + " m") + " → " + f.effectiveKm() + " km").toList());
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("type", "Feature");
+            f.put("id", h.id());
+            f.put("geometry", Map.of("type", "Point", "coordinates", List.of(p.get("lon"), p.get("lat"))));
+            f.put("properties", p);
+            features.add(f);
+            for (Drought.Fed fed : feeding) {
+                features.add(spoke(h, fed.station().lat(), fed.station().lon(), "station", fed.station().id(), fed.ring(), fed.effectiveKm()));
+            }
+            if (interp) {
+                for (String sourceId : h.drought().fromHexagons()) {
+                    store.get(sourceId).ifPresent(src -> features.add(spoke(h, src.cell().lat(), src.cell().lon(), "hexagon", sourceId, null, null)));
+                }
+            }
+        }
+        Map<String, Object> fc = new LinkedHashMap<>();
+        fc.put("type", "FeatureCollection");
+        fc.put("features", features);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("rings", r);
+        meta.put("kmPer100m", k);
+        meta.put("savedRings", droughtRule.rings());
+        meta.put("savedKmPer100m", droughtRule.kmPer100m());
+        meta.put("savedBy", droughtRule.by());
+        meta.put("savedAt", droughtRule.since() == null ? null : droughtRule.since().toString());
+        meta.put("own", own);
+        meta.put("interpolated", interpolated);
+        meta.put("unfed", unfed);
+        fc.put("meta", meta);
+        return fc;
+    }
+
+    private static Map<String, Object> spoke(Hexagon from, double toLat, double toLon, String kind, String toId, Integer ring, Double effectiveKm) {
+        Map<String, Object> f = new LinkedHashMap<>();
+        f.put("type", "Feature");
+        f.put("id", from.id() + "→" + toId);
+        f.put("geometry", Map.of("type", "LineString", "coordinates", List.of(
+                List.of(Math.round(from.cell().lon() * 1e5) / 1e5, Math.round(from.cell().lat() * 1e5) / 1e5),
+                List.of(Math.round(toLon * 1e5) / 1e5, Math.round(toLat * 1e5) / 1e5))));
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("spoke", kind);
+        p.put("hexagon", from.id());
+        p.put("to", toId);
+        p.put("ring", ring);
+        p.put("effectiveKm", effectiveKm);
+        f.put("properties", p);
+        return f;
     }
 
     /**

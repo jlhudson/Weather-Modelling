@@ -1,14 +1,12 @@
 package au.gully.hexagons;
 
-import au.gully.storage.Db;
+import au.gully.storage.ConsoleSettings;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.DoubleConsumer;
 
@@ -40,14 +38,14 @@ public class Reach {
      */
     public static final double MAX_KM = 30;
 
-    private final JdbcClient db;
+    private final ConsoleSettings settings;
     private final List<DoubleConsumer> listeners = new ArrayList<>();
     private volatile double km = Grid.DEFAULT_STATION_REACH_KM;
     private volatile String by;
     private volatile Instant since;
 
-    public Reach(JdbcClient db) {
-        this.db = db;
+    public Reach(ConsoleSettings settings) {
+        this.settings = settings;
     }
 
     /**
@@ -61,8 +59,7 @@ public class Reach {
      * Phase 2: the console's value, if one was ever set, else the default.
      */
     public void rehydrate() {
-        Optional<Map<String, Object>> row = db.sql("select value, updated_by, updated_at from setting where key = :key")
-                .param("key", KEY).query().listOfRows().stream().findFirst();
+        Optional<ConsoleSettings.Setting> row = settings.read(KEY);
         if (row.isEmpty()) {
             km = Grid.DEFAULT_STATION_REACH_KM;
             by = null;
@@ -71,13 +68,13 @@ public class Reach {
             return;
         }
         try {
-            km = clamp(Double.parseDouble(String.valueOf(row.get().get("value")).trim()));
+            km = clamp(Double.parseDouble(row.get().value().trim()));
         } catch (NumberFormatException e) {
-            log.warn("station reach: the setting '{}' is not a number; the default {} km stands", row.get().get("value"), Grid.DEFAULT_STATION_REACH_KM);
+            log.warn("station reach: the setting '{}' is not a number; the default {} km stands", row.get().value(), Grid.DEFAULT_STATION_REACH_KM);
             km = Grid.DEFAULT_STATION_REACH_KM;
         }
-        by = (String) row.get().get("updated_by");
-        since = Db.instant(row.get().get("updated_at"));
+        by = row.get().by();
+        since = row.get().at();
         log.info("station reach: {} km, set on the console by {} at {}", km, by, since);
     }
 
@@ -112,10 +109,7 @@ public class Reach {
     public double set(double reachKm, String setBy) {
         double value = clamp(reachKm);
         Instant now = Instant.now();
-        db.sql("""
-                insert into setting (key, value, updated_by, updated_at) values (:key, :value, :by, :at)
-                on conflict (key) do update set value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at""")
-                .param("key", KEY).param("value", String.valueOf(value)).param("by", setBy).param("at", Db.ts(now)).update();
+        settings.write(KEY, String.valueOf(value), setBy, now);
         double before = km;
         km = value;
         by = setBy;

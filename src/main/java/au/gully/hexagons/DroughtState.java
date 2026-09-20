@@ -17,7 +17,10 @@ import static au.gully.science.Numbers.round1;
  * @param spunUpFrom   the first day of the integration
  * @param days         how many days it has run over
  * @param recentRainMm the last twenty days' rain, oldest first, which the drought factor needs
- * @param from         where the inputs came from: {@code stations}, {@code archive} or both
+ * @param from         where the inputs came from: {@code stations}, {@code archive}, both — or
+ *                     {@code interpolated}, from the spun-up hexagons around it (W-22)
+ * @param fromHexagons the hexagons an interpolated state was made from, nearest first; empty for a
+ *                     state of the hexagon's own
  */
 public record DroughtState(
         double kbdiMm,
@@ -26,11 +29,29 @@ public record DroughtState(
         LocalDate computedFor,
         int days,
         List<Double> recentRainMm,
-        String from
+        String from,
+        List<String> fromHexagons
 ) {
 
     public DroughtState {
         recentRainMm = recentRainMm == null ? List.of() : List.copyOf(recentRainMm);
+        fromHexagons = fromHexagons == null ? List.of() : List.copyOf(fromHexagons);
+    }
+
+    /**
+     * A state of the hexagon's own.
+     */
+    public DroughtState(double kbdiMm, double meanAnnualRainfallMm, LocalDate spunUpFrom, LocalDate computedFor, int days,
+                        List<Double> recentRainMm, String from) {
+        this(kbdiMm, meanAnnualRainfallMm, spunUpFrom, computedFor, days, recentRainMm, from, List.of());
+    }
+
+    /**
+     * Whether the state was made from the hexagons around, not from this hexagon's own days: such a
+     * state is not stepped, it is made again from theirs.
+     */
+    public boolean interpolated() {
+        return "interpolated".equals(from);
     }
 
     public double droughtFactor() {
@@ -57,7 +78,7 @@ public record DroughtState(
         while (window.size() > Kbdi.WINDOW_DAYS) {
             window.removeFirst();
         }
-        return new DroughtState(kbdi, meanAnnualRainfallMm, spunUpFrom, day, days + 1, window, from);
+        return new DroughtState(kbdi, meanAnnualRainfallMm, spunUpFrom, day, days + 1, window, from, fromHexagons);
     }
 
     static double[] array(List<Double> values) {

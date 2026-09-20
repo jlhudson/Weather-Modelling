@@ -43,6 +43,7 @@ public class Startup implements ApplicationRunner {
     private final ConsoleUsers consoleUsers;
     private final StationRegistry stations;
     private final Reach reach;
+    private final au.gully.drought.DroughtRule droughtRule;
     private final Curing curing;
     private final HexagonStore store;
     private final Rivers rivers;
@@ -65,6 +66,7 @@ public class Startup implements ApplicationRunner {
         step(2, "registers from the database", () -> {
             store.ensureGrid();
             reach.rehydrate();
+            droughtRule.rehydrate();
             stations.rehydrate();
             curing.rehydrate();
             rivers.rehydrate();

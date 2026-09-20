@@ -210,6 +210,15 @@ public class MapLayer {
         Forecast fc = h.forecast();
         forecast(p, fc, fc == null ? null : fc.at(now), now);
         fire(p, h.fire());
+        // The drought as a thing of its own (W-22): where its inputs came from, how many days it runs over,
+        // the rain of the last week and the window, and whether it is the hexagon's own or its neighbours'.
+        DroughtState ds = h.drought();
+        p.put("droughtFrom", ds == null ? null : ds.from());
+        p.put("droughtInterpolated", ds != null && ds.interpolated());
+        p.put("droughtDays", ds == null ? null : ds.days());
+        p.put("droughtComputedFor", ds == null ? null : ds.computedFor().toString());
+        p.put("rain7dMm", ds == null ? null : rainOver(ds.recentRainMm(), 7));
+        p.put("rain20dMm", ds == null ? null : rainOver(ds.recentRainMm(), 20));
         // The stations' word on the forecast (W-12), and how the forecasts here have been doing over a day.
         Drift d = drifts.latest(h.id()).orElse(null);
         p.put("drift", d == null ? null : d.score());
@@ -396,6 +405,21 @@ public class MapLayer {
         p.put("fireWeatherWarning", fire != null && fire.fireWeatherWarning());
         p.put("warnings", fire == null ? 0 : fire.warnings().size());
         p.put("windChangeAt", fire == null || fire.wind() == null || fire.wind().change() == null ? null : fire.wind().change().at().toString());
+    }
+
+    /**
+     * The rain over the last so many days of the drought's window, or null when the window is shorter.
+     */
+    private static Double rainOver(List<Double> window, int days) {
+        if (window == null || window.size() < days) {
+            return null;
+        }
+        double total = 0;
+        for (int i = window.size() - days; i < window.size(); i++) {
+            Double v = window.get(i);
+            total += v == null ? 0 : v;
+        }
+        return Math.round(total * 10) / 10.0;
     }
 
     private static double round(double degrees) {

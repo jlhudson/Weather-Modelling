@@ -191,8 +191,16 @@ carried on every active hexagon in the district; a hexagon with no curing figure
 The fire indices need a drought factor; a drought factor needs a soil moisture deficit; a deficit
 needs a year of daily rain and maximum temperature integrated into a Keetch–Byram index and then a
 Griffiths factor. The drought is the hexagon's, like everything else the hexagon holds — at 17 km a
-hexagon is already the scale a drought factor describes — from the Bureau stations inside it (or the
-nearest within 75 km).
+hexagon is already the scale a drought factor describes — from the Bureau stations counting for it,
+or, when none does, the one station of the nearest ring that has any, ranked by *effective distance*:
+the ground distance plus ten kilometres for every hundred metres between the station's height and the
+hexagon's mean elevation (`DroughtRule`, W-22; rings and the height cost are turned on the map and
+kept in the setting table). Mount Lofty does not feed the plains; the Hills' stations feed the Hills.
+Rain is taken as measured; the station's daily maximum is brought to the hexagon's elevation by the
+lapse rate. A hexagon with no drought of its own takes the spun-up hexagons within the same rings,
+weighted by the inverse square of the same distance — it is never stepped, it is made again from theirs
+— so a few hexagons spun up on purpose (the map's **spin up here**) cover a region, and only a hexagon
+with none near pays for its own year.
 
 Starting a hexagon's drought fetches only the days the stations and the record do not cover: running
 for 30 days and needing 365, it asks Open-Meteo's archive at the hexagon's centre for the year behind
