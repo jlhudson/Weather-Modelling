@@ -89,6 +89,7 @@ public class History {
         int n = db.sql("delete from model_now where at < :cutoff").param("cutoff", Db.ts(cutoff)).update();
         n += db.sql("delete from station_sample where at < :cutoff").param("cutoff", Db.ts(cutoff)).update();
         n += db.sql("delete from drought_day where day < :day").param("day", cutoffDay.toLocalDate()).update();
+        n += db.sql("delete from archive_day where day < :day").param("day", cutoffDay.toLocalDate()).update();
         return n;
     }
 
@@ -172,7 +173,7 @@ public class History {
      * A table's rows written on a UTC day, as maps, for the nightly export.
      */
     public List<Map<String, Object>> rowsOn(String table, String column, Instant from, Instant to) {
-        if (!Set.of("station_sample", "model_now", "drought_day").contains(table)) {
+        if (!Set.of("station_sample", "model_now", "drought_day", "archive_day").contains(table)) {
             throw new IllegalArgumentException("not a history table: " + table);
         }
         return db.sql("select * from " + table + " where " + column + " >= :from and " + column + " < :to order by " + column)

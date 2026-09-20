@@ -186,7 +186,8 @@ Three routes that say what they are, for callers that want one half and not the 
   mean annual rainfall, the spin-up's span), `from` (`stations`, `archive` or `stations+archive`),
   `stations` — the ones feeding the hexagon's days, inside it or within reach, else the nearest within
   75 km — `days`, the last so many days of rain and maximum the deficit was stepped with, oldest first,
-  each with its `source` (`stations`, `archive`, `recent`), and `rain`, the totals those days add up to
+  each with its `source` (`stations`, `archive`, `recent`) — every day the Bureau's rain day, 9 am to
+  9 am local (W-21) — and `rain`, the totals those days add up to
   over 7, 30, 90 and 365 days (null where the record does not reach that far). `available: false`
   with the reason when the spin-up could not yet be fed. An ask, like the reading: a new hexagon is
   created and its drought spun up, which is the one archive call the hexagon ever makes; cached an

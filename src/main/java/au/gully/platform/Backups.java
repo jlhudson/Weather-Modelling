@@ -72,7 +72,7 @@ public class Backups implements ApplicationRunner {
         Instant from = day.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant to = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         Path first = null;
-        for (String[] table : new String[][]{{"station_sample", "at"}, {"model_now", "at"}, {"drought_day", "written_at"}}) {
+        for (String[] table : new String[][]{{"station_sample", "at"}, {"model_now", "at"}, {"drought_day", "written_at"}, {"archive_day", "fetched_at"}}) {
             Path file = dir.resolve(table[0].replace('_', '-') + "-" + day + ".jsonl");
             int written = 0;
             try (BufferedWriter w = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {

@@ -166,6 +166,21 @@ public class MapController {
     }
 
     /**
+     * Every drought made again from the record (W-21) - the stations' ledger and the archive as
+     * fetched, no upstream call - which is what a change to the rule that picks a hexagon's stations
+     * calls for. POST, because it rewrites every drought held.
+     */
+    @PostMapping(value = "/drought/respin", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> respinDroughts() {
+        int remade = store.respinDroughts();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("remade", remade);
+        out.put("withDrought", store.all().stream().filter(h -> h.drought() != null).count());
+        return out;
+    }
+
+    /**
      * The layer, console-authenticated, so the page needs no API key.
      */
     @GetMapping(value = "/layer.geojson", produces = "application/geo+json")

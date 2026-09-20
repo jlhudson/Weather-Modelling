@@ -483,6 +483,41 @@ public class HexagonStore {
         return after;
     }
 
+    /**
+     * Every drought made again from the record (W-21) - no fetch - after a change to the rule that
+     * picks a hexagon's stations, or to the reach; a hexagon the record cannot re-feed keeps what it
+     * had. Its picture is recomputed, since the drought factor is in it.
+     *
+     * @return how many were remade
+     */
+    public int respinDroughts() {
+        Instant now = Instant.now();
+        int remade = 0;
+        for (String id : hexagons.keySet()) {
+            Hexagon h = hexagons.get(id);
+            if (h == null || h.drought() == null) {
+                continue;
+            }
+            ZoneId zone = zoneOf(h);
+            Optional<DroughtState> state;
+            try {
+                state = drought.respin(h.cell(), LocalDate.now(zone));
+            } catch (RuntimeException e) {
+                log.warn("drought for {} not remade: {}", id, e.getMessage());
+                continue;
+            }
+            if (state.isEmpty()) {
+                continue;
+            }
+            Hexagon after = replace(id, old -> old.withDrought(state.get()));
+            repository.saveDrought(after);
+            recompute(id, now);
+            remade++;
+        }
+        log.info("droughts remade from the record: {}", remade);
+        return remade;
+    }
+
     private Hexagon ensureRiver(Hexagon h, double lat, double lon, Instant now) {
         if (!properties.sources().rivers()) {
             return h;

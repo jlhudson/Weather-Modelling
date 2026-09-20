@@ -61,6 +61,40 @@ class UpstreamsTest {
         assertThat(f.daily().get(1).condition()).isEqualTo("Light rain");
     }
 
+    /**
+     * The archive's hours summed into the Bureau's rain day (W-21): the hour beginning at 9 am local
+     * on a date through the hour beginning at 8 am the next is that date's day. Seventy-two hours from
+     * midnight Adelaide time on the 18th make one complete day (the 18th: 09:00 on the 18th to 08:00 on
+     * the 19th) with the 9 hours before it and the 15 after it incomplete; given a "now" inside the
+     * series, only the hours already past count, and a day still running is not a day.
+     */
+    @Test
+    void theArchivesHoursAreSummedIntoRainDays() throws Exception {
+        // 1789655400 is 2026-09-18T00:00 in Australia/Adelaide (UTC+9:30, no daylight saving until October). 1 mm every hour, temperature the hour's index.
+        StringBuilder times = new StringBuilder(), rain = new StringBuilder(), temp = new StringBuilder();
+        for (int h = 0; h < 72; h++) {
+            times.append(h == 0 ? "" : ",").append(1789655400L + h * 3600L);
+            rain.append(h == 0 ? "" : ",").append("1.0");
+            temp.append(h == 0 ? "" : ",").append(h);
+        }
+        String payload = "{\"utc_offset_seconds\":34200,\"timezone\":\"Australia/Adelaide\",\"hourly\":{\"time\":[" + times + "],\"precipitation\":[" + rain + "],\"temperature_2m\":[" + temp + "]}}";
+        var root = JsonMapper.builder().build().readTree(payload);
+        var days = OpenMeteo.rainDays(root, null, null, null);
+        assertThat(days).hasSize(2);
+        assertThat(days.getFirst().date()).isEqualTo(LocalDate.of(2026, 9, 18));
+        assertThat(days.getFirst().rainMm()).as("24 hours at a millimetre").isEqualTo(24.0);
+        assertThat(days.getFirst().maxTemperatureC()).as("the hour beginning 08:00 on the 19th is index 32").isEqualTo(32.0);
+        assertThat(days.get(1).date()).isEqualTo(LocalDate.of(2026, 9, 19));
+        assertThat(days.get(1).maxTemperatureC()).isEqualTo(56.0);
+        // A range keeps only the days inside it.
+        assertThat(OpenMeteo.rainDays(root, LocalDate.of(2026, 9, 19), LocalDate.of(2026, 9, 19), null)).extracting(OpenMeteo.DailyRow::date).containsExactly(LocalDate.of(2026, 9, 19));
+        // "Now" at 08:30 on the 20th: the 19th's last hour (08:00-09:00) has not finished, so the 19th is not a day yet.
+        Instant now = Instant.ofEpochSecond(1789655400L + 56 * 3600L + 1800);
+        assertThat(OpenMeteo.rainDays(root, null, null, now)).extracting(OpenMeteo.DailyRow::date).containsExactly(LocalDate.of(2026, 9, 18));
+        // At 09:00 on the 20th it has.
+        assertThat(OpenMeteo.rainDays(root, null, null, Instant.ofEpochSecond(1789655400L + 57 * 3600L))).hasSize(2);
+    }
+
     @Test
     void anAllNullAnswerIsRefusedRatherThanHeld() {
         String empty = OPEN_METEO.replace("\"temperature_2m\":10.7,\"relative_humidity_2m\":81,\"wind_speed_10m\":9.4,",

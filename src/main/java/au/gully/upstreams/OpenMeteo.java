@@ -218,13 +218,16 @@ public class OpenMeteo implements Upstream {
     // ---------------------------------------------------------------- the daily series
 
     /**
-     * Reanalysis history: daily rain and maximum temperature, which lags real time by a few days.
+     * Reanalysis history: hourly rain and temperature, which lags real time by a few days, summed
+     * and maxed into the Bureau's rain day - 9 am to 9 am local - so the archive's days and the
+     * stations' are the same days (W-21). The start is asked a day early, since the first rain day
+     * begins at 9 am the day before.
      */
     public List<DailyRow> archive(double lat, double lon, LocalDate start, LocalDate end) throws UpstreamException {
         String url = ARCHIVE + "?latitude=" + fixed(lat) + "&longitude=" + fixed(lon)
-                + "&start_date=" + start + "&end_date=" + end
-                + "&daily=precipitation_sum,temperature_2m_max&timezone=auto";
-        return daily(read(url, ARCHIVE_PATIENCE));
+                + "&start_date=" + start.minusDays(1) + "&end_date=" + end.plusDays(1)
+                + "&hourly=precipitation,temperature_2m&timezone=auto&timeformat=unixtime";
+        return rainDays(read(url, ARCHIVE_PATIENCE), start, end, null);
     }
 
     /**
@@ -250,13 +253,15 @@ public class OpenMeteo implements Upstream {
     }
 
     /**
-     * The last few days plus today, from the forecast endpoint, to close the archive's gap.
+     * The last few days, from the forecast endpoint, to close the archive's gap: the same hourly
+     * series summed into 9 am days, and only the days already complete - a rain day still running
+     * is not a day. Asked a day further back than wanted, for the first day's 9 am start.
      */
     public List<DailyRow> recent(double lat, double lon, int pastDays) throws UpstreamException {
         String url = FORECAST + "?latitude=" + fixed(lat) + "&longitude=" + fixed(lon)
-                + "&past_days=" + Math.min(92, Math.max(1, pastDays)) + "&forecast_days=1"
-                + "&daily=precipitation_sum,temperature_2m_max&timezone=auto";
-        return daily(read(url));
+                + "&past_days=" + Math.min(92, Math.max(1, pastDays + 1)) + "&forecast_days=1"
+                + "&hourly=precipitation,temperature_2m&timezone=auto&timeformat=unixtime";
+        return rainDays(read(url), null, null, Instant.now());
     }
 
     /**
@@ -283,20 +288,51 @@ public class OpenMeteo implements Upstream {
         return out;
     }
 
-    private List<DailyRow> daily(JsonNode root) throws UpstreamException {
-        JsonNode daily = Nodes.at(root, "daily");
-        JsonNode times = Nodes.at(daily, "time");
+    /**
+     * The hour the Bureau's rain day turns: the 24 hours to 9 am local are the day before's rain.
+     */
+    static final int RAIN_DAY_TURNS_AT = 9;
+
+    /**
+     * An hourly series of rain and temperature summed and maxed into rain days (W-21): the hour
+     * beginning at 9 am on day D through the hour beginning at 8 am on D+1 is day D. A day is kept
+     * only when all twenty-four of its hours are there and, given a {@code now}, all are in the past.
+     * Days outside {@code from..to} are dropped when a range is given.
+     */
+    static List<DailyRow> rainDays(JsonNode root, LocalDate from, LocalDate to, Instant now) throws UpstreamException {
+        JsonNode hourly = Nodes.at(root, "hourly");
+        JsonNode times = Nodes.at(hourly, "time");
         if (times == null || !times.isArray()) {
-            throw new UpstreamException(ID + " daily: payload carried no series");
+            throw new UpstreamException(ID + " hourly: payload carried no series");
+        }
+        String tz = Nodes.str(root, "timezone");
+        ZoneId zone = tz == null ? ZoneOffset.UTC : safeZone(tz);
+        java.util.SortedMap<LocalDate, double[]> days = new java.util.TreeMap<>();
+        for (int i = 0; i < times.size(); i++) {
+            Double t = Nodes.element(hourly, "time", i);
+            Double rain = Nodes.element(hourly, "precipitation", i);
+            Double temp = Nodes.element(hourly, "temperature_2m", i);
+            if (t == null || rain == null || temp == null) {
+                continue;
+            }
+            Instant at = Instant.ofEpochSecond(t.longValue());
+            if (now != null && !at.plusSeconds(3600).isBefore(now.plusSeconds(1))) {
+                continue;
+            }
+            java.time.ZonedDateTime local = at.atZone(zone);
+            LocalDate day = local.getHour() < RAIN_DAY_TURNS_AT ? local.toLocalDate().minusDays(1) : local.toLocalDate();
+            double[] acc = days.computeIfAbsent(day, k -> new double[]{0, Double.NEGATIVE_INFINITY, 0});
+            acc[0] += rain;
+            acc[1] = Math.max(acc[1], temp);
+            acc[2]++;
         }
         List<DailyRow> out = new ArrayList<>();
-        for (int i = 0; i < times.size(); i++) {
-            LocalDate date = date(times.get(i));
-            if (date != null) {
-                out.add(new DailyRow(date, Nodes.element(daily, "precipitation_sum", i),
-                        Nodes.element(daily, "temperature_2m_max", i)));
+        days.forEach((day, acc) -> {
+            if (acc[2] < 24 || (from != null && day.isBefore(from)) || (to != null && day.isAfter(to))) {
+                return;
             }
-        }
+            out.add(new DailyRow(day, Math.round(acc[0] * 10) / 10.0, Math.round(acc[1] * 10) / 10.0));
+        });
         return out;
     }
 
@@ -423,7 +459,8 @@ public class OpenMeteo implements Upstream {
     }
 
     /**
-     * One day of history: the local calendar day, its rain and its maximum.
+     * One day of history: the Bureau's rain day - the 24 hours from 9 am local on the date - its rain
+     * and its maximum.
      */
     public record DailyRow(LocalDate date, Double rainMm, Double maxTemperatureC) {
     }

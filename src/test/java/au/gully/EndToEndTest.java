@@ -68,7 +68,7 @@ class EndToEndTest {
         // The legacy row is still there, with the hash of the plaintext the init script planted.
         String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
         assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "drought_day", "model_now", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent", "setting"}) {
+        for (String table : new String[]{"hexagon", "drought_day", "archive_day", "model_now", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent", "setting"}) {
             Long n = db.sql("select count(*) from " + table).query(Long.class).single();
             assertThat(n).as(table).isNotNull();
         }
@@ -202,6 +202,8 @@ class EndToEndTest {
     au.gully.hexagons.Reach reach;
     @Autowired
     au.gully.drought.DroughtDays droughtDays;
+    @Autowired
+    au.gully.drought.ArchiveDays archiveDays;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -313,6 +315,16 @@ class EndToEndTest {
         assertThat(droughtDays.of(h.id(), day, day).get(day).source()).isEqualTo("archive");
         assertThat(droughtDays.save(h.id(), java.util.List.of(new au.gully.drought.DroughtDays.Day(day, 9.9, 30.0, "stations")), now)).as("a day held is left as it was").isZero();
         assertThat(droughtDays.recent(h.id(), 10)).hasSize(1);
+        // The archive as fetched (W-21): kept whole per point, the archive's day replacing a recent-days row, never the reverse;
+        // and a re-spin from the record alone, with no upstream, finds a year it cannot supply and leaves the state as it was.
+        java.util.List<au.gully.upstreams.OpenMeteo.DailyRow> fetched = java.util.List.of(new au.gully.upstreams.OpenMeteo.DailyRow(day, 1.0, 20.0), new au.gully.upstreams.OpenMeteo.DailyRow(day.plusDays(1), 0.0, 22.0));
+        assertThat(archiveDays.save(h.cell().lat(), h.cell().lon(), fetched, "recent", now)).isEqualTo(2);
+        assertThat(archiveDays.save(h.cell().lat(), h.cell().lon(), java.util.List.of(new au.gully.upstreams.OpenMeteo.DailyRow(day, 3.0, 21.0)), "archive", now)).as("the archive replaces a recent row").isEqualTo(1);
+        assertThat(archiveDays.save(h.cell().lat(), h.cell().lon(), java.util.List.of(new au.gully.upstreams.OpenMeteo.DailyRow(day, 9.0, 30.0)), "recent", now)).as("a recent row never replaces the archive's").isZero();
+        assertThat(archiveDays.of(h.cell().lat(), h.cell().lon(), day, day.plusDays(1))).hasSize(2);
+        assertThat(archiveDays.of(h.cell().lat(), h.cell().lon(), day, day).get(day).rainMm()).isEqualTo(3.0);
+        assertThat(archiveDays.count()).isEqualTo(2);
+        assertThat(store.respinDroughts()).as("no hexagon holds a drought to remake").isZero();
         assertThat(history.prune(now)).as("nothing is five years old").isZero();
 
         // The drift ledger takes a blend as its judge: three stations joined is twenty characters, which the

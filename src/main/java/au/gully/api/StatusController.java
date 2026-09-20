@@ -51,6 +51,7 @@ public class StatusController {
     private final HexagonStore store;
     private final History history;
     private final StationRegistry stations;
+    private final au.gully.drought.ArchiveDays archiveDays;
     private final StationReader stationReader;
     private final WarningsReader warnings;
     private final Ratings ratings;
@@ -149,6 +150,7 @@ public class StatusController {
         m.put("ledgerRows", stations.ledgerRows());
         m.put("modelNowRows", history.modelRows());
         m.put("droughtDays", history.droughtDays());
+        m.put("archiveDays", archiveDays.count());
         m.put("served", store.servedCount());
         m.put("fetched", store.fetchedCount());
         m.put("servedStale", store.staleCount());

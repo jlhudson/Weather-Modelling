@@ -358,3 +358,32 @@ because it is mostly rain ahead and the river's outlook.
 days of forecast to find it, and one asking how dry the country is should get the days behind the
 number, not the number alone. The blocks already existed; the routes are the names the questions
 have. — James, 20 September 2026.
+
+### W-21 · One day everywhere — the Bureau's, 9 am to 9 am — and the archive kept as fetched, so a drought is remade from the record
+
+**The decision.** Every daily figure the drought integrates is the Bureau's rain day: the
+twenty-four hours from 9 am local on the date. The stations' ledger already gave that (the 9 am
+total is the day before's rain, and now the day's maximum is attributed the same way); Open-Meteo's
+archive and its recent-days call gave midnight-to-midnight days, so both are now fetched *hourly*
+— precipitation and temperature — and summed and maxed into 9 am days here
+(`OpenMeteo.rainDays`), a day counting only when all twenty-four of its hours are there and, for
+the recent call, already past. The variable count is unchanged, so the archive's twenty-six units
+should be too; the ledger will say if Open-Meteo weighs the hours otherwise.
+
+The archive's answer is kept whole and raw, per point, in `archive_day` (V11): every day it
+returned, not only the days wanted, keyed on the point asked for — the hexagon's centre to four
+decimals — and apart from what any hexagon did with it. The recent call's days are kept too,
+marked, and give way to the archive's when the archive later covers them. `drought_day` stays as
+the audit of what each hexagon's step actually used. A drought is now fed in this order: the
+stations, the archive as fetched, the days used before, and only then a fetch; and **re-spin**
+(`POST /console/map/drought/respin`, `HexagonStore.respinDroughts`) makes every drought again from
+the record alone, no fetch — what a change to the rule that picks a hexagon's stations, or to the
+reach, calls for.
+
+**Why.** Two sources on two different days put the same dawn rain in both, or in neither, at every
+seam — and the seam was not only at spin-up: every day the ledger missed was filled from the
+model on a midnight day beside station 9 am days, straight into the twenty-day window that sets the
+drought factor. One day, the Bureau's, ends that. And a year of reanalysis paid for at
+twenty-six units and consumed into a number could not be looked at, let alone used again when the
+rule for choosing stations changed; kept raw, per point, it is the rain the place had, which is the
+thing worth keeping. — James, 20 September 2026.

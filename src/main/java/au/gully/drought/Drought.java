@@ -73,14 +73,16 @@ public class Drought {
     private final StationRegistry stations;
     private final Upstreams upstreams;
     private final DroughtDays record;
+    private final ArchiveDays archive;
     private final Map<String, Object> locks = new ConcurrentHashMap<>();
     private final Map<String, Instant> attempts = new ConcurrentHashMap<>();
 
-    public Drought(Grid grid, StationRegistry stations, Upstreams upstreams, DroughtDays days) {
+    public Drought(Grid grid, StationRegistry stations, Upstreams upstreams, DroughtDays days, ArchiveDays archive) {
         this.grid = grid;
         this.stations = stations;
         this.upstreams = upstreams;
         this.record = days;
+        this.archive = archive;
     }
 
     /**
@@ -104,7 +106,7 @@ public class Drought {
             }
             attempts.put(cell.id(), Instant.now());
             if (held == null) {
-                return spinUp(cell, today);
+                return spinUp(cell, today, true);
             }
             return Optional.of(stepTo(cell, held, yesterday));
         }
@@ -117,7 +119,7 @@ public class Drought {
      * have it and the archive at the centre for the rest, integrated into a deficit. Empty when
      * neither could supply enough days.
      */
-    Optional<DroughtState> spinUp(Cell cell, LocalDate today) {
+    Optional<DroughtState> spinUp(Cell cell, LocalDate today, boolean mayFetch) {
         LocalDate from = today.minusDays(SPIN_UP_DAYS);
         LocalDate to = today.minusDays(1);
         List<Station> around = stationsFor(cell);
@@ -128,9 +130,11 @@ public class Drought {
             }
         });
         int fromStations = days.size();
-        // The days already held for this hexagon (W-19) - a reset hexagon, or one spun up before - before any source is asked.
+        // The archive as fetched for this point (W-21), then the days this hexagon used before (W-19) - a
+        // reset hexagon, or one spun up before the archive was kept - before any source is asked.
+        archive.of(cell.lat(), cell.lon(), from, to).forEach((d, held) -> days.putIfAbsent(d, new Input(held.rainMm(), held.maxTemperatureC(), held.source())));
         record.of(cell.id(), from, to).forEach((d, held) -> days.putIfAbsent(d, new Input(held.rainMm(), held.maxTemperatureC(), held.source())));
-        fillGaps(cell, days, from, to, today);
+        fillGaps(cell, days, from, to, today, mayFetch);
         if (days.size() < Kbdi.WINDOW_DAYS) {
             // The archive did not answer (it said so, once, at warn) or is out of allowance: deferred, not lost.
             log.info("drought spin-up for {} deferred: only {} days available, tried again in {}", cell.id(), days.size(), RETRY_AFTER);
@@ -179,6 +183,7 @@ public class Drought {
                 days.put(d, new Input(in.rainMm(), in.maxTemperatureC(), "stations"));
             }
         });
+        archive.of(cell.lat(), cell.lon(), from, upTo).forEach((d, held) -> days.putIfAbsent(d, new Input(held.rainMm(), held.maxTemperatureC(), held.source())));
         record.of(cell.id(), from, upTo).forEach((d, held) -> days.putIfAbsent(d, new Input(held.rainMm(), held.maxTemperatureC(), held.source())));
         boolean gap = false;
         for (LocalDate d = from; !d.isAfter(upTo); d = d.plusDays(1)) {
@@ -190,11 +195,8 @@ public class Drought {
         if (gap) {
             int pastDays = (int) java.time.temporal.ChronoUnit.DAYS.between(from, upTo) + 2;
             upstreams.recentDays(cell.lat(), cell.lon(), Math.min(92, pastDays)).ifPresent(rows -> {
-                for (OpenMeteo.DailyRow r : rows) {
-                    if (!days.containsKey(r.date()) && r.rainMm() != null && r.maxTemperatureC() != null) {
-                        days.put(r.date(), new Input(r.rainMm(), r.maxTemperatureC(), "recent"));
-                    }
-                }
+                archive.save(cell.lat(), cell.lon(), rows, "recent", Instant.now());
+                put(days, rows, "recent");
             });
         }
         DroughtState current = state;
@@ -211,6 +213,18 @@ public class Drought {
         }
         keep(cell, stepped);
         return current;
+    }
+
+    /**
+     * The drought made again from the record alone (W-21) - the stations' ledger, the archive as
+     * fetched, the days used before - with no fetch: what a change to the rule that picks the
+     * stations, or to the reach, calls for on every hexagon holding one. Empty when the record
+     * cannot supply the year, in which case the state held stands.
+     */
+    public Optional<DroughtState> respin(Cell cell, LocalDate today) {
+        synchronized (locks.computeIfAbsent(cell.id(), k -> new Object())) {
+            return spinUp(cell, today, false);
+        }
     }
 
     /**
@@ -239,11 +253,12 @@ public class Drought {
     }
 
     /**
-     * The days the stations did not cover, from the archive (older than its lag) and the recent-days
-     * call (newer), each fetched at the hexagon's centre and only when there is something missing in
-     * its range.
+     * The days the stations and the record did not cover, from the archive (older than its lag) and
+     * the recent-days call (newer), each fetched at the hexagon's centre and only when there is
+     * something missing in its range - and only when a fetch is allowed: a re-spin from the record
+     * takes what is there. An answer is kept whole (W-21), not only the days wanted.
      */
-    private void fillGaps(Cell cell, SortedMap<LocalDate, Input> days, LocalDate from, LocalDate to, LocalDate today) {
+    private void fillGaps(Cell cell, SortedMap<LocalDate, Input> days, LocalDate from, LocalDate to, LocalDate today, boolean mayFetch) {
         LocalDate archiveEnd = today.minusDays(ARCHIVE_LAG_DAYS);
         boolean missingOld = false, missingRecent = false;
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
@@ -256,11 +271,22 @@ public class Drought {
                 missingRecent = true;
             }
         }
+        if (!mayFetch) {
+            days.headMap(from).clear();
+            days.tailMap(to.plusDays(1)).clear();
+            return;
+        }
         if (missingOld) {
-            upstreams.archive(cell.lat(), cell.lon(), from, archiveEnd).ifPresent(rows -> put(days, rows, "archive"));
+            upstreams.archive(cell.lat(), cell.lon(), from, archiveEnd).ifPresent(rows -> {
+                archive.save(cell.lat(), cell.lon(), rows, "archive", Instant.now());
+                put(days, rows, "archive");
+            });
         }
         if (missingRecent) {
-            upstreams.recentDays(cell.lat(), cell.lon(), ARCHIVE_LAG_DAYS + 2).ifPresent(rows -> put(days, rows, "recent"));
+            upstreams.recentDays(cell.lat(), cell.lon(), ARCHIVE_LAG_DAYS + 2).ifPresent(rows -> {
+                archive.save(cell.lat(), cell.lon(), rows, "recent", Instant.now());
+                put(days, rows, "recent");
+            });
         }
         days.headMap(from).clear();
         days.tailMap(to.plusDays(1)).clear();

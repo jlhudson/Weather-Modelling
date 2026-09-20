@@ -482,7 +482,9 @@ public class StationRegistry {
                     // Two nullable values: never a mixed ternary, which unboxes the null.
                     Double candidate = max == null ? t : t == null ? max : Double.valueOf(Math.max(max, t));
                     if (candidate != null) {
-                        maxByDay.computeIfAbsent(day, d -> new HashMap<>()).merge(id, candidate, Math::max);
+                        // The maximum belongs to the rain day too (W-21): a sample before 9 am is still the day before's.
+                        LocalDate maxDay = local.toLocalTime().isBefore(RAIN_DAY_ENDS) ? day.minusDays(1) : day;
+                        maxByDay.computeIfAbsent(maxDay, d -> new HashMap<>()).merge(id, candidate, Math::max);
                     }
                 });
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {

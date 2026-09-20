@@ -194,11 +194,15 @@ Griffiths factor. The drought is the hexagon's, like everything else the hexagon
 hexagon is already the scale a drought factor describes — from the Bureau stations inside it (or the
 nearest within 75 km).
 
-Starting a hexagon's drought fetches only the days the stations do not cover: running for 30 days and
-needing 365, it asks Open-Meteo's archive at the hexagon's centre for the year behind the ledger and
-nothing else — one fetch, twenty-six units (a fortnight of daily data is one call in Open-Meteo's
-weighting), given ninety seconds to answer because the archive sometimes takes fifteen, once per
-hexagon. After that it is free: an ask that finds
+Starting a hexagon's drought fetches only the days the stations and the record do not cover: running
+for 30 days and needing 365, it asks Open-Meteo's archive at the hexagon's centre for the year behind
+the ledger and nothing else — one fetch, twenty-six units (a fortnight of up to ten variables is one
+call in Open-Meteo's weighting), given ninety seconds to answer because the archive sometimes takes
+fifteen, once per point, ever: the answer is kept whole in `archive_day` (W-21), so a reset hexagon,
+or every hexagon after a change to the rule that picks its stations, spins up again from the record.
+Every day, from every source, is the Bureau's rain day — the twenty-four hours from 9 am local — the
+archive's hours summed and maxed into it, so the archive's days and the stations' are the same days
+and a rain band at dawn is never counted twice at the seam. After that it is free: an ask that finds
 the hexagon's last complete day behind the last closed rain day (9:10 am in its zone) steps it forward
 from the ledger, exactly once per day, and a hexagon nobody asks about is not stepped at all. The
 state is kept on the hexagon's row so a quiet hexagon picks up where it left off. A reading with no drought state has no fire index.
