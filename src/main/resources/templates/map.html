@@ -48,7 +48,7 @@
                         <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-per=${kmPer100m},data-coastal=${coastalKm},data-by=${reachBy},data-since=${reachSince}">set</span>
                         <button class="pill" id="reachSet" title="Make this the rule: every reach is drawn by it, and the values survive a restart" type="button">set</button>
                     </div>
-                    <div class="muted control-note">A ray stops where its distance plus the cost of the greatest height difference it has crossed exceeds the reach: a ridge is a barrier, and the far side of it is another climate. A ray ends at the water - the sea or a lake at least 3 km across; a river is crossed - and a station with such water inside 10 km is coastal, held to the coastal limit on every bearing.</div>
+                    <div class="muted control-note">A ray stops where its distance plus the cost of the greatest height difference it has crossed exceeds the reach: a ridge is a barrier, and the far side of it is another climate. Water ends no ray: the sea is ground at sea level for the cost. A station with the sea, or a lake at least 3 km across, inside 10 km is coastal, and held to the coastal limit on every bearing.</div>
                 </div>
                 <details class="group" id="moreShow" open>
                     <summary>Show</summary>

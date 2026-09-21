@@ -301,7 +301,6 @@
         var parts = [];
         if (c.distance) parts.push(c.distance + ' at the reach');
         if (c.height) parts.push(c.height + ' by height');
-        if (c.water) parts.push(c.water + ' at the water');
         if (c.coastal) parts.push(c.coastal + ' at the coastal limit');
         if (c.unknown) parts.push(c.unknown + ' unknown');
         return parts.join(' · ');
@@ -316,7 +315,7 @@
             ['area', fmt(r.areaKm2, 0) + ' km²'],
             ['reach', fmt(r.minKm, 0) + '–' + fmt(r.maxKm, 0) + ' km <span class="muted">mean ' + fmt(r.meanKm, 1) + '</span>'],
             ['rays', cutWords(r.cut) + ' <span class="muted">of ' + r.rays.length + '</span>'],
-            ['the sea', r.coastal ? '<span class="coastal">coastal</span> · water ' + fmt(r.waterKm, 0) + ' km away at the nearest' : r.waterKm != null ? 'water ' + fmt(r.waterKm, 0) + ' km away at the nearest' : 'none inside 50 km'],
+            ['the sea', r.coastal ? '<span class="coastal">coastal</span> · water ' + fmt(r.waterKm, 0) + ' km away at the nearest, so held to the coastal limit' : r.waterKm != null ? 'water ' + fmt(r.waterKm, 0) + ' km away at the nearest · crossed, not a border' : 'none seen inside the reach'],
             ['rule', ruleWords(r.rule)],
             ['model height', fmt(t.elevationM, 0) + ' m' + (s.heightM != null ? ' <span class="muted">the Bureau says ' + s.heightM + '</span>' : '')],
             ['sampled', esc(ago(t.sampledAt)) + ' <span class="muted">' + t.tiles + ' tiles fetched · ' + esc(t.source) + '</span>']
@@ -331,7 +330,7 @@
         });
         svg += '<text x="' + cx + '" y="' + (cy - R - 3) + '" text-anchor="middle">N</text><text x="' + (w - 2) + '" y="' + (h - 3) + '" text-anchor="end">' + fmt(max, 0) + ' km</text></svg>';
         return html + '<div class="rose-wrap">' + svg + '<div class="rose-key"><span class="swatch"><i class="k-distance"></i>at the reach</span><span class="swatch"><i class="k-height"></i>cut by height</span>'
-            + (r.cut.water ? '<span class="swatch"><i class="k-water"></i>at the water</span>' : '') + (r.cut.coastal ? '<span class="swatch"><i class="k-coastal"></i>coastal limit</span>' : '')
+            + (r.cut.coastal ? '<span class="swatch"><i class="k-coastal"></i>coastal limit</span>' : '')
             + (r.cut.unknown ? '<span class="swatch"><i class="k-unknown"></i>unknown</span>' : '') + '</div></div>';
     }
     // ---- the reading (W-8): click anywhere, and ask - the weather now and the drought, blended from the
@@ -394,7 +393,7 @@
                 + '<td class="num">' + fmt(s.km, 1) + '</td><td class="mono">' + dirWord(s.bearingDeg) + '</td><td class="num">' + (s.aboveM != null ? (s.aboveM > 0 ? '+' : '') + s.aboveM : '—') + '</td>'
                 + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="num">' + fmt(s.kbdiMm, 0) + '</td><td class="num">' + fmt(s.droughtFactor, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
             if (!inReach) html += '<tr class="why"><td colspan="11" class="muted">' + esc(s.why) + '</td></tr>';
-            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
+            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
         });
         return html + '</tbody></table>';
     }

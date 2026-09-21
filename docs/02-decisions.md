@@ -166,3 +166,21 @@ visibility, cloud and oktas, delta-T, the day's maximum and minimum.
 pressure and the other Bureau fields when a station is clicked. Five readings is fifty minutes of a
 ten-minute file: long enough that a gust is not a change, short enough that a change is not lost.
 — James, 22 September 2026.
+
+### W-10 · No ocean borders: water ends no ray, the sea is sea level for the cost
+
+**The decision.** A ray no longer ends at the water. The sea is ground at sea level for the height
+cost and nothing more, so a station on an island or a headland reaches across the water to the far
+shore as it would across a plain, and the small islands whose station sits a few hundred metres out
+in the sea have weather again. Water is still seen: what is at least 3 km across along a ray (W-4)
+inside 10 km of the station makes it *coastal*, and a coastal station is still held to the rule's
+coastal limit on every bearing — the three sliders stay as they are. The rose has one colour fewer;
+the drawer says the water is crossed, not a border.
+
+**Why.** James: "there are a lot of small islands that have no weather due to simply having their
+station in the ocean by a few hundred meters. so for now, NO ocean borders please." A border at the
+sea was drawn to keep a reach off the water nobody stands on, but its cost fell on the stations
+that matter most to the coast — a station in the sea reached nothing, and a headland's reached only
+along its own spit. Overlap is allowed and the interpolation weighs by cost, so a reach that runs
+out over the gulf does little harm: the far shore is 1/cost² away, and its own stations outweigh it.
+The coastal limit does the work the border did, and it is a slider. — James, 22 September 2026.

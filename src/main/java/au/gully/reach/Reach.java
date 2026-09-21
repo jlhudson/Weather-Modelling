@@ -12,18 +12,18 @@ import java.util.Map;
  * hill is another climate even where it is the station's own height again. A ray cut by height
  * still reaches {@link ReachRule#MIN_KM}, so every station has some ground.
  * <p>
- * A ray ends at the water (W-3): the first sample of the water stops it half a step short, so the
- * shore is inside and the sea is not. Water is water only when it is {@link #WATER_ACROSS_KM} across
- * along the ray (W-4) — a river is a line and never is, the sea and the big lakes are areas and
- * always are — so the lower Murray, which the tiles read at sea level, ends nothing. A station with
- * water inside {@link #COASTAL_WITHIN_KM} on any bearing is <em>coastal</em>, and every one of its
+ * Water does not end a ray (W-10): the sea is ground at sea level for the height cost and no more,
+ * so a station on a headland or an island reaches across the water as it reaches across a plain.
+ * Water is still <em>seen</em>: where it is at least {@link #WATER_ACROSS_KM} across along the ray
+ * (a river is a line and never is, the sea and the big lakes are areas and always are) and inside
+ * {@link #COASTAL_WITHIN_KM} of the station, the station is <em>coastal</em>, and every one of its
  * rays is held to the rule's coastal limit: maritime air does not carry far inland, and the ground
  * beyond the sea breeze is not the shore's.
  *
  * @param km      how far the reach goes on each bearing, in bearing order
  * @param cut     why each ray stopped: {@code distance} at the reach itself, {@code height} at the
- *                cost of the ground, {@code water} at the sea, {@code coastal} at a coastal
- *                station's limit, {@code unknown} where the model had nothing
+ *                cost of the ground, {@code coastal} at a coastal station's limit, {@code unknown}
+ *                where the model had nothing
  * @param coastal whether water lies inside {@link #COASTAL_WITHIN_KM} of the station
  * @param waterKm how near the water is, on the bearing it is nearest, or null with none inside the terrain
  * @param ring    the polygon, one vertex per bearing, closed (the first vertex again at the end), as
@@ -32,7 +32,7 @@ import java.util.Map;
 public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cut, boolean coastal, Double waterKm,
                     double[][] ring, double areaKm2) {
 
-    public enum Cut { DISTANCE, HEIGHT, WATER, COASTAL, UNKNOWN }
+    public enum Cut { DISTANCE, HEIGHT, COASTAL, UNKNOWN }
 
     /**
      * How near the water makes a station coastal.
@@ -85,15 +85,11 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
                     break;
                 }
                 double d = s * Terrain.STEP_KM;
-                if (s == water) {
-                    why = Cut.WATER;
-                    reached = d - Terrain.STEP_KM / 2;
-                    if (nearestWater == null || d < nearestWater) {
-                        nearestWater = d;
-                    }
-                    break;
+                if (s == water && (nearestWater == null || d < nearestWater)) {
+                    nearestWater = d;
                 }
-                maxDiff = Math.max(maxDiff, Math.abs(e - t.elevationM()));
+                // The sea is sea level for the cost, whatever depth the tiles give it.
+                maxDiff = Math.max(maxDiff, Math.abs(Math.max(0, e) - t.elevationM()));
                 double cost = d + rule.kmPer100m() * maxDiff / 100.0;
                 if (cost > rule.reachKm()) {
                     why = d > rule.reachKm() ? Cut.DISTANCE : Cut.HEIGHT;
