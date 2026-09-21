@@ -39,15 +39,48 @@ h2 { font-size: .85rem; font-weight: 600; margin: 1rem 0 .35rem; color: var(--bs
 .figures .v { font-family: var(--g-mono); font-size: 1.25rem; font-weight: 600; }
 .figures .k { font-size: .75rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .04em; }
 
-/* Bars: a spend against an allowance, a day against a month. */
-.bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
-.bars > i { display: block; flex: 1 1 0; background: var(--bs-primary); min-width: 3px; }
-.bars > i.over { background: var(--bs-danger); }
-.bars > i.zero { background: var(--bs-tertiary-bg); }
+/* A meter: a spend against an allowance, green until it is not. */
 .meter { height: 6px; background: var(--bs-tertiary-bg); border-radius: 3px; overflow: hidden; width: 140px; display: inline-block; vertical-align: middle; }
 .meter > i { display: block; height: 100%; background: var(--bs-success); }
 .meter > i.warn { background: var(--bs-warning); }
 .meter > i.bad { background: var(--bs-danger); }
+
+/* The allowance table: a window per column, the spend over its allowance and a meter under it;
+   the second line of every cell is the smaller print. */
+.allowance td { vertical-align: top; white-space: nowrap; }
+.allowance .of { font-family: var(--g-mono); font-size: .92em; color: var(--bs-secondary-color); }
+.allowance td > .muted, .allowance .gauge { font-size: .85em; margin-top: .1rem; }
+.allowance .gauge { display: flex; align-items: center; gap: .35rem; }
+.allowance .gauge .meter { width: 72px; height: 4px; }
+.allowance .clip { max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv th.sub { padding-left: 1.2rem; font-weight: 400; }
+
+/* The spend chart: a line per upstream in its own colour - the same slot in both themes, stepped
+   for the surface - a hairline grid, the values read by a crosshair, the failures as red dots. */
+:root { --g-s1: #2a78d6; --g-s2: #eb6834; --g-s3: #1baf7a; --g-s4: #4a3aa7; }
+[data-bs-theme=dark] { --g-s1: #3987e5; --g-s2: #d95926; --g-s3: #199e70; --g-s4: #9085e9; }
+.s1 { --g-s: var(--g-s1); }
+.s2 { --g-s: var(--g-s2); }
+.s3 { --g-s: var(--g-s3); }
+.s4 { --g-s: var(--g-s4); }
+.chart { position: relative; max-width: 960px; }
+.chart-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .35rem .75rem; margin-bottom: .35rem; }
+.legend { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; }
+.legend .key, .chart-tip .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--g-s); vertical-align: middle; margin-right: .4rem; }
+.legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bs-danger); vertical-align: middle; margin-right: .4rem; }
+.plot { height: 220px; }
+.plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.plot .grid { stroke: var(--bs-border-color); stroke-width: 1; }
+.plot text { fill: var(--bs-secondary-color); font-family: var(--g-mono); font-size: 10px; font-variant-numeric: tabular-nums; }
+.plot .line { fill: none; stroke: var(--g-s); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.plot .end { fill: var(--g-s); stroke: var(--bs-body-bg); stroke-width: 2; }
+.plot .fail { fill: var(--bs-danger); stroke: var(--bs-body-bg); stroke-width: 2; }
+.plot .cross { stroke: var(--bs-secondary-color); stroke-width: 1; }
+.plot .hit { fill: transparent; cursor: crosshair; }
+.chart-tip { position: absolute; z-index: 5; pointer-events: none; background: var(--bs-body-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color);
+    border-radius: .25rem; padding: .3rem .55rem; font-size: .85rem; line-height: 1.5; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); white-space: nowrap; }
+.chart-tip .t { color: var(--bs-secondary-color); font-family: var(--g-mono); }
+.chart-tip b { font-family: var(--g-mono); font-weight: 600; }
 
 .badge { font-weight: 500; }
 .muted { color: var(--bs-secondary-color); }

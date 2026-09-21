@@ -129,8 +129,10 @@ with the same shape of answer, and Google's spend is counted and capped the same
 
 Open-Meteo counts variables multiplied by span rather than requests: our fetch — thirty-odd hourly
 variables over three days, twelve current and ten daily over seven — is charged as five units against
-the ten thousand a day, which is the overhaul's figure. The console's upstreams page shows the spend
-per hour and per day as bars against the allowance, with the breaker's history.
+the ten thousand a day, which is the overhaul's figure. The console's upstreams page shows every
+budgeted upstream's spend against its allowance per window in one table, the spend over time as one
+line chart - a line per upstream, by hour over the last day or by day over the last month, with the
+failures marked - the breaker's history, and the recent calls (W-24).
 
 ## 1.5 The Bureau
 

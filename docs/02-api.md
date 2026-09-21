@@ -279,7 +279,8 @@ curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/upstreams/open-meteo/spend/daily?from=
 curl -sS -H "X-Api-Key: $KEY" "$WX/api/v1/upstreams/open-meteo/spend/hourly"
 ```
 
-`spend/daily` is at most 62 days and a `400` past that.
+`spend/daily` is at most 62 days and a `400` past that. Its rows carry `units`, `calls` and `failures`
+per UTC day, every day in the range present; `spend/hourly` the same per hour, only the hours with a call.
 
 ## 2.6 The contract and the document
 

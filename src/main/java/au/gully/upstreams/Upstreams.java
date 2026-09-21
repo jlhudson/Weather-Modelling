@@ -255,14 +255,36 @@ public class Upstreams {
             return configured && withinBudget && breaker.openUntil() == null;
         }
 
+        /**
+         * The allowance for a window - {@code minute · hour · day · month} - or null where there is none.
+         */
+        public Integer limit(String window) {
+            if (limits == null) {
+                return null;
+            }
+            return switch (window) {
+                case "minute" -> limits.perMinute();
+                case "hour" -> limits.perHour();
+                case "day" -> limits.perDay();
+                case "month" -> limits.perMonth();
+                default -> null;
+            };
+        }
+
+        /**
+         * The window's spend over its allowance, capped at one; zero where there is no allowance.
+         */
+        public double fraction(String window) {
+            Integer limit = limit(window);
+            return limit == null || limit <= 0 ? 0 : Math.min(1.0, spent.getOrDefault(window, 0.0) / limit);
+        }
+
         public double dayFraction() {
-            Integer perDay = limits == null ? null : limits.perDay();
-            return perDay == null || perDay <= 0 ? 0 : Math.min(1.0, spent.getOrDefault("day", 0.0) / perDay);
+            return fraction("day");
         }
 
         public double monthFraction() {
-            Integer perMonth = limits == null ? null : limits.perMonth();
-            return perMonth == null || perMonth <= 0 ? 0 : Math.min(1.0, spent.getOrDefault("month", 0.0) / perMonth);
+            return fraction("month");
         }
     }
 }

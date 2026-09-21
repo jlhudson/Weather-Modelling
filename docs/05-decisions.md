@@ -443,3 +443,26 @@ everything about each answered where it is asked. A threshold was a constant nob
 effect of; two sliders that light the stations as they move show it. And a purple ring around every
 one of eighty hexagons said "drought" eighty times; a line around the eighty says it once, and the
 same line around a wind change shows the front. — James, 20 September 2026.
+
+### W-24 · The upstreams page: one allowance table, one line chart, the paid calls and the failures
+
+**The decision.** The upstreams page is one table and one chart. The table has a row per budgeted
+upstream and a column per window — this minute, this hour, today, this month — each cell the spend
+over its allowance with a meter and the percentage under it, the state, the model and host, the
+units per fetch, and the breaker; the per-upstream key/value blocks and their sentences of four
+figures are gone. The chart is one line per upstream, in a colour that is the upstream's in both
+themes, by hour over the last 24 hours or by UTC day over the last 31 (a switch), the scale fitted
+to the spend rather than to the allowance, a hairline grid with labelled axes, a crosshair that reads
+every line at the bucket under the pointer, a red dot where a call failed, the totals in the legend,
+and the same figures as a table for reading without a pointer. It is drawn by `upstreams.js` from
+`/console/upstreams/spend.json`, as the map's panels are drawn from their feeds; the ledger's daily
+rows now carry the calls and the failures (`spend/daily` too). The recent calls are the budgeted
+upstreams' own and every failed call whoever made it; the free sources' polls are behind
+`?calls=all`.
+
+**Why.** The page had four bar charts with no axis, no date and no value: the hourly ones scaled to
+their own peak, the daily ones to the allowance, so a 3,912-unit day stood a third high and Google's
+42 units did not show at all; the four windows were two sentences to read across; and the recent
+calls were the Bureau's warning polls (491 in two days, at no cost) with the paid calls lost among
+them. "Can't it just be a line chart with a coloured line per API source?" — it can. — James,
+21 September 2026.

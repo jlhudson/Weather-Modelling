@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -62,12 +63,14 @@ public class Ledger {
     }
 
     /**
-     * Spend per UTC day, inclusive at both ends.
+     * Spend per UTC day, inclusive at both ends, with the calls and how many failed: every day in
+     * the range answered, zero where nothing was called.
      */
     public List<DaySpend> daily(String upstream, LocalDate from, LocalDate to) {
         List<DaySpend> out = new ArrayList<>();
-        Map<LocalDate, Double> byDay = new ConcurrentHashMap<>();
-        db.sql("select date_trunc('day', at at time zone 'UTC')::date as day, sum(units) as units from upstream_call"
+        Map<LocalDate, DaySpend> byDay = new ConcurrentHashMap<>();
+        db.sql("select date_trunc('day', at at time zone 'UTC')::date as day, sum(units) as units, count(*) as calls,"
+                        + " sum(case when ok then 0 else 1 end) as failures from upstream_call"
                         + " where upstream = :u and at >= :from and at < :to group by 1")
                 .param("u", upstream)
                 .param("from", Db.ts(from.atStartOfDay(ZoneOffset.UTC).toInstant()))
@@ -75,19 +78,19 @@ public class Ledger {
                 .query().listOfRows()
                 .forEach(row -> {
                     LocalDate day = Db.date(row.get("day"));
-                    Double units = Db.dbl(row.get("units"));
-                    if (day != null && units != null) {
-                        byDay.put(day, units);
+                    if (day != null) {
+                        byDay.put(day, new DaySpend(day, orZero(Db.dbl(row.get("units"))),
+                                orZero(Db.integer(row.get("calls"))), orZero(Db.integer(row.get("failures")))));
                     }
                 });
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-            out.add(new DaySpend(d, byDay.getOrDefault(d, 0.0)));
+            out.add(byDay.getOrDefault(d, new DaySpend(d, 0, 0, 0)));
         }
         return out;
     }
 
     /**
-     * Spend per UTC hour over the last day, for the console's bars.
+     * Spend per UTC hour since an instant, for the console's chart.
      */
     public List<HourSpend> hourly(String upstream, Instant since) {
         List<HourSpend> out = new ArrayList<>();
@@ -105,6 +108,21 @@ public class Ledger {
      */
     public List<Map<String, Object>> recent(int limit) {
         return db.sql("select upstream, at, units, ok, latency_ms, detail from upstream_call order by at desc limit :n")
+                .param("n", Math.max(1, Math.min(limit, 500))).query().listOfRows();
+    }
+
+    /**
+     * The most recent calls to the named upstreams, and every call that failed whoever made it,
+     * newest first: the paid calls without the free sources' polls drowning them, and no failure
+     * hidden.
+     */
+    public List<Map<String, Object>> recent(int limit, Collection<String> upstreams) {
+        if (upstreams == null || upstreams.isEmpty()) {
+            return recent(limit);
+        }
+        return db.sql("select upstream, at, units, ok, latency_ms, detail from upstream_call"
+                        + " where upstream in (:ids) or not ok order by at desc limit :n")
+                .param("ids", List.copyOf(upstreams))
                 .param("n", Math.max(1, Math.min(limit, 500))).query().listOfRows();
     }
 
@@ -127,7 +145,7 @@ public class Ledger {
     private record Memo(Instant at, double units) {
     }
 
-    public record DaySpend(LocalDate date, double units) {
+    public record DaySpend(LocalDate date, double units, int calls, int failures) {
     }
 
     public record HourSpend(Instant hour, double units, int calls, int failures) {

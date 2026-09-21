@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * What every console page needs: who is logged in, the map key, and the formatting helpers.
@@ -98,6 +99,27 @@ public class ConsoleModel {
 
         public String n(Object v, String unit) {
             return v == null ? "—" : v + unit;
+        }
+
+        /**
+         * A spend or an allowance: whole when it is whole, one decimal otherwise, thousands separated.
+         */
+        public String units(Object v) {
+            Double d = au.gully.storage.Db.dbl(v);
+            if (d == null) {
+                return "—";
+            }
+            return d == Math.rint(d) ? String.format(Locale.ENGLISH, "%,d", d.longValue()) : String.format(Locale.ENGLISH, "%,.1f", d);
+        }
+
+        /**
+         * A fraction as a whole percentage; under one percent but not nothing reads as "<1%".
+         */
+        public String pct(double fraction) {
+            if (fraction > 0 && fraction < 0.01) {
+                return "<1%";
+            }
+            return Math.round(fraction * 100) + "%";
         }
     }
 }

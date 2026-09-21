@@ -291,9 +291,16 @@ class EndToEndTest {
         ledger.record("open-meteo", 5.0, true, java.time.Duration.ofMillis(120), "forecast 1_2");
         ledger.record("open-meteo", 5.0, false, java.time.Duration.ofMillis(9), "forecast 1_2: unreachable");
         assertThat(ledger.spent("open-meteo", java.time.Duration.ofHours(1))).isEqualTo(10.0);
-        assertThat(ledger.daily("open-meteo", java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(1), java.time.LocalDate.now(java.time.ZoneOffset.UTC))).hasSize(2);
+        java.util.List<au.gully.upstreams.Ledger.DaySpend> days = ledger.daily("open-meteo", java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(1), java.time.LocalDate.now(java.time.ZoneOffset.UTC));
+        assertThat(days).hasSize(2);
+        assertThat(days.getLast()).as("today: both calls, one failed").satisfies(d -> { assertThat(d.units()).isEqualTo(10.0); assertThat(d.calls()).isEqualTo(2); assertThat(d.failures()).isEqualTo(1); });
+        assertThat(days.getFirst().calls()).as("yesterday: nothing").isZero();
         assertThat(ledger.hourly("open-meteo", now.minus(java.time.Duration.ofHours(2)))).isNotEmpty();
         assertThat(ledger.recent(10)).hasSize(2);
+        ledger.record("warnings-sa", 0, true, java.time.Duration.ofMillis(30), "poll");
+        ledger.record("warnings-sa", 0, false, java.time.Duration.ofMillis(30), "poll: 503");
+        assertThat(ledger.recent(10, java.util.List.of("open-meteo"))).as("the budgeted upstream's calls and any failure, not the free poll that worked")
+                .extracting(r -> r.get("upstream") + ":" + r.get("ok")).contains("warnings-sa:false", "open-meteo:false", "open-meteo:true").doesNotContain("warnings-sa:true");
 
         au.gully.hexagons.Hexagon h = store.ask(-34.93, 138.6, false, "INC0001");
         assertThat(h.active()).isTrue();
@@ -396,7 +403,7 @@ class EndToEndTest {
         assertThat(login.getHeaders().getLocation().toString()).endsWith("/console/map");
         String session = login.getHeaders().containsHeader(HttpHeaders.SET_COOKIE) ? firstCookie(login.getHeaders()) : cookie;
 
-        for (String page : new String[]{"/console/map", "/console/hexagons", "/console/upstreams", "/console/curing",
+        for (String page : new String[]{"/console/map", "/console/hexagons", "/console/upstreams", "/console/upstreams?calls=all", "/console/curing",
                 "/console/diagnostics", "/console/api-keys"}) {
             ResponseEntity<String> r = client().get().uri(page).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(page).isEqualTo(HttpStatus.OK);
@@ -407,7 +414,7 @@ class EndToEndTest {
             }
         }
         for (String feed : new String[]{"/console/map/layer.geojson", "/console/map/grid.geojson?south=-35.2&west=138.3&north=-34.7&east=138.9",
-                "/console/map/stations.geojson", "/console/map/coverage.geojson?reachKm=10", "/console/map/drought-feed.geojson?rings=2&kmPer100m=5", "/console/map/sources.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+                "/console/map/stations.geojson", "/console/map/coverage.geojson?reachKm=10", "/console/map/drought-feed.geojson?rings=2&kmPer100m=5", "/console/map/sources.json", "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }
