@@ -232,8 +232,8 @@ public class OpenMeteo implements Upstream {
     /**
      * An hourly series of rain and temperature summed and maxed into rain days: the hour beginning
      * at 9 am on day D through the hour beginning at 8 am on D+1 is day D. A day is kept only when
-     * all its hours are there - twenty-four, or twenty-three on the day daylight saving begins - and,
-     * given a {@code now}, all are in the past. Days outside {@code from..to} are dropped when a
+     * all the hours it has in its zone are there - twenty-four, twenty-three the day daylight saving
+     * begins, twenty-five the day it ends - and, given a {@code now}, all are in the past. Days outside {@code from..to} are dropped when a
      * range is given.
      */
     static List<DailyRow> rainDays(JsonNode root, LocalDate from, LocalDate to, Instant now) throws UpstreamException {
@@ -265,7 +265,8 @@ public class OpenMeteo implements Upstream {
         }
         List<DailyRow> out = new ArrayList<>();
         days.forEach((day, acc) -> {
-            if (acc[2] < 23 || (from != null && day.isBefore(from)) || (to != null && day.isAfter(to))) {
+            long hoursInDay = java.time.Duration.between(day.atTime(RAIN_DAY_TURNS_AT, 0).atZone(zone), day.plusDays(1).atTime(RAIN_DAY_TURNS_AT, 0).atZone(zone)).toHours();
+            if (acc[2] < hoursInDay || (from != null && day.isBefore(from)) || (to != null && day.isAfter(to))) {
                 return;
             }
             out.add(new DailyRow(day, Math.round(acc[0] * 10) / 10.0, Math.round(acc[1] * 10) / 10.0));
