@@ -247,7 +247,7 @@
     function reachSection(s) {
         var t = s.terrain, r = s.reach, html = '<h2>Reach <span class="muted">the ground it speaks for</span></h2>';
         if (!t || !t.sampled) {
-            return html + '<p class="muted mb-1">Its terrain has not been sampled yet: ' + (t ? t.points : '') + ' points of the elevation model, ' + (t ? t.callsToSample : '') + ' calls, once. The background job takes one station every fifteen seconds; or</p>'
+            return html + '<p class="muted mb-1">Its terrain has not been sampled yet: ' + (t ? t.points : '') + ' points of the elevation tiles, some fifteen tiles, once. The background job takes one station every fifteen seconds; or</p>'
                 + '<button class="pill" id="sampleNow" type="button">' + icon('reach') + ' sample it now</button>';
         }
         html += kv([
@@ -256,7 +256,7 @@
             ['rays', cutWords(r.cut) + ' <span class="muted">of ' + r.rays.length + '</span>'],
             ['rule', r.rule.reachKm + ' km · 100 m costs ' + r.rule.kmPer100m + ' km'],
             ['model height', fmt(t.elevationM, 0) + ' m' + (s.heightM != null ? ' <span class="muted">the Bureau says ' + s.heightM + '</span>' : '')],
-            ['sampled', esc(ago(t.sampledAt)) + ' <span class="muted">' + t.calls + ' calls</span>']
+            ['sampled', esc(ago(t.sampledAt)) + ' <span class="muted">' + t.tiles + ' tiles fetched · ' + esc(t.source) + '</span>']
         ]);
         // The rays as a rose: each bearing's reach as a bar, coloured by why it stopped.
         var w = 240, h = 120, cx = w / 2, cy = h / 2, R = 56, max = Math.max.apply(null, r.rays.map(function (x) { return x.km; })) || 1;

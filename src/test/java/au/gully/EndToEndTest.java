@@ -149,7 +149,7 @@ class EndToEndTest {
         assertThat(none.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(none.getBody()).containsEntry("sampled", 0).containsEntry("inForce", true);
         Map<String, Object> before = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
-        assertThat((Map<String, Object>) before.get("terrain")).containsEntry("sampled", false).containsEntry("callsToSample", 25);
+        assertThat((Map<String, Object>) before.get("terrain")).containsEntry("sampled", false).containsEntry("points", 2401);
         assertThat(before.get("reach")).isNull();
 
         plantFlatTerrain("023000", -34.9257, 138.5832, 29);

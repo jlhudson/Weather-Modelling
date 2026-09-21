@@ -21,14 +21,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Open-Meteo, the primary: free, keyless, CC BY 4.0, and generous. One class for its two endpoints,
- * because they share a host, a licence and an allowance: the forecast, and the elevation of a point
- * from a 90 m digital elevation model, which is what a station's reach is drawn from.
+ * Open-Meteo, the primary: free, keyless, CC BY 4.0, and generous.
  * <p>
  * <strong>What a fetch costs.</strong> Open-Meteo counts variables multiplied by span, not requests:
  * a forecast here is eleven hourly variables over three days, twelve current ones and eleven daily
- * over seven, which its published weighting puts at about three units. An elevation call is one,
- * whatever the number of points in it (up to a hundred).
+ * over seven, which its published weighting puts at about three units. (Its elevation endpoint is
+ * not used: it counts every point as a call, and a station's terrain is two and a half thousand.)
  */
 @Slf4j
 @Component
@@ -36,17 +34,10 @@ public class OpenMeteo implements Upstream {
 
     public static final String ID = "open-meteo";
     public static final String FORECAST = "https://api.open-meteo.com/v1/forecast";
-    public static final String ELEVATION = "https://api.open-meteo.com/v1/elevation";
 
     public static final int FORECAST_DAYS = 7;
     public static final int FORECAST_HOURS = 72;
     public static final int PAST_HOURS = 24;
-
-    /**
-     * The most points one elevation call takes.
-     */
-    public static final int ELEVATION_POINTS_PER_CALL = 100;
-    public static final double ELEVATION_UNITS = 1.0;
 
     private static final List<String> CURRENT = List.of("temperature_2m", "relative_humidity_2m",
             "apparent_temperature", "dew_point_2m", "precipitation", "weather_code", "cloud_cover",
@@ -178,36 +169,6 @@ public class OpenMeteo implements Upstream {
         }
 
         return new Forecast(ID, SPEC.model(), SPEC.attribution(), now, Nodes.dbl(root, "elevation"), zone.getId(), current, hourly, daily);
-    }
-
-    /**
-     * The ground height at up to a hundred points, metres, from Open-Meteo's elevation endpoint (the
-     * Copernicus 90 m digital elevation model). The sea reads exactly zero; a value below zero is
-     * land below sea level (Lake Eyre), not water.
-     *
-     * @return one value per point, in order; null where the model has nothing
-     */
-    public List<Double> elevation(List<double[]> points) throws UpstreamException {
-        if (points.size() > ELEVATION_POINTS_PER_CALL) {
-            throw new IllegalArgumentException("at most " + ELEVATION_POINTS_PER_CALL + " points per elevation call");
-        }
-        StringBuilder lats = new StringBuilder(), lons = new StringBuilder();
-        for (double[] p : points) {
-            lats.append(lats.isEmpty() ? "" : ",").append(fixed(p[0]));
-            lons.append(lons.isEmpty() ? "" : ",").append(fixed(p[1]));
-        }
-        JsonNode root = read(ELEVATION + "?latitude=" + lats + "&longitude=" + lons);
-        JsonNode values = Nodes.at(root, "elevation");
-        List<Double> out = new ArrayList<>();
-        if (values != null && values.isArray()) {
-            for (JsonNode v : values) {
-                out.add(v == null || v.isNull() ? null : v.asDouble());
-            }
-        }
-        if (out.size() != points.size()) {
-            throw new UpstreamException(ID + ": asked " + points.size() + " elevations, got " + out.size());
-        }
-        return out;
     }
 
     private JsonNode read(String url) throws UpstreamException {

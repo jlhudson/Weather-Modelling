@@ -11,9 +11,9 @@ minutes and every station in it is held: where it is, how high it is, and what i
 station will carry a *reach* — a polygon drawn once from the terrain around it, out to a distance,
 shortened where the ground rises or falls away from the station's own height, ended at the sea —
 which is the ground the station speaks for; reaches overlap, and a point inside several is answered
-from all of them. Open-Meteo and Google Weather stand behind the stations: Open-Meteo's elevation
-model is what a reach is drawn from, and the forecast comes from Open-Meteo first and Google when
-Open-Meteo is out of allowance. One in-memory register holds all of it, rebuilt from Postgres at
+from all of them. The terrain a reach is drawn from is the open Terrain Tiles on AWS, sampled once;
+Open-Meteo and Google Weather stand behind the stations for the forecast, Open-Meteo first and
+Google when Open-Meteo is out of allowance. One in-memory register holds all of it, rebuilt from Postgres at
 start; the database is not touched to answer a request.
 
 Java 25, Spring Boot 4.1.1, PostgreSQL 18, one Maven module, plain SQL (no entity manager), Flyway.

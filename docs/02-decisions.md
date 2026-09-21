@@ -29,9 +29,11 @@ from the stations, with nothing derived until the shape is right, is cheaper tha
 ### W-2 · The reach: a polygon per station, drawn once from the terrain by a cost rule
 
 **The decision.** Every station carries a reach — the ground it speaks for — as a polygon. The
-terrain around each station is sampled once from Open-Meteo's elevation model (the station and every
-kilometre out to 50 km on 48 bearings, 2,401 points, 25 calls) by a background job that takes one
-station every fifteen seconds, and kept. The polygon is arithmetic over those samples under a rule
+terrain around each station is sampled once from the Terrain Tiles on AWS's open data registry
+(the station and every kilometre out to 50 km on 48 bearings, 2,401 points off some fifteen tiles) by
+a background job that takes one station every fifteen seconds, and kept. Open-Meteo's elevation
+endpoint was the first choice and lasted six calls: it counts every point, so a station is 2,401
+against a day's 10,000. The polygon is arithmetic over those samples under a rule
 of two numbers, both sliders on the map: the *reach* (40 km) and *what a hundred metres of height
 costs* of it (10 km). A ray stops where its distance plus the cost of the greatest height difference
 it has crossed exceeds the reach — the greatest, so a ridge is a barrier — with a 3 km floor. The

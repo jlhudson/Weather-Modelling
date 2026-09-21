@@ -27,17 +27,15 @@ public class Upstreams {
     private final Budget budget;
     private final Breaker breaker;
     private final Pacer pacer;
-    private final OpenMeteo openMeteo;
 
     public Upstreams(List<Upstream> upstreams, GullyProperties properties, Ledger ledger, Budget budget,
-                     Breaker breaker, Pacer pacer, OpenMeteo openMeteo) {
+                     Breaker breaker, Pacer pacer) {
         this.upstreams = upstreams;
         this.properties = properties;
         this.ledger = ledger;
         this.budget = budget;
         this.breaker = breaker;
         this.pacer = pacer;
-        this.openMeteo = openMeteo;
     }
 
     public Optional<Upstream> upstream(String id) {
@@ -85,31 +83,6 @@ public class Upstreams {
             }
         }
         throw new NoUpstream(String.join("; ", skipped));
-    }
-
-    /**
-     * The ground height at up to a hundred points, on Open-Meteo's budget at one unit; empty when
-     * the call could not be made or failed (the ledger and the breaker know why).
-     */
-    public Optional<List<Double>> elevation(List<double[]> points, String what) {
-        if (!properties.enabled()) {
-            return Optional.empty();
-        }
-        String held = gate(openMeteo, OpenMeteo.ELEVATION_UNITS);
-        if (held != null) {
-            log.debug("elevation {} skipped: {}", what, held);
-            return Optional.empty();
-        }
-        long started = System.nanoTime();
-        try {
-            List<Double> out = openMeteo.elevation(points);
-            ledger.record(openMeteo.id(), OpenMeteo.ELEVATION_UNITS, true, Duration.ofNanos(System.nanoTime() - started), "elevation " + what);
-            breaker.succeeded(openMeteo.id());
-            return Optional.of(out);
-        } catch (UpstreamException | RuntimeException e) {
-            failed(openMeteo, e, Duration.ofNanos(System.nanoTime() - started), "elevation " + what, OpenMeteo.ELEVATION_UNITS);
-            return Optional.empty();
-        }
     }
 
     /**

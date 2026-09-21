@@ -102,9 +102,9 @@ public class Reaches {
         tm.put("sampled", t != null);
         tm.put("sampledAt", t == null ? null : t.sampledAt().toString());
         tm.put("elevationM", t == null ? null : t.elevationM());
-        tm.put("calls", t == null ? null : t.calls());
-        tm.put("callsToSample", TerrainSampler.CALLS_PER_STATION);
+        tm.put("tiles", t == null ? null : t.calls());
         tm.put("points", Terrain.POINTS);
+        tm.put("source", TerrainTiles.ATTRIBUTION);
         out.put("terrain", tm);
         if (t != null) {
             Reach r = Reach.of(t, rule.current());

@@ -137,11 +137,11 @@ class UpstreamsTest {
     @Test
     void thePacerWeighsACallAtWhatItCosts() {
         Pacer pacer = new Pacer();
-        // Eight a minute: two forecasts at three leave room for one elevation call at one, not a third forecast.
+        // Eight a minute: two forecasts at three leave room for a call at one, not a third forecast.
         assertThat(pacer.acquire("z", 8, OpenMeteo.SPEC.unitsPerFetch())).isTrue();
         assertThat(pacer.acquire("z", 8, OpenMeteo.SPEC.unitsPerFetch())).isTrue();
         assertThat(pacer.acquire("z", 8, OpenMeteo.SPEC.unitsPerFetch())).as("6 + 3 > 8: the minute is full").isFalse();
-        assertThat(pacer.acquire("z", 8, OpenMeteo.ELEVATION_UNITS)).as("6 + 1 fits").isTrue();
+        assertThat(pacer.acquire("z", 8, 1.0)).as("6 + 1 fits").isTrue();
         assertThat(pacer.inLastMinute("z")).as("counted as calls for the console").isEqualTo(3);
         // A call heavier than the whole limit goes through on an empty minute rather than never.
         assertThat(pacer.acquire("y", 2, OpenMeteo.SPEC.unitsPerFetch())).isTrue();
@@ -150,8 +150,6 @@ class UpstreamsTest {
     @Test
     void theSpecsSayWhatTheyCost() {
         assertThat(OpenMeteo.SPEC.unitsPerFetch()).isEqualTo(3.0);
-        assertThat(OpenMeteo.ELEVATION_UNITS).isEqualTo(1.0);
-        assertThat(OpenMeteo.ELEVATION_POINTS_PER_CALL).isEqualTo(100);
         assertThat(OpenMeteo.SPEC.limits().perDay()).isEqualTo(10_000);
         assertThat(OpenMeteo.SPEC.bills()).isFalse();
         assertThat(GoogleWeather.SPEC.unitsPerFetch()).isEqualTo(3.0);

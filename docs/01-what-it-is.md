@@ -21,12 +21,15 @@ A station is *reporting* when its latest observation is under seventy minutes ol
 
 Each station carries a polygon — its reach — which is the ground it speaks for.
 
-**The terrain, sampled once.** For each station, 2,401 points of Open-Meteo's elevation model (the
-Copernicus 90 m DEM): the station itself, then every kilometre out to 50 km along 48 bearings, 7.5°
-apart. A hundred points to a call, 25 calls a station, on Open-Meteo's allowance at one unit each —
-about two thousand calls for the 82 stations, once. A background job takes one station every
-fifteen seconds until every station has its terrain; the console can sample one station now from
-its drawer. The samples are kept in `terrain` (eight-byte doubles, the station's own first) with the
+**The terrain, sampled once.** For each station, 2,401 points of a digital elevation model: the
+station itself, then every kilometre out to 50 km along 48 bearings, 7.5° apart. The model is the
+Terrain Tiles on AWS's open data registry (Mapzen's, from SRTM, GMTED2010 and others, with
+bathymetry over the sea): public, no key, no published limit, 256-pixel PNG tiles at zoom 10 —
+about 125 m a pixel here — decoded with the JDK. A station's fifty-kilometre disc is some fifteen
+tiles (a megabyte), neighbouring stations share them through a cache, and every tile fetched is a
+row in the ledger. A background job takes one station every fifteen seconds until every station
+has its terrain; the console can sample one station now from its drawer. (Open-Meteo's elevation
+endpoint was tried first and counts every point as a call: 2,401 a station against 10,000 a day.) The samples are kept in `terrain` (eight-byte doubles, the station's own first) with the
 position they were taken at, so a station that moves is sampled again. A new station in the file is
 picked up by the job on its own.
 
@@ -51,9 +54,7 @@ Open-Meteo is the primary and Google Weather the overflow, each behind a budget 
 allowance, retired at 90 % of it), a breaker (open after three failures, or at once when the refusal
 names the window that ran out) and a pacer (the real per-minute limit). Every call is a row in
 `upstream_call`, written before it is counted, which is what the Upstreams page and the budget read.
-Open-Meteo's forecast costs three units; its elevation endpoint — a hundred points of a 90 m digital
-elevation model in one call — costs one. Nothing fetches a forecast yet; the elevation endpoint is
-what the reach is drawn from.
+Open-Meteo's forecast costs three units. Nothing fetches a forecast yet.
 
 ## 4. The console
 

@@ -118,6 +118,5 @@ class ReachTest {
         assertThat(Geo.distanceKm(LAT, LON, east[0], east[1])).isCloseTo(50, within(0.01));
         assertThat(east[1]).isGreaterThan(LON);
         assertThat(east[0]).isCloseTo(LAT, within(0.2));
-        assertThat(TerrainSampler.CALLS_PER_STATION).isEqualTo(25);
     }
 }
