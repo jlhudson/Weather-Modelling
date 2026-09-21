@@ -22,6 +22,14 @@ import java.util.Optional;
 public class StationsFeed {
 
     private final StationRegistry stations;
+    private final List<java.util.function.BiConsumer<Station, Map<String, Object>>> decorators = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * Who adds to every station's properties: the drought, the reach.
+     */
+    public void decorate(java.util.function.BiConsumer<Station, Map<String, Object>> decorator) {
+        decorators.add(decorator);
+    }
 
     public Map<String, Object> geojson() {
         Instant now = Instant.now();
@@ -80,6 +88,9 @@ public class StationsFeed {
         p.put("maxTemperatureC", o == null ? null : o.maxTemperatureC());
         p.put("minTemperatureC", o == null ? null : o.minTemperatureC());
         p.put("cloud", o == null ? null : o.cloud());
+        for (java.util.function.BiConsumer<Station, Map<String, Object>> d : decorators) {
+            d.accept(s, p);
+        }
         return p;
     }
 

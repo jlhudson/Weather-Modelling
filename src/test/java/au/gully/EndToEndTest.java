@@ -65,6 +65,9 @@ class EndToEndTest {
     @Autowired
     ReachRule reachRule;
 
+    @Autowired
+    au.gully.record.Record record;
+
     @BeforeAll
     static void dockerOrSkip() {
         assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker is not available");
@@ -95,7 +98,7 @@ class EndToEndTest {
 
     @Test
     void theMigrationBuiltTheTablesAndTheStationsAreKept() throws Exception {
-        for (String table : new String[]{"api_key", "console_user", "api_access_log", "log_event", "setting", "upstream_call", "station"}) {
+        for (String table : new String[]{"api_key", "console_user", "api_access_log", "log_event", "setting", "upstream_call", "station", "terrain", "station_hour6", "station_day"}) {
             assertThat(db.sql("select to_regclass('public." + table + "')").query(String.class).single()).as(table).isEqualTo(table);
         }
         takeInTheFixture();
@@ -194,6 +197,50 @@ class EndToEndTest {
         assertThat(terrain.get("023000")).isPresent();
         assertThat(terrain.get("023000").get().at(3, 3)).isEqualTo(29);
         reachRule.set(ReachRule.DEFAULT_KM, ReachRule.DEFAULT_KM_PER_100M, ReachRule.DEFAULT_COASTAL_KM, "test", Instant.now());
+    }
+
+    /**
+     * The record (W-6): a year of archive days planted for Adelaide, the drought integrated from
+     * them on the station's detail, and the ledger rows the fixture's reading opens.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theRecordFeedsTheDroughtAndTheDetailCarriesBoth() throws Exception {
+        issueHubKey();
+        takeInTheFixture();
+        Map<String, Object> before = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat((Map<String, Object>) before.get("drought")).containsEntry("held", false);
+        // A year of dry days at thirty degrees, as the archive would give them.
+        java.time.LocalDate today = au.gully.record.Record.dayOf(Instant.now(), java.time.ZoneId.of("Australia/Adelaide"));
+        List<au.gully.upstreams.OpenMeteo.DailyRow> year = new java.util.ArrayList<>();
+        for (int i = 1; i <= 365; i++) {
+            year.add(new au.gully.upstreams.OpenMeteo.DailyRow(today.minusDays(i), i % 15 == 0 ? 12.0 : 0.0, 30.0));
+        }
+        assertThat(record.fill("023000", year)).isEqualTo(365);
+        assertThat(db.sql("select count(*) from station_day where station_id = '023000' and source = 'archive'").query(Long.class).single()).isEqualTo(365L);
+        Map<String, Object> after = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        Map<String, Object> drought = (Map<String, Object>) after.get("drought");
+        assertThat(drought).containsEntry("held", true).containsEntry("complete", true).containsEntry("yearDays", 365).containsEntry("archiveDays", 365);
+        assertThat((Double) drought.get("kbdiMm")).isBetween(0.0, 203.2);
+        assertThat((Double) drought.get("droughtFactor")).isBetween(0.0, 10.0);
+        assertThat((Double) drought.get("meanAnnualRainMm")).isCloseTo(24 * 12.0, org.assertj.core.api.Assertions.within(15.0));
+        assertThat(after).containsKeys("kbdiMm", "droughtFactor", "recordDays", "recordWindows");
+        assertThat((List<?>) after.get("recordDays")).hasSize(30);
+        // The stations feed carries the drought on every point, so the map can colour by it.
+        Map<String, Object> feed = client().get().uri("/api/v1/stations.geojson").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        List<Map<String, Object>> features = (List<Map<String, Object>>) feed.get("features");
+        Map<String, Object> adelaide = features.stream().map(f -> (Map<String, Object>) f.get("properties")).filter(p -> "023000".equals(p.get("id"))).findFirst().orElseThrow();
+        assertThat(adelaide.get("kbdiMm")).isNotNull();
+        assertThat(adelaide.get("droughtDays")).isEqualTo(365);
+        // The record survives a restart's rehydration, and a day the station has of its own is not the archive's to replace.
+        record.rehydrate();
+        assertThat(record.days("023000")).hasSize(365);
+        record.put("023000", new au.gully.record.Record.Day(today.minusDays(1), 5.0, 20.0, au.gully.record.Record.SOURCE_BUREAU), true);
+        assertThat(record.fill("023000", List.of(new au.gully.upstreams.OpenMeteo.DailyRow(today.minusDays(1), 0.0, 30.0)))).isZero();
+        assertThat(db.sql("select source from station_day where station_id = '023000' and day = :d").param("d", today.minusDays(1)).query(String.class).single()).isEqualTo("bureau");
+        // The diagnostics say how the record stands.
+        Map<String, Object> held = (Map<String, Object>) ((Map<String, Object>) client().get().uri("/api/diagnostics?window=PT1H").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class).get("gully")).get("held");
+        assertThat(held).containsKeys("recordDays", "recordWindows", "backfillPending");
     }
 
     @Test

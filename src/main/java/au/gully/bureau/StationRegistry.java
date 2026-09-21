@@ -37,10 +37,18 @@ public class StationRegistry {
     private final Map<String, Station> stations = new ConcurrentHashMap<>();
     private final Map<String, Observation> latest = new ConcurrentHashMap<>();
     private final Map<String, ArrayDeque<Observation>> recent = new ConcurrentHashMap<>();
+    private final List<java.util.function.BiConsumer<Station, Observation>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile Instant lastUpdateAt;
 
     public StationRegistry(JdbcClient db) {
         this.db = db;
+    }
+
+    /**
+     * Who wants every reading newer than the station's last, as it arrives: the record.
+     */
+    public void onObservation(java.util.function.BiConsumer<Station, Observation> listener) {
+        listeners.add(listener);
     }
 
     /**
@@ -101,6 +109,13 @@ public class StationRegistry {
                 d.addFirst(o);
                 while (d.size() > RECENT) {
                     d.removeLast();
+                }
+            }
+            for (java.util.function.BiConsumer<Station, Observation> l : listeners) {
+                try {
+                    l.accept(s, o);
+                } catch (RuntimeException e) {
+                    log.warn("a listener failed on {} at {}: {}", s.id(), o.at(), e.toString());
                 }
             }
         }

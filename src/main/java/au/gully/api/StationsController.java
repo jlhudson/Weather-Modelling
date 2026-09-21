@@ -3,6 +3,8 @@ package au.gully.api;
 import au.gully.bureau.StationsFeed;
 import au.gully.reach.Probe;
 import au.gully.reach.Reaches;
+import au.gully.record.Droughts;
+import au.gully.bureau.StationRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -28,6 +30,8 @@ public class StationsController {
     private final StationsFeed feed;
     private final Reaches reaches;
     private final Probe probe;
+    private final Droughts droughts;
+    private final StationRegistry stations;
 
     @GetMapping(value = "/stations.geojson", produces = {"application/geo+json", "application/json"})
     public Map<String, Object> stations() {
@@ -39,6 +43,7 @@ public class StationsController {
         Map<String, Object> d = feed.detail(id).orElseThrow(() -> new ErrorResponseException(HttpStatus.NOT_FOUND,
                 ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "no station " + id), null));
         d.putAll(reaches.detail(id));
+        stations.station(id).ifPresent(s -> d.putAll(droughts.detail(s)));
         return d;
     }
 

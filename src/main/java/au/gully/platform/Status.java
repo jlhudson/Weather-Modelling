@@ -4,6 +4,8 @@ import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
 import au.gully.reach.TerrainSampler;
 import au.gully.reach.TerrainStore;
+import au.gully.record.Backfill;
+import au.gully.record.Record;
 import au.gully.upstreams.Upstreams;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -34,6 +36,8 @@ public class Status {
     private final StationRegistry stations;
     private final TerrainStore terrain;
     private final TerrainSampler sampler;
+    private final Record record;
+    private final Backfill backfill;
 
     public Map<String, Object> status() {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -97,6 +101,11 @@ public class Status {
         m.put("terrainPending", sampler.pending().size());
         m.put("terrainFailure", sampler.lastFailure());
         m.put("terrainFailedAt", sampler.lastFailedAt());
+        m.put("recordDays", record.dayRows());
+        m.put("recordWindows", record.windowRows());
+        m.put("backfillPending", backfill.pending().size());
+        m.put("backfillFailure", backfill.lastFailure());
+        m.put("backfillFailedAt", backfill.lastFailedAt());
         return m;
     }
 

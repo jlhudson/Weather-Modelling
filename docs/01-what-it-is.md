@@ -60,7 +60,33 @@ foothill scarp, never crosses to the Hills, and ends at the gulf; Mount Lofty (7
 and not the plain; Murray Bridge (30 m) reaches east over the flat and stops short of the Hills to its
 west. Two reaches may overlap — a point inside several is for the interpolation, which comes next.
 
-## 3. The probe
+## 3. The record and the drought
+
+**The record.** Every observation a real station makes goes into an open six-hour window; when a
+reading arrives past the window's end - 3 am, 9 am, 3 pm, 9 pm local - the window is written to
+`station_hour6` (readings, the temperature's extremes and mean, the humidity's extremes, the wind's
+mean and maximum, the strongest gust, and the Bureau's running figures as they stood). The first
+reading at or after 9 am closes the Bureau's day that ended there, into `station_day`: the day is
+dated by the 9 am it began at, its rain is the total to 9 am the reading publishes, its maximum the
+highest of the day's windows and the running maximum published just before 9 am. A day the service
+was not running for is left absent and the archive fills it. Both tables are kept 548 days.
+
+**The backfill.** A background job takes one station every fifteen seconds and asks Open-Meteo for
+the days its year lacks: the reanalysis archive (hourly rain and temperature, folded into 9 am days;
+about 26 units for a year, one per fortnight) for the days older than the archive's six-day lag, the
+forecast endpoint's past days (one unit) for the rest. Only the missing days are asked for, a gap
+of three or fewer is not worth a call, and a station is left six hours between attempts. The
+archive's day never replaces a day the station made itself.
+
+**The drought.** Each station's KBDI is integrated from its own record: from field capacity at the
+start of the year behind today, day by day, with the mean annual rainfall the run needs taken from
+that same year; the drought factor from the deficit and the last twenty days of rain, today's so
+far last. Twenty days is the least a record can speak from; a year less a fortnight is complete.
+Nothing is stored - it is arithmetic over the record, memoised until the record or the day changes -
+and it travels on the stations feed (`kbdiMm`, `droughtFactor`) and the station's detail, with the
+last thirty days and eight windows of the record behind it.
+
+## 4. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the
 stations that speak for that point (W-5): every station whose reach contains it, nearest first, each
@@ -70,7 +96,7 @@ its ray towards it goes; then the nearest three whose reach does not contain it,
 stopped short. Nothing is blended: these are the ingredients a reading at the point will be made
 from, and the interpolation between them is the next decision.
 
-## 4. The upstreams
+## 5. The upstreams
 
 Open-Meteo is the primary and Google Weather the overflow, each behind a budget (the published
 allowance, retired at 90 % of it), a breaker (open after three failures, or at once when the refusal
@@ -78,7 +104,7 @@ names the window that ran out) and a pacer (the real per-minute limit). Every ca
 `upstream_call`, written before it is counted, which is what the Upstreams page and the budget read.
 Open-Meteo's forecast costs three units. Nothing fetches a forecast yet.
 
-## 5. The console
+## 6. The console
 
 One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
 where it is, filled when it is reporting and hollow when it is not, coloured by what it last said;
@@ -86,13 +112,14 @@ a click opens everything held for it. The Upstreams page is the allowance table,
 breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
 startup record. API keys issues and revokes keys with a scope.
 
-## 6. The API
+## 7. The API
 
 `/api/v1/stations.geojson` and `/api/v1/reach.geojson` are what the map draws; `/api/v1/stations/{id}`
 is what a click on a station opens and `/api/v1/stations/at?lat=&lon=` what a click anywhere else opens; `/api/diagnostics` is the shape The Hub's morning agent reads. Every route needs a key.
 
-## 7. Storage
+## 8. Storage
 
-Eight tables: `api_key`, `console_user`, `api_access_log`, `log_event`, `setting` (what the console
-sets and a restart must keep), `upstream_call`, `station` (`V1`), and `terrain` (`V2`). Two in-memory
-registers, the stations and their terrain, rebuilt at start.
+Ten tables: `api_key`, `console_user`, `api_access_log`, `log_event`, `setting` (what the console
+sets and a restart must keep), `upstream_call`, `station` (`V1`), `terrain` (`V2`), `station_hour6`
+and `station_day` (`V3`). Three in-memory registers - the stations, their terrain, their days - rebuilt
+at start.

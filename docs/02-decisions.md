@@ -101,3 +101,25 @@ be seen rather than wondered about. The endpoint is the one a reading at a point
 the one the Hub's `/api/weather` can be pointed at when it does. The five ways to blend them — nearest
 station, inverse distance, height-corrected inverse distance, Barnes successive correction, kriging
 with an elevation drift — were laid out on 21 September and none chosen yet. — James, 21 September 2026.
+
+### W-6 · The record, and the drought from it: six-hour windows, Bureau days, a year backfilled
+
+**The decision.** A real station's readings are kept as six-hour windows (3, 9, 15, 21 local) and
+as Bureau days — the 24 hours from 9 am, rain the published total to the next 9 am, maximum the
+highest reading between — both 548 days. The days a station's year lacks are filled from
+Open-Meteo's reanalysis archive by a background job, one station every fifteen seconds, only the
+missing days, never over a day the station made itself. Each station's drought is the Keetch–Byram
+deficit integrated from its own record — from field capacity at the start of the year behind
+today, the mean annual rainfall from that year — and the Griffiths drought factor from the deficit
+and the last twenty days of rain; both on demand, memoised, on the stations feed and the detail. The
+formulas are the ones this service had before the start-over, restored from git with their tests
+(Keetch & Byram 1968 in Crane's metric form; Griffiths 1999 as corrected by Finkele 2006), not
+retyped. The drought rides the same reach as the current: one polygon per station, one membership.
+
+**Why.** The deficit is a running total, not an observation: it has to be integrated from history,
+and a year is the honest spin-up because a South Australian year always holds the wet season that
+resets it. Interpolating each station's *index* rather than its inputs is what the Bureau's gridded
+drought factor does and keeps the record where it belongs, with the station. Backfilling only the
+missing days, and resting a station six hours between attempts, is what keeps a hundred stations at
+a few hundred units a day at worst and nothing at best. A day without both a rain total and a
+maximum is left for the archive rather than written half-known. — James, 21 September 2026.

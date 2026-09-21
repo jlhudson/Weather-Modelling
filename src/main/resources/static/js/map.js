@@ -20,6 +20,8 @@
         {id: 'windSpeedKmh', name: 'Wind', unit: 'km/h', icon: 'wind', range: [0, 80]},
         {id: 'windGustKmh', name: 'Gust', unit: 'km/h', icon: 'gust', range: [0, 110]},
         {id: 'rainSince9amMm', name: 'Rain', hint: 'since 9 am', unit: 'mm', icon: 'rain', range: [0, 25], d: 1},
+        {id: 'kbdiMm', name: 'KBDI', hint: 'soil moisture deficit', unit: 'mm', icon: 'drought', range: [0, 203], always: true},
+        {id: 'droughtFactor', name: 'Drought factor', hint: '0 to 10', icon: 'drought', range: [0, 10], always: true, d: 1},
         {id: 'heightM', name: 'Height', hint: 'of the station', unit: 'm', icon: 'elevation', range: [0, 800], always: true},
         {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true}
     ];
@@ -318,15 +320,46 @@
         }).catch(function (e) { note('probe failed: ' + e); });
     }
     function stationRows(list, inReach) {
-        var html = '<table class="table table-sm probe"><thead><tr><th>station</th><th class="num">km</th><th>from</th><th class="num">Δ m</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">mm</th><th>age</th></tr></thead><tbody>';
+        var html = '<table class="table table-sm probe"><thead><tr><th>station</th><th class="num">km</th><th>from</th><th class="num">Δ m</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">mm</th><th class="num" title="Keetch-Byram drought index, mm">KBDI</th><th class="num" title="drought factor, 0 to 10">DF</th><th>age</th></tr></thead><tbody>';
         list.forEach(function (s) {
             html += '<tr' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#" data-station="' + esc(s.id) + '">' + esc(s.name) + '</a>' + (s.coastal ? ' <span class="coastal" title="coastal">~</span>' : '') + '</td>'
                 + '<td class="num">' + fmt(s.km, 1) + '</td><td class="mono">' + dirWord(s.bearingDeg) + '</td><td class="num">' + (s.aboveM != null ? (s.aboveM > 0 ? '+' : '') + s.aboveM : '—') + '</td>'
-                + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
-            if (!inReach) html += '<tr class="why"><td colspan="9" class="muted">' + esc(s.why) + '</td></tr>';
-            else if (s.margin != null) html += '<tr class="why"><td colspan="9" class="muted">its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
+                + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="num">' + fmt(s.kbdiMm, 0) + '</td><td class="num">' + fmt(s.droughtFactor, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
+            if (!inReach) html += '<tr class="why"><td colspan="11" class="muted">' + esc(s.why) + '</td></tr>';
+            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
         });
         return html + '</tbody></table>';
+    }
+
+    // ---- the drought (W-6): the station's deficit and factor from its own record, and the record itself
+    function droughtSection(s) {
+        var d = s.drought, html = '<h2>Drought <span class="muted">from its own record</span></h2>';
+        if (!d) return html;
+        if (!d.held) {
+            return html + '<p class="muted mb-1">Its record holds ' + d.days + ' day' + (d.days === 1 ? '' : 's') + (d.days ? ' (' + d.bureauDays + ' from the file, ' + d.archiveDays + ' from the archive)' : '') + ': too few for a drought to speak of. The archive fills a year, one station every fifteen seconds.</p>';
+        }
+        html += kv([
+            ['KBDI', fmt(d.kbdiMm, 0) + ' mm <span class="muted">' + esc(String(d.band).toLowerCase()) + ' · 0 saturated, 203 dry</span>'],
+            ['drought factor', fmt(d.droughtFactor, 1) + ' <span class="muted">of 10</span>'],
+            ['integrated', d.yearDays + ' days, ' + esc(d.integratedFrom) + ' to ' + esc(d.integratedTo) + (d.complete ? '' : ' <span class="muted">· not a whole year yet</span>')],
+            ['mean annual rain', fmt(d.meanAnnualRainMm, 0) + ' mm <span class="muted">from that year</span>'],
+            ['record', d.days + ' days <span class="muted">' + d.bureauDays + ' from the file · ' + d.archiveDays + ' from the archive</span>'],
+            ['today so far', d.rainSoFarMm != null ? fmt(d.rainSoFarMm, 1) + ' mm' : null]
+        ]);
+        // The twenty days behind the factor, as bars, today last.
+        var rr = d.recentRainMm || [], max = Math.max.apply(null, rr.concat([1]));
+        html += '<div class="rain-strip" title="the last twenty days\' rain, today last">' + rr.map(function (mm, i) { return '<i style="height:' + Math.max(2, mm / max * 28) + 'px" title="' + (rr.length - 1 - i) + ' days ago: ' + mm.toFixed(1) + ' mm"></i>'; }).join('') + '</div>';
+        if (s.recordDays && s.recordDays.length) {
+            html += '<details class="rec"><summary class="muted">the last ' + s.recordDays.length + ' days of the record</summary><table class="table table-sm recent"><thead><tr><th>day</th><th class="num">rain</th><th class="num">max °C</th><th>from</th></tr></thead><tbody>';
+            s.recordDays.forEach(function (x) { html += '<tr><td class="mono">' + esc(x.day) + '</td><td class="num">' + fmt(x.rainMm, 1) + '</td><td class="num">' + fmt(x.maxTempC, 1) + '</td><td class="muted">' + esc(x.source) + '</td></tr>'; });
+            html += '</tbody></table></details>';
+        }
+        if (s.recordWindows && s.recordWindows.length) {
+            html += '<details class="rec"><summary class="muted">the last ' + s.recordWindows.length + ' six-hour windows</summary><table class="table table-sm recent"><thead><tr><th>to</th><th class="num">n</th><th class="num">°C min·mean·max</th><th class="num">% min·max</th><th class="num">wind mean·max</th><th class="num">gust</th><th class="num">rain 9 am</th></tr></thead><tbody>';
+            s.recordWindows.forEach(function (x) { html += '<tr><td class="mono">' + esc(when(x.at)) + '</td><td class="num">' + fmt(x.readings) + '</td><td class="num">' + fmt(x.temp_min_c, 1) + '·' + fmt(x.temp_mean_c, 1) + '·' + fmt(x.temp_max_c, 1) + '</td><td class="num">' + fmt(x.rh_min_pct) + '·' + fmt(x.rh_max_pct) + '</td><td class="num">' + fmt(x.wind_mean_kmh) + '·' + fmt(x.wind_max_kmh) + '</td><td class="num">' + fmt(x.gust_max_kmh) + '</td><td class="num">' + fmt(x.rain_since_9am_mm, 1) + '</td></tr>'; });
+            html += '</tbody></table></details>';
+        }
+        return html;
     }
 
     function detail(id) {
@@ -361,6 +394,7 @@
                 html += '<p class="muted">Nothing reported since the start.</p>';
             }
             html += reachSection(s);
+            html += droughtSection(s);
             if (s.recent && s.recent.length > 1) {
                 html += '<h2>Last readings <span class="muted">newest first, since the start</span></h2><table class="table table-sm recent"><thead><tr><th>at</th><th class="num">°C</th><th class="num">%</th><th class="num">km/h</th><th>from</th><th class="num">gust</th><th class="num">mm</th></tr></thead><tbody>';
                 s.recent.forEach(function (x) { html += '<tr><td class="mono">' + clock(x.at) + '</td><td class="num">' + fmt(x.temperatureC, 1) + '</td><td class="num">' + fmt(x.humidityPct) + '</td><td class="num">' + fmt(x.windSpeedKmh) + '</td><td class="dir">' + (x.windDirectionDeg != null ? '<span class="arrow" style="transform:rotate(' + ((x.windDirectionDeg + 180) % 360) + 'deg)">↑</span> ' + x.windDirectionDeg + '°' : '—') + '</td><td class="num">' + fmt(x.windGustKmh) + '</td><td class="num">' + fmt(x.rainSince9amMm, 1) + '</td></tr>'; });

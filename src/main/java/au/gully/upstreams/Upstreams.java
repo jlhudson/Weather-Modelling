@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,15 +28,17 @@ public class Upstreams {
     private final Budget budget;
     private final Breaker breaker;
     private final Pacer pacer;
+    private final OpenMeteo openMeteo;
 
     public Upstreams(List<Upstream> upstreams, GullyProperties properties, Ledger ledger, Budget budget,
-                     Breaker breaker, Pacer pacer) {
+                     Breaker breaker, Pacer pacer, OpenMeteo openMeteo) {
         this.upstreams = upstreams;
         this.properties = properties;
         this.ledger = ledger;
         this.budget = budget;
         this.breaker = breaker;
         this.pacer = pacer;
+        this.openMeteo = openMeteo;
     }
 
     public Optional<Upstream> upstream(String id) {
@@ -83,6 +86,47 @@ public class Upstreams {
             }
         }
         throw new NoUpstream(String.join("; ", skipped));
+    }
+
+    /**
+     * A range of the daily record from Open-Meteo's reanalysis archive, at the archive's cost; empty
+     * when the call could not be made or failed (the ledger and the breaker know why).
+     */
+    public Optional<List<OpenMeteo.DailyRow>> archive(double lat, double lon, LocalDate from, LocalDate to, String what) {
+        return spend(OpenMeteo.archiveUnits(from, to), "archive " + from + " to " + to + " " + what, () -> openMeteo.archive(lat, lon, from, to));
+    }
+
+    /**
+     * The last few complete days from the forecast endpoint, at one unit.
+     */
+    public Optional<List<OpenMeteo.DailyRow>> recentDays(double lat, double lon, int pastDays, String what) {
+        return spend(OpenMeteo.RECENT_UNITS, "recent " + pastDays + " days " + what, () -> openMeteo.recent(lat, lon, pastDays));
+    }
+
+    private <T> Optional<T> spend(double units, String what, Call<T> call) {
+        if (!properties.enabled()) {
+            return Optional.empty();
+        }
+        String held = gate(openMeteo, units);
+        if (held != null) {
+            log.debug("{} skipped: {}", what, held);
+            return Optional.empty();
+        }
+        long started = System.nanoTime();
+        try {
+            T out = call.run();
+            ledger.record(openMeteo.id(), units, true, Duration.ofNanos(System.nanoTime() - started), what);
+            breaker.succeeded(openMeteo.id());
+            return Optional.of(out);
+        } catch (UpstreamException | RuntimeException e) {
+            failed(openMeteo, e, Duration.ofNanos(System.nanoTime() - started), what, units);
+            return Optional.empty();
+        }
+    }
+
+    @FunctionalInterface
+    private interface Call<T> {
+        T run() throws UpstreamException;
     }
 
     /**

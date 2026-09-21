@@ -8,6 +8,7 @@ import au.gully.reach.Probe;
 import au.gully.reach.ReachRule;
 import au.gully.reach.Reaches;
 import au.gully.reach.TerrainSampler;
+import au.gully.record.Droughts;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,7 @@ public class MapController {
     private final ReachRule rule;
     private final TerrainSampler sampler;
     private final Probe probe;
+    private final Droughts droughts;
 
     @GetMapping
     public String page(Model model) {
@@ -68,6 +70,7 @@ public class MapController {
     public ResponseEntity<Map<String, Object>> station(@PathVariable String id) {
         return feed.detail(id).map(d -> {
             d.putAll(reaches.detail(id));
+            stations.station(id).ifPresent(s -> d.putAll(droughts.detail(s)));
             return ResponseEntity.ok(d);
         }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }

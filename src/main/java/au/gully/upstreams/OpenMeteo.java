@@ -34,10 +34,33 @@ public class OpenMeteo implements Upstream {
 
     public static final String ID = "open-meteo";
     public static final String FORECAST = "https://api.open-meteo.com/v1/forecast";
+    public static final String ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
 
     public static final int FORECAST_DAYS = 7;
     public static final int FORECAST_HOURS = 72;
     public static final int PAST_HOURS = 24;
+
+    /**
+     * What the archive costs: Open-Meteo's published weighting counts a fortnight of up to ten
+     * variables as one call, so a year of two is 26 - and a burst of spin-ups charged at less met the
+     * minute limit long before the ledger said so.
+     */
+    public static final int ARCHIVE_DAYS_PER_UNIT = 14;
+    /** A few past days from the forecast endpoint. */
+    public static final double RECENT_UNITS = 1.0;
+    /**
+     * How long the archive is given to answer: a year of reanalysis at one point usually comes back
+     * in a second and sometimes in fifteen, and thirty seconds was cutting off one in twenty.
+     */
+    public static final Duration ARCHIVE_PATIENCE = Duration.ofSeconds(90);
+    /**
+     * The archive lags real time by about this much; the days since come from {@link #recent}.
+     */
+    public static final int ARCHIVE_LAG_DAYS = 6;
+    /**
+     * The hour the Bureau's rain day turns: the 24 hours to 9 am local are the day before's rain.
+     */
+    static final int RAIN_DAY_TURNS_AT = 9;
 
     private static final List<String> CURRENT = List.of("temperature_2m", "relative_humidity_2m",
             "apparent_temperature", "dew_point_2m", "precipitation", "weather_code", "cloud_cover",
@@ -171,8 +194,93 @@ public class OpenMeteo implements Upstream {
         return new Forecast(ID, SPEC.model(), SPEC.attribution(), now, Nodes.dbl(root, "elevation"), zone.getId(), current, hourly, daily);
     }
 
+    // ---------------------------------------------------------------- the daily record
+
+    /**
+     * Reanalysis history: hourly rain and temperature, which lags real time by a few days, summed
+     * and maxed into the Bureau's rain day - 9 am to 9 am local - so the archive's days and the
+     * stations' are the same days. The start is asked a day early, since the first rain day begins
+     * at 9 am the day before.
+     */
+    public List<DailyRow> archive(double lat, double lon, LocalDate start, LocalDate end) throws UpstreamException {
+        String url = ARCHIVE + "?latitude=" + fixed(lat) + "&longitude=" + fixed(lon)
+                + "&start_date=" + start.minusDays(1) + "&end_date=" + end.plusDays(1)
+                + "&hourly=precipitation,temperature_2m&timezone=auto&timeformat=unixtime";
+        return rainDays(read(url, ARCHIVE_PATIENCE), start, end, null);
+    }
+
+    /**
+     * What a range of the archive costs in Open-Meteo's units.
+     */
+    public static double archiveUnits(LocalDate start, LocalDate end) {
+        long days = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 3;
+        return Math.max(1, Math.ceil(days / (double) ARCHIVE_DAYS_PER_UNIT));
+    }
+
+    /**
+     * The last few days, from the forecast endpoint, to close the archive's gap: the same hourly
+     * series summed into 9 am days, and only the days already complete - a rain day still running
+     * is not a day. Asked a day further back than wanted, for the first day's 9 am start.
+     */
+    public List<DailyRow> recent(double lat, double lon, int pastDays) throws UpstreamException {
+        String url = FORECAST + "?latitude=" + fixed(lat) + "&longitude=" + fixed(lon)
+                + "&past_days=" + Math.min(92, Math.max(1, pastDays + 1)) + "&forecast_days=1"
+                + "&hourly=precipitation,temperature_2m&timezone=auto&timeformat=unixtime";
+        return rainDays(read(url), null, null, Instant.now());
+    }
+
+    /**
+     * An hourly series of rain and temperature summed and maxed into rain days: the hour beginning
+     * at 9 am on day D through the hour beginning at 8 am on D+1 is day D. A day is kept only when
+     * all twenty-four of its hours are there and, given a {@code now}, all are in the past. Days
+     * outside {@code from..to} are dropped when a range is given.
+     */
+    static List<DailyRow> rainDays(JsonNode root, LocalDate from, LocalDate to, Instant now) throws UpstreamException {
+        JsonNode hourly = Nodes.at(root, "hourly");
+        JsonNode times = Nodes.at(hourly, "time");
+        if (times == null || !times.isArray()) {
+            throw new UpstreamException(ID + " hourly: payload carried no series");
+        }
+        String tz = Nodes.str(root, "timezone");
+        ZoneId zone = tz == null ? ZoneOffset.UTC : safeZone(tz);
+        java.util.SortedMap<LocalDate, double[]> days = new java.util.TreeMap<>();
+        for (int i = 0; i < times.size(); i++) {
+            Double t = Nodes.element(hourly, "time", i);
+            Double rain = Nodes.element(hourly, "precipitation", i);
+            Double temp = Nodes.element(hourly, "temperature_2m", i);
+            if (t == null || rain == null || temp == null) {
+                continue;
+            }
+            Instant at = Instant.ofEpochSecond(t.longValue());
+            if (now != null && !at.plusSeconds(3600).isBefore(now.plusSeconds(1))) {
+                continue;
+            }
+            java.time.ZonedDateTime local = at.atZone(zone);
+            LocalDate day = local.getHour() < RAIN_DAY_TURNS_AT ? local.toLocalDate().minusDays(1) : local.toLocalDate();
+            double[] acc = days.computeIfAbsent(day, k -> new double[]{0, Double.NEGATIVE_INFINITY, 0});
+            acc[0] += rain;
+            acc[1] = Math.max(acc[1], temp);
+            acc[2]++;
+        }
+        List<DailyRow> out = new ArrayList<>();
+        days.forEach((day, acc) -> {
+            if (acc[2] < 24 || (from != null && day.isBefore(from)) || (to != null && day.isAfter(to))) {
+                return;
+            }
+            out.add(new DailyRow(day, Math.round(acc[0] * 10) / 10.0, Math.round(acc[1] * 10) / 10.0));
+        });
+        return out;
+    }
+
     private JsonNode read(String url) throws UpstreamException {
-        Fetched fetched = http.get(URI.create(url));
+        return read(http.get(URI.create(url)));
+    }
+
+    private JsonNode read(String url, Duration patience) throws UpstreamException {
+        return read(http.get(URI.create(url), patience));
+    }
+
+    private JsonNode read(Fetched fetched) throws UpstreamException {
         JsonNode root = mapper.readTree(fetched.bodyAsString());
         // Open-Meteo answers a bad request with 200-shaped JSON carrying error and reason.
         if (Boolean.TRUE.equals(Nodes.bool(root, "error"))) {
@@ -241,5 +349,12 @@ public class OpenMeteo implements Upstream {
 
     static String fixed(double v) {
         return String.format(java.util.Locale.ROOT, "%.4f", v);
+    }
+
+    /**
+     * One day of history: the Bureau's rain day - the 24 hours from 9 am local on the date - its rain
+     * and its maximum.
+     */
+    public record DailyRow(LocalDate date, double rainMm, double maxTemperatureC) {
     }
 }
