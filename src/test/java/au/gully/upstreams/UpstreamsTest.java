@@ -52,47 +52,11 @@ class UpstreamsTest {
         assertThat(f.at(Instant.ofEpochSecond(1789740000L)).temperatureC()).isEqualTo(10.7);
         assertThat(f.at(Instant.ofEpochSecond(1789800000L)).temperatureC()).as("past the series: its last hour").isEqualTo(9.8);
         assertThat(f.at(Instant.ofEpochSecond(1789000000L)).temperatureC()).as("before the series: its first hour").isEqualTo(10.7);
-        assertThat(f.precipitationBetween(Instant.ofEpochSecond(1789740000L), Instant.ofEpochSecond(1789747200L))).isEqualTo(0.1);
-        assertThat(f.precipitationBetween(Instant.ofEpochSecond(1789700000L), Instant.ofEpochSecond(1789747200L))).as("the series does not reach back").isNull();
         assertThat(f.daily()).hasSize(2);
         // Midnight local expressed as a UTC epoch comes back as the local date.
         assertThat(f.daily().getFirst().date()).isEqualTo(LocalDate.of(2026, 9, 18));
         assertThat(f.daily().getFirst().minHumidityPct()).as("from the hourly series of that local day").isEqualTo(81);
         assertThat(f.daily().get(1).condition()).isEqualTo("Light rain");
-    }
-
-    /**
-     * The archive's hours summed into the Bureau's rain day (W-21): the hour beginning at 9 am local
-     * on a date through the hour beginning at 8 am the next is that date's day. Seventy-two hours from
-     * midnight Adelaide time on the 18th make one complete day (the 18th: 09:00 on the 18th to 08:00 on
-     * the 19th) with the 9 hours before it and the 15 after it incomplete; given a "now" inside the
-     * series, only the hours already past count, and a day still running is not a day.
-     */
-    @Test
-    void theArchivesHoursAreSummedIntoRainDays() throws Exception {
-        // 1789655400 is 2026-09-18T00:00 in Australia/Adelaide (UTC+9:30, no daylight saving until October). 1 mm every hour, temperature the hour's index.
-        StringBuilder times = new StringBuilder(), rain = new StringBuilder(), temp = new StringBuilder();
-        for (int h = 0; h < 72; h++) {
-            times.append(h == 0 ? "" : ",").append(1789655400L + h * 3600L);
-            rain.append(h == 0 ? "" : ",").append("1.0");
-            temp.append(h == 0 ? "" : ",").append(h);
-        }
-        String payload = "{\"utc_offset_seconds\":34200,\"timezone\":\"Australia/Adelaide\",\"hourly\":{\"time\":[" + times + "],\"precipitation\":[" + rain + "],\"temperature_2m\":[" + temp + "]}}";
-        var root = JsonMapper.builder().build().readTree(payload);
-        var days = OpenMeteo.rainDays(root, null, null, null);
-        assertThat(days).hasSize(2);
-        assertThat(days.getFirst().date()).isEqualTo(LocalDate.of(2026, 9, 18));
-        assertThat(days.getFirst().rainMm()).as("24 hours at a millimetre").isEqualTo(24.0);
-        assertThat(days.getFirst().maxTemperatureC()).as("the hour beginning 08:00 on the 19th is index 32").isEqualTo(32.0);
-        assertThat(days.get(1).date()).isEqualTo(LocalDate.of(2026, 9, 19));
-        assertThat(days.get(1).maxTemperatureC()).isEqualTo(56.0);
-        // A range keeps only the days inside it.
-        assertThat(OpenMeteo.rainDays(root, LocalDate.of(2026, 9, 19), LocalDate.of(2026, 9, 19), null)).extracting(OpenMeteo.DailyRow::date).containsExactly(LocalDate.of(2026, 9, 19));
-        // "Now" at 08:30 on the 20th: the 19th's last hour (08:00-09:00) has not finished, so the 19th is not a day yet.
-        Instant now = Instant.ofEpochSecond(1789655400L + 56 * 3600L + 1800);
-        assertThat(OpenMeteo.rainDays(root, null, null, now)).extracting(OpenMeteo.DailyRow::date).containsExactly(LocalDate.of(2026, 9, 18));
-        // At 09:00 on the 20th it has.
-        assertThat(OpenMeteo.rainDays(root, null, null, Instant.ofEpochSecond(1789655400L + 57 * 3600L))).hasSize(2);
     }
 
     @Test
@@ -173,21 +137,21 @@ class UpstreamsTest {
     @Test
     void thePacerWeighsACallAtWhatItCosts() {
         Pacer pacer = new Pacer();
-        // Thirty a minute: a year of the archive at twenty-six leaves room for one forecast at five, not two.
-        assertThat(pacer.acquire("z", 30, OpenMeteo.ARCHIVE_UNITS)).isTrue();
-        assertThat(pacer.acquire("z", 30, OpenMeteo.SPEC.unitsPerFetch())).as("26 + 5 > 30: the minute is full").isFalse();
-        assertThat(pacer.acquire("z", 30, OpenMeteo.SMALL_UNITS)).as("26 + 1 fits").isTrue();
-        assertThat(pacer.inLastMinute("z")).as("counted as calls for the console").isEqualTo(2);
+        // Eight a minute: two forecasts at three leave room for one elevation call at one, not a third forecast.
+        assertThat(pacer.acquire("z", 8, OpenMeteo.SPEC.unitsPerFetch())).isTrue();
+        assertThat(pacer.acquire("z", 8, OpenMeteo.SPEC.unitsPerFetch())).isTrue();
+        assertThat(pacer.acquire("z", 8, OpenMeteo.SPEC.unitsPerFetch())).as("6 + 3 > 8: the minute is full").isFalse();
+        assertThat(pacer.acquire("z", 8, OpenMeteo.ELEVATION_UNITS)).as("6 + 1 fits").isTrue();
+        assertThat(pacer.inLastMinute("z")).as("counted as calls for the console").isEqualTo(3);
         // A call heavier than the whole limit goes through on an empty minute rather than never.
-        assertThat(pacer.acquire("y", 5, OpenMeteo.ARCHIVE_UNITS)).isTrue();
+        assertThat(pacer.acquire("y", 2, OpenMeteo.SPEC.unitsPerFetch())).isTrue();
     }
 
     @Test
     void theSpecsSayWhatTheyCost() {
-        assertThat(OpenMeteo.SPEC.unitsPerFetch()).isEqualTo(5.0);
-        // Open-Meteo's weighting: a fortnight of up to ten variables is one call, so a year of two is 26.
-        assertThat(OpenMeteo.ARCHIVE_UNITS).isEqualTo(Math.floor(365 / 14.0));
-        assertThat(OpenMeteo.ARCHIVE_PATIENCE).isGreaterThan(Duration.ofSeconds(30));
+        assertThat(OpenMeteo.SPEC.unitsPerFetch()).isEqualTo(3.0);
+        assertThat(OpenMeteo.ELEVATION_UNITS).isEqualTo(1.0);
+        assertThat(OpenMeteo.ELEVATION_POINTS_PER_CALL).isEqualTo(100);
         assertThat(OpenMeteo.SPEC.limits().perDay()).isEqualTo(10_000);
         assertThat(OpenMeteo.SPEC.bills()).isFalse();
         assertThat(GoogleWeather.SPEC.unitsPerFetch()).isEqualTo(3.0);

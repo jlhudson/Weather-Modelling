@@ -1,16 +1,15 @@
-package au.gully.science;
+package au.gully.upstreams;
 
 import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * One day of the forecast, reduced to what a fire actually turns on: how hot, how dry, how
- * windy, and whether rain is coming. The hourly series carries the detail; this carries the shape of
- * the day, which is what a duty officer reads first.
+ * One day of the forecast, reduced to the shape of the day: how hot, how dry, how windy, whether
+ * rain is coming. The hourly series carries the detail.
  *
  * @param date           the local date at the point, not a UTC day
- * @param minHumidityPct the day's driest hour, which is when a fire runs, not the daily mean
- * @param maxWindKmh     the day's strongest mean wind, for the same reason
+ * @param minHumidityPct the day's driest hour, not the daily mean
+ * @param maxWindKmh     the day's strongest mean wind
  */
 public record DayOutlook(
         LocalDate date,

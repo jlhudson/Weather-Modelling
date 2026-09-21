@@ -5,14 +5,15 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
- * Gully: the weather, and the fire danger, at a point, now or at a time (docs/01-what-it-does.md).
+ * Gully: South Australia's weather from the Bureau's stations, each with the ground it speaks for
+ * (docs/01-what-it-is.md).
  *
  * <p>No component-scan filters and no entity manager: every bean is an ordinary {@code @Component},
  * {@code @Service} or {@code @Configuration}, the configuration records are discovered by
  * {@code @ConfigurationProperties}, and the schema is Flyway's ({@code db/migration}).
  *
- * <p>Nothing is {@code @Scheduled}. The timers are set up by {@code au.gully.platform.Timers} once
- * the store has been rebuilt, because the first poll has to find the hexagons already in memory.
+ * <p>Nothing is {@code @Scheduled}: the timers are set up by {@code au.gully.platform.Startup} once
+ * the registers are back in memory.
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan("au.gully")

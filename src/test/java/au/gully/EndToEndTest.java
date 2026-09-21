@@ -1,12 +1,14 @@
 package au.gully;
 
+import au.gully.bureau.StationFile;
+import au.gully.bureau.StationRegistry;
 import au.gully.platform.Hashing;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -19,19 +21,18 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.time.Duration;
+import java.io.InputStream;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * The one real end-to-end test (docs/06 item 13): the service boots against a throwaway Postgres
- * that already holds the four tables the old service's Hibernate built — with a key issued to the
- * Hub in it — runs its migration, and answers the API. Nothing upstream is called:
- * {@code gully.enabled} is off, so the reading is honestly unavailable and says so in the contract's
- * shape.
+ * The one real end-to-end test: the service boots against a throwaway Postgres, runs its migration,
+ * takes a station file into the register, and answers the API and the console. Nothing upstream is
+ * called: {@code gully.enabled} is off.
  * <p>
  * Skipped where Docker is not available.
  */
@@ -44,14 +45,16 @@ class EndToEndTest {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine")
-            .withInitScript("fixtures/before-gully.sql");
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
     @LocalServerPort
     int port;
 
     @Autowired
     JdbcClient db;
+
+    @Autowired
+    StationRegistry stations;
 
     @BeforeAll
     static void dockerOrSkip() {
@@ -63,323 +66,71 @@ class EndToEndTest {
                 .defaultStatusHandler(s -> true, (req, res) -> { /* read the status ourselves */ }).build();
     }
 
-    @Test
-    void theMigrationKeptTheOldKeyAndBuiltTheNewTables() {
-        // The legacy row is still there, with the hash of the plaintext the init script planted.
-        String hash = db.sql("select key_hash from api_key where consumer = 'hub'").query(String.class).single();
-        assertThat(hash).isEqualTo(Hashing.sha256Hex(HUB_KEY));
-        for (String table : new String[]{"hexagon", "drought_day", "archive_day", "model_now", "station", "station_sample", "upstream_call", "grass_curing", "river_discharge", "grid_spec", "forecast_drift", "station_recent", "setting"}) {
-            Long n = db.sql("select count(*) from " + table).query(Long.class).single();
-            assertThat(n).as(table).isNotNull();
-        }
-        Long userCount = db.sql("select count(*) from console_user where username = 'operator'").query(Long.class).single();
-        assertThat(userCount).isEqualTo(1);
-        // The grid the tables were written with was recorded on the first start.
-        assertThat(db.sql("select spec from grid_spec where id = 1").query(String.class).single()).isEqualTo(store.grid().spec());
-    }
-
-    @Test
-    void aReadingIsAnsweredInTheContractsShapeEvenWhenNothingCanBeFetched() {
-        ResponseEntity<Map> r = client().get().uri("/api/v1/readings?lat=-34.93&lon=138.6&forecast=true")
-                .header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(r.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
-        assertThat(r.getHeaders().getETag()).isNotNull();
-        assertThat(r.getHeaders().getCacheControl()).contains("max-age");
-        assertThat(r.getHeaders().getFirst("RateLimit-Limit")).isEqualTo("600");
-        Map<?, ?> body = r.getBody();
-        assertThat(body.get("schema")).isEqualTo("gully/reading/1");
-        assertThat(body.get("available")).isEqualTo(false);
-        assertThat(body.get("unavailable")).asString().contains("no upstream");
-        assertThat(body.get("hexagon")).as("the hexagon was created and is described").isNotNull();
-        assertThat(((Map<?, ?>) body.get("hexagon")).get("id")).isNotNull();
-
-        // The same again with the ETag is a 304.
-        ResponseEntity<Void> again = client().get().uri("/api/v1/readings?lat=-34.93&lon=138.6&forecast=true")
-                .header("X-Api-Key", HUB_KEY).header(HttpHeaders.IF_NONE_MATCH, r.getHeaders().getETag()).retrieve().toBodilessEntity();
-        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.NOT_MODIFIED);
-    }
-
-    @Test
-    void theHexagonLayerIsFingerprinted() {
-        ResponseEntity<String> r = client().get().uri("/api/v1/hexagons.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class);
-        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(r.getHeaders().getETag()).isNotNull();
-        assertThat(r.getBody()).contains("\"FeatureCollection\"");
-        ResponseEntity<Void> again = client().get().uri("/api/v1/hexagons.geojson").header("X-Api-Key", HUB_KEY)
-                .header(HttpHeaders.IF_NONE_MATCH, r.getHeaders().getETag()).retrieve().toBodilessEntity();
-        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.NOT_MODIFIED);
-    }
-
-    @Test
-    void errorsAreProblemDetails() {
-        ResponseEntity<Map> noKey = client().get().uri("/api/v1/readings?lat=-34.93&lon=138.6").retrieve().toEntity(Map.class);
-        assertThat(noKey.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(noKey.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)).isTrue();
-        assertThat(noKey.getBody()).containsEntry("status", 401);
-
-        ResponseEntity<Map> bad = client().get().uri("/api/v1/readings?lat=95&lon=138.6").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(bad.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(bad.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)).isTrue();
-        assertThat(bad.getBody().get("detail")).asString().contains("lat");
-
-        ResponseEntity<Map> missing = client().get().uri("/api/v1/readings?lat=-34.93").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(missing.getHeaders().getContentType().isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)).isTrue();
-    }
-
-    @Test
-    void theContractAndTheOpenApiDocumentAreOpen() {
-        ResponseEntity<String> schema = client().get().uri("/api/v1/contract/reading.schema.json").retrieve().toEntity(String.class);
-        assertThat(schema.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(schema.getBody()).contains("gully/reading/1");
-        ResponseEntity<String> openapi = client().get().uri("/api/v1/openapi.json").retrieve().toEntity(String.class);
-        assertThat(openapi.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(openapi.getBody()).contains("/api/v1/readings").contains("/api/v1/fire-indices");
-    }
-
-    @Test
-    void theFireIndicesCalculatorAndStatusAnswer() {
-        ResponseEntity<Map> r = client().get().uri("/api/v1/fire-indices?temperatureC=30&humidityPct=20&windKmh=30&droughtFactor=10&curingPct=100&condition=natural")
-                .header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<?, ?> grass = (Map<?, ?>) r.getBody().get("grass");
-        assertThat(grass.get("fbi")).isEqualTo(47);
-        assertThat(grass.get("afdrsRating")).isEqualTo("High");
-        ResponseEntity<Map> status = client().get().uri("/api/v1/status").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(status.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(status.getBody()).containsKeys("upstreams", "sources", "held");
-    }
-
     /**
-     * The three named routes (W-20): now is the reading cut to the ground's half, in the reading's
-     * shape; forecast is the whole reading; drought is its own shape with the days behind it. All
-     * behind the same key and scope, all honest when nothing can be fetched.
+     * A key issued as the console would issue it: the hash in the table, the plaintext with the caller.
      */
-    @Test
-    void nowForecastAndDroughtAnswerByName() {
-        ResponseEntity<Map> now = client().get().uri("/api/v1/now?lat=-34.93&lon=138.6").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(now.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(now.getBody().get("schema")).isEqualTo("gully/reading/1");
-        assertThat(now.getBody()).containsKeys("current", "currentFrom", "station", "fire", "warnings").containsEntry("forecast", null)
-                .containsEntry("drought", null).containsEntry("flood", null);
-        ResponseEntity<Map> forecast = client().get().uri("/api/v1/forecast?lat=-34.93&lon=138.6").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(forecast.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(forecast.getBody().get("schema")).isEqualTo("gully/reading/1");
-        assertThat(forecast.getBody()).containsKeys("current", "forecast", "drought", "fire", "flood");
-        ResponseEntity<Map> drought = client().get().uri("/api/v1/drought?lat=-34.93&lon=138.6&days=7").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(drought.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(drought.getBody().get("schema")).isEqualTo("gully/drought/1");
-        assertThat(drought.getBody().get("available")).as("no upstream: the spin-up cannot be fed").isEqualTo(false);
-        assertThat(drought.getBody()).containsKeys("hexagon", "stations", "days", "rain");
-        assertThat(((Map<?, ?>) drought.getBody().get("rain")).get("last7DaysMm")).as("the record does not reach a week back").isNull();
-        assertThat(client().get().uri("/api/v1/drought?lat=-34.93&lon=138.6").retrieve().toEntity(Map.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(client().get().uri("/api/v1/now?lat=-34.93&lon=10").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    private void issueHubKey() {
+        if (db.sql("select count(*) from api_key where consumer = 'hub'").query(Long.class).single() == 0) {
+            db.sql("insert into api_key (consumer, created_at, created_by, key_hash, key_prefix, scope) values ('hub', now(), 'test', :hash, 'weather_end', 'ALL')")
+                    .param("hash", Hashing.sha256Hex(HUB_KEY)).update();
+        }
+    }
+
+    private void takeInTheFixture() throws Exception {
+        try (InputStream in = getClass().getResourceAsStream("/fixtures/IDS60920-three-stations.xml")) {
+            assertThat(in).isNotNull();
+            List<StationFile.StationReading> readings = StationFile.parse(in.readAllBytes(), "sa");
+            stations.accept(readings, Instant.now());
+        }
     }
 
     @Test
-    void theLegacyRouteStillAnswersInItsOldShape() {
-        ResponseEntity<Map> r = client().get().uri("/api/weather?lat=-34.93&lon=138.6&forecast=true").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(r.getBody()).containsKeys("generatedAt", "query", "provenance", "current", "fire", "flood", "drought", "disclaimer");
-    }
-
-    @Autowired
-    au.gully.bureau.StationRegistry stations;
-    @Autowired
-    au.gully.cfs.Curing curing;
-    @Autowired
-    au.gully.upstreams.Ledger ledger;
-    @Autowired
-    au.gully.hexagons.HexagonRepository hexagons;
-    @Autowired
-    au.gully.hexagons.History history;
-    @Autowired
-    au.gully.hexagons.HexagonStore store;
-    @Autowired
-    au.gully.hexagons.Drifts drifts;
-    @Autowired
-    au.gully.hexagons.Reach reach;
-    @Autowired
-    au.gully.drought.DroughtDays droughtDays;
-    @Autowired
-    au.gully.drought.ArchiveDays archiveDays;
-    @Autowired
-    au.gully.drought.DroughtRule droughtRule;
-    @Autowired
-    au.gully.drought.Drought drought;
-    @Autowired
-    au.gully.bureau.WindChangeThresholds windChange;
-    @Autowired
-    au.gully.bureau.DiurnalRanges diurnal;
-    @Autowired
-    au.gully.api.Readings readings;
-
-    /**
-     * Every piece of SQL, once, against the real database: the station register and its ledger, the
-     * curing register, the upstream ledger and its windows, the hexagon row and its reload, a snapshot.
-     */
-    @Test
-    void everyTableIsWrittenAndReadBack() throws Exception {
-        byte[] xml;
-        try (java.io.InputStream in = getClass().getResourceAsStream("/fixtures/IDS60920-three-stations.xml")) {
-            xml = in.readAllBytes();
+    void theMigrationBuiltTheTablesAndTheStationsAreKept() throws Exception {
+        for (String table : new String[]{"api_key", "console_user", "api_access_log", "log_event", "setting", "upstream_call", "station"}) {
+            assertThat(db.sql("select to_regclass('public." + table + "')").query(String.class).single()).as(table).isEqualTo(table);
         }
-        java.time.Instant now = java.time.Instant.now();
-        // The fixture was read on 18 September 2026; a station is "now" only for an hour, so re-time it to now.
-        // The third station reports no temperature at all, as a rain-only station does: the ledger must take it.
-        java.util.List<au.gully.bureau.StationFile.StationReading> fresh = new java.util.ArrayList<>();
-        for (au.gully.bureau.StationFile.StationReading r : au.gully.bureau.StationFile.parse(xml, "sa")) {
-            au.gully.bureau.Observation o = r.observation();
-            boolean rainOnly = fresh.size() == 2;
-            fresh.add(new au.gully.bureau.StationFile.StationReading(r.station(), new au.gully.bureau.Observation(o.stationId(), now,
-                    rainOnly ? null : o.temperatureC(), o.apparentTemperatureC(), o.dewPointC(), o.humidityPct(), o.windSpeedKmh(), o.windDirectionDeg(),
-                    o.windDirection(), o.windGustKmh(), o.pressureMslHpa(), o.rainSince9amMm(), o.rain24hMm(), rainOnly ? null : o.maxTemperatureC(),
-                    o.minTemperatureC(), o.visibilityKm(), o.cloud(), o.cloudOktas(), o.deltaTC())));
-        }
-        int added = stations.accept(fresh, now);
-        assertThat(added).isEqualTo(3);
-        assertThat(stations.size()).isEqualTo(3);
-        // What the reader does after a file: every hexagon re-finds its station, every station gets one.
-        store.stationsChanged();
-        assertThat(store.size()).isGreaterThanOrEqualTo(3);
-        // The reach (W-18): the default until set; set, it is written, the stations count for more hexagons
-        // and every station gets them; reloaded with the registers, it is still the value set. Put back after.
-        assertThat(reach.isDefault()).isTrue();
-        int held = store.size(), reached = stations.hexagonsOf(store.grid(), "023000").size();
-        assertThat(reach.set(12.3, "test")).as("held to the slider's quarter-kilometre step").isEqualTo(12.25);
-        assertThat(stations.hexagonsOf(store.grid(), "023000").size()).isGreaterThan(reached);
-        assertThat(store.stationsChanged()).isGreaterThan(0);
-        assertThat(store.size()).isGreaterThan(held);
-        reach.rehydrate();
-        assertThat(reach.km()).isEqualTo(12.25);
-        assertThat(reach.by()).isEqualTo("test");
-        assertThat(reach.since()).isNotNull();
-        reach.set(au.gully.hexagons.Grid.DEFAULT_STATION_REACH_KM, "test");
-        store.stationsChanged();
-        assertThat(stations.hexagonsOf(store.grid(), "023000").size()).isEqualTo(reached);
-        assertThat(stations.ledgerRows()).isEqualTo(3);
-        assertThat(stations.nearest(-34.93, 138.6)).isPresent();
-        assertThat(stations.nearest(-34.93, 138.6).get().station().id()).isEqualTo("023000");
-        java.util.List<au.gully.bureau.Station> all = new java.util.ArrayList<>(stations.all());
-        java.time.LocalDate day = java.time.LocalDate.of(2026, 9, 18);
-        assertThat(stations.daily(all, day.minusDays(2), day.plusDays(1))).isNotNull();
-        assertThat(stations.recentSamples("023000", 5)).hasSize(1);
-        // The last readings (W-16): a second file a moment on with the wind swung round is kept, survives
-        // a reload of the register, and reads as a wind change.
-        java.util.List<au.gully.bureau.StationFile.StationReading> later = new java.util.ArrayList<>();
-        for (au.gully.bureau.StationFile.StationReading r : fresh) {
-            au.gully.bureau.Observation o = r.observation();
-            later.add(new au.gully.bureau.StationFile.StationReading(r.station(), new au.gully.bureau.Observation(o.stationId(), now.plusSeconds(1),
-                    o.temperatureC(), o.apparentTemperatureC(), o.dewPointC(), o.humidityPct(), 30.0, 225, "SW", 40.0, o.pressureMslHpa(),
-                    o.rainSince9amMm(), o.rain24hMm(), o.maxTemperatureC(), o.minTemperatureC(), o.visibilityKm(), o.cloud(), o.cloudOktas(), o.deltaTC())));
-        }
-        stations.accept(later, now.plusSeconds(1));
-        assertThat(stations.recent("023000")).hasSize(2);
-        assertThat(stations.recent("023000").getFirst().windDirectionDeg()).isEqualTo(225);
+        takeInTheFixture();
+        assertThat(db.sql("select count(*) from station where state = 'sa'").query(Long.class).single()).isEqualTo(3L);
+        assertThat(db.sql("select name from station where id = '023000'").query(String.class).single()).isEqualTo("ADELAIDE (WEST TERRACE / NGAYIRDAPIRA)");
+        // A restart reads them back.
         stations.rehydrate();
-        assertThat(stations.recent("023000")).hasSize(2);
-        assertThat(stations.recent("023000").getFirst().windSpeedKmh()).isEqualTo(30.0);
-        au.gully.bureau.Observation first = fresh.getFirst().observation();
-        if (first.windSpeedKmh() != null && first.windSpeedKmh() >= au.gully.bureau.WindShift.CALM_KMH && first.windDirectionDeg() != null
-                && au.gully.bureau.WindShift.angle(first.windDirectionDeg(), 225) >= au.gully.bureau.WindShift.SWING_SLIGHT_DEG) {
-            assertThat(stations.windShift("023000")).isPresent();
-        }
+        assertThat(stations.size()).isEqualTo(3);
+    }
 
-        au.gully.cfs.Curing.Entry e = curing.save("Mount Lofty Ranges", 80, day, "CFS map", "test");
-        assertThat(e.district()).isEqualTo("MOUNT LOFTY RANGES");
-        assertThat(curing.forDistrict("mount lofty ranges")).isPresent();
-        curing.rehydrate();
-        assertThat(curing.forDistrict("MOUNT LOFTY RANGES").get().percent()).isEqualTo(80);
+    @Test
+    void theStationsAnswerWithAKeyAndRefuseWithout() throws Exception {
+        issueHubKey();
+        takeInTheFixture();
+        ResponseEntity<Map> r = client().get().uri("/api/v1/stations.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(r.getBody()).containsEntry("type", "FeatureCollection").containsEntry("stations", 3);
+        assertThat(r.getHeaders().getFirst(HttpHeaders.ETAG)).as("fingerprinted").isNotNull();
 
-        ledger.record("open-meteo", 5.0, true, java.time.Duration.ofMillis(120), "forecast 1_2");
-        ledger.record("open-meteo", 5.0, false, java.time.Duration.ofMillis(9), "forecast 1_2: unreachable");
-        assertThat(ledger.spent("open-meteo", java.time.Duration.ofHours(1))).isEqualTo(10.0);
-        java.util.List<au.gully.upstreams.Ledger.DaySpend> days = ledger.daily("open-meteo", java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(1), java.time.LocalDate.now(java.time.ZoneOffset.UTC));
-        assertThat(days).hasSize(2);
-        assertThat(days.getLast()).as("today: both calls, one failed").satisfies(d -> { assertThat(d.units()).isEqualTo(10.0); assertThat(d.calls()).isEqualTo(2); assertThat(d.failures()).isEqualTo(1); });
-        assertThat(days.getFirst().calls()).as("yesterday: nothing").isZero();
-        assertThat(ledger.hourly("open-meteo", now.minus(java.time.Duration.ofHours(2)))).isNotEmpty();
-        assertThat(ledger.recent(10)).hasSize(2);
-        ledger.record("warnings-sa", 0, true, java.time.Duration.ofMillis(30), "poll");
-        ledger.record("warnings-sa", 0, false, java.time.Duration.ofMillis(30), "poll: 503");
-        assertThat(ledger.recent(10, java.util.List.of("open-meteo"))).as("the budgeted upstream's calls and any failure, not the free poll that worked")
-                .extracting(r -> r.get("upstream") + ":" + r.get("ok")).contains("warnings-sa:false", "open-meteo:false", "open-meteo:true").doesNotContain("warnings-sa:true");
+        ResponseEntity<Map> one = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(one.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(one.getBody()).containsEntry("name", "ADELAIDE (WEST TERRACE / NGAYIRDAPIRA)").containsEntry("temperatureC", 15.0);
+        assertThat(one.getBody().get("recent")).isInstanceOf(List.class);
 
-        au.gully.hexagons.Hexagon h = store.ask(-34.93, 138.6, false, "INC0001");
-        assertThat(h.active()).isTrue();
-        assertThat(h.stationId()).as("Adelaide West Terrace is inside this hexagon").isEqualTo("023000");
-        assertThat(hexagons.loadAll(store.grid())).extracting(au.gully.hexagons.Hexagon::id).contains(h.id());
-        assertThat(hexagons.loadAll(store.grid()).stream().filter(x -> x.id().equals(h.id())).findFirst().get().stationId()).isEqualTo("023000");
-        // History is the ground's (W-19): the ask wrote nothing, and what was "now" at that moment is the
-        // station's ledger row - the first file's reading, consolidated - found within three hours of it,
-        // for the reading and for the map's timeline alike.
-        assertThat(history.then(h, now)).isPresent();
-        assertThat(history.then(h, now).get().from()).isEqualTo("station");
-        assertThat(history.then(h, now).get().stationId()).isEqualTo("023000");
-        assertThat(history.then(h, now).get().conditions().temperatureC())
-                .isEqualTo(fresh.stream().filter(x -> x.station().id().equals("023000")).findFirst().get().observation().temperatureC());
-        assertThat(history.allAt(store.all(), now.plusSeconds(60))).containsKey(h.id());
-        assertThat(history.then(h, now.plus(Duration.ofHours(4)))).as("nothing stands beyond three hours").isEmpty();
-        assertThat(history.of(h, 5)).hasSize(1);
-        // The diurnal range (W-25) is the station's, from the same ledger: one row in, so today has a
-        // reading and no day is complete yet; a hexagon without a station has none.
-        au.gully.api.Reading withStation = readings.of(h, new au.gully.api.Reading.Point(h.cell().lat(), h.cell().lon()), false);
-        assertThat(withStation.station()).isNotNull();
-        assertThat(withStation.station().diurnal()).isNotNull();
-        assertThat(withStation.station().diurnal().day()).isNull();
-        assertThat(withStation.station().diurnal().today()).isNotNull();
-        assertThat(withStation.station().diurnal().week().of()).isEqualTo(7);
-        assertThat(withStation.station().diurnal().week().days()).isZero();
-        assertThat(withStation.station().diurnal().month().of()).isEqualTo(30);
-        assertThat(diurnal.of(stations.station("023000").get())).isPresent();
-        assertThat(history.modelRows()).as("the model never stood in: no upstream is enabled").isZero();
-        // The consolidation: the second file's reading went into the window after the row was written, so the
-        // row counts the one reading it was made from.
-        assertThat(stations.recentSamples("023000", 1).getFirst().get("readings")).isEqualTo(1);
-        // The drought's days are the hexagon's record: nothing could be spun up with no upstream, so none yet.
-        assertThat(history.droughtDays()).isZero();
-        assertThat(droughtDays.save(h.id(), java.util.List.of(new au.gully.drought.DroughtDays.Day(day, 2.5, 24.0, "archive")), now)).isEqualTo(1);
-        assertThat(droughtDays.of(h.id(), day, day).get(day).source()).isEqualTo("archive");
-        assertThat(droughtDays.save(h.id(), java.util.List.of(new au.gully.drought.DroughtDays.Day(day, 9.9, 30.0, "stations")), now)).as("a day held is left as it was").isZero();
-        assertThat(droughtDays.recent(h.id(), 10)).hasSize(1);
-        // The archive as fetched (W-21): kept whole per point, the archive's day replacing a recent-days row, never the reverse;
-        // and a re-spin from the record alone, with no upstream, finds a year it cannot supply and leaves the state as it was.
-        java.util.List<au.gully.upstreams.OpenMeteo.DailyRow> fetched = java.util.List.of(new au.gully.upstreams.OpenMeteo.DailyRow(day, 1.0, 20.0), new au.gully.upstreams.OpenMeteo.DailyRow(day.plusDays(1), 0.0, 22.0));
-        assertThat(archiveDays.save(h.cell().lat(), h.cell().lon(), fetched, "recent", now)).isEqualTo(2);
-        assertThat(archiveDays.save(h.cell().lat(), h.cell().lon(), java.util.List.of(new au.gully.upstreams.OpenMeteo.DailyRow(day, 3.0, 21.0)), "archive", now)).as("the archive replaces a recent row").isEqualTo(1);
-        assertThat(archiveDays.save(h.cell().lat(), h.cell().lon(), java.util.List.of(new au.gully.upstreams.OpenMeteo.DailyRow(day, 9.0, 30.0)), "recent", now)).as("a recent row never replaces the archive's").isZero();
-        assertThat(archiveDays.of(h.cell().lat(), h.cell().lon(), day, day.plusDays(1))).hasSize(2);
-        assertThat(archiveDays.of(h.cell().lat(), h.cell().lon(), day, day).get(day).rainMm()).isEqualTo(3.0);
-        assertThat(archiveDays.count()).isEqualTo(2);
-        assertThat(store.respinDroughts()).as("no hexagon holds a drought to remake").isZero();
-        // The drought's rule (W-22): set, it is written, survives a reload, and the feed follows it; the operator's
-        // spin-up with no upstream finds no year and leaves the hexagon without a drought, honestly.
-        assertThat(droughtRule.isDefault()).isTrue();
-        droughtRule.set(2, 5.5, "test");
-        droughtRule.rehydrate();
-        assertThat(droughtRule.rings()).isEqualTo(2);
-        assertThat(droughtRule.kmPer100m()).isEqualTo(5.5);
-        assertThat(droughtRule.by()).isEqualTo("test");
-        assertThat(drought.feed(h.cell(), h.elevationM())).as("West Terrace counts for the hexagon: ring 0").extracting(au.gully.drought.Drought.Fed::ring).contains(0);
-        assertThat(store.spinDrought(-34.93, 138.6).drought()).isNull();
-        droughtRule.set(au.gully.drought.DroughtRule.DEFAULT_RINGS, au.gully.drought.DroughtRule.DEFAULT_KM_PER_100M, "test");
-        // What counts as a wind change (W-23): set, written, reloaded; the register's shifts follow it.
-        windChange.set(45, 12, "test");
-        windChange.rehydrate();
-        assertThat(windChange.swingDeg()).isEqualTo(45);
-        assertThat(windChange.speedKmh()).isEqualTo(12.0);
-        assertThat(stations.windExtent("023000")).isPresent();
-        windChange.set(au.gully.bureau.WindShift.SWING_SLIGHT_DEG, au.gully.bureau.WindShift.SPEED_SLIGHT_KMH, "test");
-        assertThat(history.prune(now)).as("nothing is five years old").isZero();
+        ResponseEntity<Map> missing = client().get().uri("/api/v1/stations/999999").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(missing.getHeaders().getContentType().toString()).contains("problem+json");
 
-        // The drift ledger takes a blend as its judge: three stations joined is twenty characters, which the
-        // first shape of the table refused, and with it the reading (V8).
-        db.sql("""
-                insert into forecast_drift (hexagon_id, at, station_id, upstream, temperature_c, humidity_pct, wind_kmh, rain_mm, score, worst, drifted, created_at)
-                values (:h, :at, :s, :u, 1.5, -4, 2.0, null, 0.5, 'temperature', false, :at)""")
-                .param("h", h.id()).param("at", au.gully.storage.Db.ts(now)).param("s", "023000+023034+023090").param("u", "open-meteo").update();
-        assertThat(drifts.recent(h.id(), 5)).extracting(au.gully.hexagons.Drift::stationId).contains("023000+023034+023090");
+        ResponseEntity<Map> anonymous = client().get().uri("/api/v1/stations.geojson").retrieve().toEntity(Map.class);
+        assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(anonymous.getBody()).containsEntry("status", 401);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theDiagnosticsAnswerTheMorningAgent() {
+        issueHubKey();
+        ResponseEntity<Map> r = client().get().uri("/api/diagnostics?window=PT6H").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = r.getBody();
+        assertThat(body).containsKeys("app", "startup", "logs", "gully");
+        Map<String, Object> gully = (Map<String, Object>) body.get("gully");
+        assertThat(gully).containsKeys("upstreams", "bureau", "held");
+        assertThat((Map<String, Object>) gully.get("bureau")).containsEntry("state", "sa");
     }
 
     @Test
@@ -395,7 +146,8 @@ class EndToEndTest {
      * the same walk with a cookie jar.
      */
     @Test
-    void theConsoleLogsInAndEveryPageRenders() {
+    void theConsoleLogsInAndEveryPageRenders() throws Exception {
+        takeInTheFixture();
         ResponseEntity<String> loginPage = client().get().uri("/login").retrieve().toEntity(String.class);
         assertThat(loginPage.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(loginPage.getBody()).contains("name=\"code\"").contains("bootstrap.min.css");
@@ -418,31 +170,21 @@ class EndToEndTest {
         assertThat(login.getHeaders().getLocation().toString()).endsWith("/console/map");
         String session = login.getHeaders().containsHeader(HttpHeaders.SET_COOKIE) ? firstCookie(login.getHeaders()) : cookie;
 
-        for (String page : new String[]{"/console/map", "/console/hexagons", "/console/upstreams", "/console/upstreams?calls=all", "/console/curing",
-                "/console/diagnostics", "/console/api-keys"}) {
+        for (String page : new String[]{"/console/map", "/console/upstreams", "/console/upstreams?calls=all", "/console/diagnostics", "/console/api-keys"}) {
             ResponseEntity<String> r = client().get().uri(page).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(page).isEqualTo(HttpStatus.OK);
             assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");
             if (page.equals("/console/map")) {
-                // The map page: its own sheet in the head, the rail, the figures, the legend and the timeline.
-                assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"tabs\"").contains("id=\"timeline\"").contains("id=\"legend\"").contains("id=\"droughtRule\"").contains("id=\"windChange\"");
+                assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"legend\"").contains("id=\"detail\"").contains("/js/map.js");
             }
         }
-        for (String feed : new String[]{"/console/map/layer.geojson", "/console/map/grid.geojson?south=-35.2&west=138.3&north=-34.7&east=138.9",
-                "/console/map/stations.geojson", "/console/map/coverage.geojson?reachKm=10", "/console/map/drought-feed.geojson?rings=2&kmPer100m=5", "/console/map/sources.json", "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json",
+                "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }
-        // The timeline: behind now the layer is the history, ahead of now the forecasts, and the layer says which.
-        String ahead = client().get().uri("/console/map/layer.geojson?at=" + Instant.now().plus(Duration.ofHours(6)))
-                .header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
-        assertThat(ahead).contains("\"mode\":\"ahead\"").contains("\"aheadHours\":72");
-        String behind = client().get().uri("/console/map/layer.geojson?at=" + Instant.now().minus(Duration.ofHours(6)))
-                .header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
-        assertThat(behind).contains("\"mode\":\"history\"");
-        // The stations as points say whether each is fresh.
         String points = client().get().uri("/console/map/stations.geojson").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
-        assertThat(points).contains("\"meta\":").contains("\"fresh\":");
+        assertThat(points).contains("\"stations\":3").contains("\"fresh\":");
         // Without the cookie, the console is the login page.
         ResponseEntity<Void> anonymous = client().get().uri("/console/map").retrieve().toEntity(Void.class);
         assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);

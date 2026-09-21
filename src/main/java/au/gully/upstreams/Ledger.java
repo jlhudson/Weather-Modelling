@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Every upstream call, written to {@code upstream_call} before it is counted, so the month's spend
  * survives a restart and "how much is left" is a fact rather than a hope. The budget counts from
- * this table (docs/06 item 6); a ten-second memo per window keeps a burst of fetches from turning
+ * this table; a ten-second memo per window keeps a burst of fetches from turning
  * into a burst of sums.
  */
 @Component

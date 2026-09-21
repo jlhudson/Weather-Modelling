@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * The API's front door: a key per consumer in {@code X-Api-Key} or {@code Authorization: Bearer},
  * never in the URL; the key's scope against the path; a per-minute rate and a daily cap per key,
- * both visible to the caller in the standard {@code RateLimit-*} headers (docs/06 item 11); and
+ * both visible to the caller in the standard {@code RateLimit-*} headers; and
  * every read logged.
  * <p>
  * Refusals are RFC 9457 problem details, the one error format the API has.
@@ -57,7 +57,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return !uri.startsWith("/api/") || uri.startsWith("/api/v1/contract/") || uri.startsWith("/api/v1/openapi");
+        return !uri.startsWith("/api/");
     }
 
     @Override

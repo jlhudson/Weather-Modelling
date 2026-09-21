@@ -1,12 +1,9 @@
 package au.gully.upstreams;
 
-import au.gully.hexagons.Cell;
 import au.gully.platform.Fetched;
 import au.gully.platform.HttpFetcher;
 import au.gully.platform.Nodes;
 import au.gully.platform.UpstreamException;
-import au.gully.science.Conditions;
-import au.gully.science.DayOutlook;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -22,9 +19,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The Google Maps Platform Weather API: the overflow (docs/06 item 6). When Open-Meteo's allowance for
- * the day is used up, or Open-Meteo is not answering, the fetch goes here instead, on the same
- * hexagon, with the same shape of answer, and its own spend is counted and capped the same way.
+ * The Google Maps Platform Weather API: the overflow. When Open-Meteo's allowance for the day is
+ * used up, or Open-Meteo is not answering, the fetch goes here instead, at the same point, with
+ * the same shape of answer, and its own spend is counted and capped the same way.
  * <p>
  * <strong>Three requests, not one.</strong> Current conditions, hourly and daily are separate
  * endpoints and separately billed, so one fetch costs three units against a free allowance of 10,000
@@ -43,7 +40,7 @@ public class GoogleWeather implements Upstream {
 
     public static final Spec SPEC = new Spec(ID, "weather.googleapis.com", "google-weather-v1",
             "Weather data from Google Maps Platform", 3.0, new Limits(null, null, null, 10_000), 0.9, 60,
-            true, Duration.ofMinutes(15), List.of());
+            true, Duration.ofMinutes(15));
 
     private final String apiKey;
     private final HttpFetcher http;
@@ -69,9 +66,9 @@ public class GoogleWeather implements Upstream {
     }
 
     @Override
-    public Forecast fetch(Cell cell) throws UpstreamException {
-        String point = "&location.latitude=" + String.format(java.util.Locale.ROOT, "%.4f", cell.lat())
-                + "&location.longitude=" + String.format(java.util.Locale.ROOT, "%.4f", cell.lon()) + "&unitsSystem=METRIC";
+    public Forecast fetch(double lat, double lon) throws UpstreamException {
+        String point = "&location.latitude=" + OpenMeteo.fixed(lat)
+                + "&location.longitude=" + OpenMeteo.fixed(lon) + "&unitsSystem=METRIC";
         String key = "?key=" + apiKey;
 
         JsonNode currentNode = read(ENDPOINT + "/currentConditions:lookup" + key + point);

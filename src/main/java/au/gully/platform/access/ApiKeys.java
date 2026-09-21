@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * Create, validate, revoke. The plaintext is shown once and never stored. Every read is logged, in
  * batches: the access log is queued and written every few seconds rather than a row inside every
- * request (docs/06 item 11).
+ * request.
  */
 @Slf4j
 @Service

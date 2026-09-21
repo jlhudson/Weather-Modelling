@@ -17,9 +17,8 @@
     <packaging>jar</packaging>
     <name>Gully</name>
     <description>
-        Gully: the weather, and the fire danger, at a point, now or at a time. Australia in 15 km hexagons, each fetched
-        once where something is happening; the Bureau's stations and warnings; the CFS rating; one in-memory cache
-        rebuilt from Postgres at start. The overhaul of the Weather service (docs/06-overhaul.md).
+        Gully: South Australia's weather from the Bureau's stations, each with the ground it speaks for - a reach
+        polygon drawn once from the terrain around it - and Open-Meteo and Google Weather behind them.
     </description>
 
     <properties>
@@ -30,8 +29,6 @@
         <!-- Boot 4.1.1 manages Lombok 1.18.46; 1.18.48 adds JDK 26 so a newer local JDK still compiles. -->
         <lombok.version>1.18.48</lombok.version>
         <jts.version>1.20.0</jts.version>
-        <springdoc.version>3.1.1</springdoc.version>
-        <json-schema-validator.version>3.0.7</json-schema-validator.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <webjar.leaflet.version>1.9.4</webjar.leaflet.version>
         <!-- Bootstrap 5.3.5, the one front-end library; the templates name this version in their webjar paths. -->
@@ -39,7 +36,7 @@
     </properties>
 
     <dependencies>
-        <!-- Point-in-polygon for the fire ban districts and the hexagon outlines. In memory only: no geometry column. -->
+        <!-- The reach polygons: their area, and which one a point is in. In memory only: no geometry column. -->
         <dependency>
             <groupId>org.locationtech.jts</groupId>
             <artifactId>jts-core</artifactId>
@@ -103,13 +100,6 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- The generated OpenAPI document for /api/v1 (docs/02-api.md). -->
-        <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
-            <version>${springdoc.version}</version>
-        </dependency>
-
         <!-- The API key lookup memo. -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -147,13 +137,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- The contract test: what /api/v1/readings serves is checked against contract/reading.schema.json. -->
-        <dependency>
-            <groupId>com.networknt</groupId>
-            <artifactId>json-schema-validator</artifactId>
-            <version>${json-schema-validator.version}</version>
             <scope>test</scope>
         </dependency>
         <!-- The one end-to-end test, against a throwaway Postgres. Skipped where Docker is not available. -->

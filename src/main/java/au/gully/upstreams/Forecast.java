@@ -1,27 +1,17 @@
 package au.gully.upstreams;
 
-import au.gully.science.Conditions;
-import au.gully.science.DayOutlook;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
 /**
- * One upstream's answer for one hexagon centre: the conditions now as its model saw them when it was
+ * One upstream's answer for one point: the conditions now as its model saw them when it was
  * fetched, the hourly series and the daily outlook, in the shape every upstream is normalised into.
- * This is what is held on the hexagon and written to its row.
- * <p>
- * A forecast carries no expiry of its own: how long it is kept is the service's rule ({@code Life}:
- * three hours, stretched when the allowance is tight) and a station's word ({@code Drift}: thrown out
- * early when the station in the hexagon says the model has drifted). What it does carry is the
- * series, so "now" can be read off it at any moment inside its life ({@link #at}) rather than off a
- * current block that is hours old.
  *
- * @param attribution     the licence line the upstream requires; it travels to the API edge
- * @param fetchedAt       when it was fetched, which its life is counted from
+ * @param attribution     the licence line the upstream requires
+ * @param fetchedAt       when it was fetched
  * @param modelElevationM the height of the model cell the upstream answered from, which explains
- *                        a reading; the hexagon's own elevation, from the terrain file, places it
+ *                        a reading
  * @param current         the model's own "now" at the moment of the fetch
  */
 public record Forecast(
@@ -43,9 +33,9 @@ public record Forecast(
 
     /**
      * The conditions at an instant, read off the hourly series: the two hours around it blended in
-     * proportion, the words and the flags from the nearer one, a total for the hour (rain, showers,
-     * snow) from the hour it falls in. Outside the series, its nearest end; without a series, the
-     * current block. Null only when there is neither.
+     * proportion, the words and the flags from the nearer one, the hour's rain from the hour it falls
+     * in. Outside the series, its nearest end; without a series, the current block. Null only when
+     * there is neither.
      */
     public Conditions at(Instant t) {
         if (hourly.isEmpty() || t == null) {
@@ -88,47 +78,7 @@ public record Forecast(
                 .uv(blend(before.uvIndex(), after.uvIndex(), f))
                 .daytime(nearer.daytime())
                 .condition(nearer.condition())
-                .vapourPressureDeficit(blend(before.vapourPressureDeficitKpa(), after.vapourPressureDeficitKpa(), f))
-                .evapotranspiration(before.evapotranspirationMm())
-                .soilMoistureSurface(blend(before.soilMoistureSurface(), after.soilMoistureSurface(), f))
-                .soilMoistureShallow(blend(before.soilMoistureShallow(), after.soilMoistureShallow(), f))
-                .soilMoistureRootZone(blend(before.soilMoistureRootZone(), after.soilMoistureRootZone(), f))
-                .soilTemperature(blend(before.soilTemperatureC(), after.soilTemperatureC(), f))
-                .boundaryLayerHeight(blend(before.boundaryLayerHeightM(), after.boundaryLayerHeightM(), f))
-                .cape(blend(before.capeJkg(), after.capeJkg(), f))
-                .liftedIndex(blend(before.liftedIndex(), after.liftedIndex(), f))
-                .convectiveInhibition(blend(before.convectiveInhibitionJkg(), after.convectiveInhibitionJkg(), f))
-                .wind80m(blend(before.windSpeed80mKmh(), after.windSpeed80mKmh(), f))
-                .windDirection80m(blendBearing(before.windDirection80mDeg(), after.windDirection80mDeg(), f))
-                .shortwaveRadiation(blend(before.shortwaveRadiationWm2(), after.shortwaveRadiationWm2(), f))
-                .showers(before.showersMm())
-                .snowfall(before.snowfallCm())
                 .build();
-    }
-
-    /**
-     * The rain the series holds between two instants: the hourly totals of the hours starting in the
-     * window. Null when the series does not reach back to {@code from}, so a comparison is never made
-     * against a partial sum.
-     */
-    public Double precipitationBetween(Instant from, Instant to) {
-        if (hourly.isEmpty() || from == null || to == null || !from.isBefore(to)) {
-            return null;
-        }
-        Instant first = hourly.getFirst().at();
-        if (first == null || first.isAfter(from)) {
-            return null;
-        }
-        double total = 0;
-        for (Conditions c : hourly) {
-            if (c.at() == null || c.at().isBefore(from) || !c.at().isBefore(to)) {
-                continue;
-            }
-            if (c.precipitationMm() != null) {
-                total += c.precipitationMm();
-            }
-        }
-        return total;
     }
 
     private static Double blend(Double a, Double b, double f) {

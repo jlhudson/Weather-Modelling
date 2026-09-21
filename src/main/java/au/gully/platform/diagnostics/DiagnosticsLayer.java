@@ -1,6 +1,6 @@
 package au.gully.platform.diagnostics;
 
-import au.gully.api.StatusController;
+import au.gully.platform.Status;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +15,7 @@ import java.util.Optional;
 /**
  * The service's own state as one consumer reads it: an agent looking for what is wrong. The same
  * {@code app}, {@code startup} and {@code logs} blocks as The Hub's, so one agent reads both, and a
- * {@code gully} block in place of the Hub's sources and managers: the upstreams, the sources, what
+ * {@code gully} block in place of the Hub's sources and managers: the upstreams, the Bureau's file, what
  * is held.
  */
 @Component
@@ -26,14 +26,14 @@ public class DiagnosticsLayer {
 
     private final LogEventStore logs;
     private final StartupHistory startup;
-    private final StatusController status;
+    private final Status status;
 
     public Map<String, Object> summary(Duration window) {
         Instant now = Instant.now();
         Instant since = now.minus(window);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("window", window.toString());
-        out.put("readMe", "Start with logs.top and gully.upstreams; the evidence is /api/diagnostics/logs; "
+        out.put("readMe", "Start with logs.top, gully.bureau and gully.upstreams; the evidence is /api/diagnostics/logs; "
                 + "DELETE /api/diagnostics/logs when the morning is done.");
 
         Map<String, Object> app = new LinkedHashMap<>();

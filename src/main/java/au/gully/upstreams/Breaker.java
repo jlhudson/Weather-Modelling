@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A circuit breaker per upstream (docs/06 item 6): after {@link #TRIPS_AFTER} consecutive failures
+ * A circuit breaker per upstream: after {@link #TRIPS_AFTER} consecutive failures
  * the upstream is left alone for the pause it asked for — a refusal that names the window that ran out
  * gets that window; anything else gets the spec's pause — and is tried again once. A single failure
  * on its own does not trip it: one dropped connection is a fact about the minute, not about the day.

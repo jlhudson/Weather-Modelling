@@ -6,11 +6,10 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static au.gully.science.Numbers.round1;
 
 /**
- * What each upstream has spent, from the ledger, against what it is allowed to spend (docs/06 item
- * 6). A plain budget: inside every published window, at the guard fraction rather than the limit,
+ * What each upstream has spent, from the ledger, against what it is allowed to spend.
+ * A plain budget: inside every published window, at the guard fraction rather than the limit,
  * because the first call to be refused upstream is the one somebody is waiting on and a 429 costs the
  * same round trip as a success.
  */
@@ -65,5 +64,9 @@ public class Budget {
     }
 
     public record Decision(boolean allowed, String reason) {
+    }
+
+    static double round1(double v) {
+        return Math.round(v * 10) / 10.0;
     }
 }

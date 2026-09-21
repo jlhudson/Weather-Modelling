@@ -1,14 +1,12 @@
 package au.gully.upstreams;
 
-import au.gully.hexagons.Cell;
 import au.gully.platform.UpstreamException;
 
 import java.time.Duration;
-import java.util.List;
 
 /**
- * One upstream that can answer "what is the weather at this hexagon's centre". The smallest possible
- * interface: a cell in, a normalised {@link Forecast} out, and no opinion about budgets, breakers or
+ * One upstream that can answer "what is the weather at this point". The smallest possible
+ * interface: a point in, a normalised {@link Forecast} out, and no opinion about budgets, breakers or
  * the order of fallback — those are {@link Upstreams}, and putting them here would mean writing
  * them once per upstream.
  * <p>
@@ -50,9 +48,9 @@ public interface Upstream {
     }
 
     /**
-     * One forecast for one cell. Throws rather than returning a partial answer.
+     * One forecast for one point. Throws rather than returning a partial answer.
      */
-    Forecast fetch(Cell cell) throws UpstreamException;
+    Forecast fetch(double lat, double lon) throws UpstreamException;
 
     /**
      * Everything fixed about one upstream, declared beside the code that calls it.
@@ -67,11 +65,7 @@ public interface Upstream {
      * @param pauseAfterFailure how long the breaker stays open when a failure says nothing about itself
      */
     record Spec(String id, String host, String model, String attribution, double unitsPerFetch, Limits limits,
-                double guard, int perMinute, boolean bills, Duration pauseAfterFailure, List<String> variables) {
-
-        public Spec {
-            variables = variables == null ? List.of() : List.copyOf(variables);
-        }
+                double guard, int perMinute, boolean bills, Duration pauseAfterFailure) {
     }
 
     /**

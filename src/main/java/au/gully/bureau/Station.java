@@ -2,7 +2,7 @@ package au.gully.bureau;
 
 /**
  * One of the Bureau's automatic weather stations, exactly as the state file describes it — never a
- * hand-typed list, so a new or moved station appears on its own (docs/06 item 12).
+ * hand-typed list, so a new or moved station appears on its own.
  *
  * @param id       the Bureau's station number ({@code bom-id}), the key everything is held under
  * @param wmoId    the WMO number, which the Bureau's own JSON products are addressed by

@@ -8,9 +8,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The {@code setting} table (V9): what the console sets and a restart must keep, one row per value,
- * the value as text and the reader knowing its shape. The station reach ({@code Reach}, W-18) and the
- * drought's rule ({@code DroughtRule}, W-22) live here; a deployment's properties do not.
+ * The {@code setting} table: what the console sets and a restart must keep, one row per value,
+ * the value as text and the reader knowing its shape. What the map turns lives here; a
+ * deployment's properties do not.
  */
 @Repository
 public class ConsoleSettings {

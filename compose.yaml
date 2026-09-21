@@ -6,10 +6,8 @@
 # development machine (`docker compose up -d`) and on a VPS as a Portainer stack deployed from this
 # repository's `main`.
 #
-# The service and container names are still `weather-*`, and the database volume `weather-pgdata`, so
-# an existing deployment keeps its data and The Hub's HUB_WEATHER_URL keeps working. Two more volumes
-# arrived with the overhaul: `weather-data` for the terrain files an operator mounts (docs/06 items 17
-# and 19) and `weather-backups` for the nightly export of the history.
+# The service and container names are `weather-*` and the database volume `weather-pgdata`, so The
+# Hub's HUB_WEATHER_URL keeps working.
 #
 # No bind mounts of repository files, and `pull_policy: build` so every `up` rebuilds the image from
 # the checkout. The edge is a profile: COMPOSE_PROFILES=edge starts the connector.
@@ -57,18 +55,11 @@ services:
       WEATHER_CONTACT: ${WEATHER_CONTACT:-https://github.com/jlhudson/Weather-Modelling}
       GOOGLE_WEATHER_KEY: ${GOOGLE_WEATHER_KEY:-}
       CARTO_API_KEY: ${CARTO_API_KEY:-}
-      # The terrain files, if mounted into /data (empty means none; the hexagon carries no slope or land use).
-      WEATHER_ELEVATION_FILE: ${WEATHER_ELEVATION_FILE:-}
-      WEATHER_LAND_COVER_FILE: ${WEATHER_LAND_COVER_FILE:-}
-      WEATHER_BACKUPS_DIR: /backups
       # Structured JSON logs in the container; the console log pattern is for the IDE.
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:-ecs}
     ports:
       # Loopback only: the tunnel carries the public traffic, and a VPS should accept nothing else.
       - "127.0.0.1:${WEATHER_PORT:-8082}:8082"
-    volumes:
-      - weather-data:/data
-      - weather-backups:/backups
     # The JVM takes 75% of this for its heap (Dockerfile).
     mem_limit: ${WEATHER_MEM_LIMIT:-1g}
     healthcheck:
@@ -98,5 +89,3 @@ services:
 
 volumes:
   weather-pgdata:
-  weather-data:
-  weather-backups:

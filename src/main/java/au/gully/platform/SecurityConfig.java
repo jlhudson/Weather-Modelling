@@ -26,8 +26,7 @@ import java.util.List;
 
 /**
  * Two surfaces. {@code /api/**} takes a key per consumer with a scope, stateless, CORS-allowlisted and
- * never {@code *}; the contract schema and the OpenAPI document are open, since they describe the
- * shape and hold no data. The console is one login behind an 8-digit code with lockout. The three
+ * never {@code *}. The console is one login behind an 8-digit code with lockout. The three
  * health probes are public; the rest of the actuator needs the console login.
  */
 @Configuration
@@ -76,13 +75,12 @@ public class SecurityConfig {
 
     /**
      * A weak ETag on every successful API GET, hashed from the body, and {@code 304} to a matching
-     * {@code If-None-Match}. With no generated-at time in any body, the hash only changes when the
-     * reading does. The hexagon layer sets its own ETag, which the filter leaves alone.
+     * {@code If-None-Match}.
      * <p>
      * Weak, not strong, and deliberately: Tomcat will not compress a response that carries a strong
      * ETag (a gzipped body is a different representation, RFC 7232), so a strong tag here silently
-     * switched compression off for the whole API - the megabyte hexagon layer went out whole on
-     * every poll. A weak tag validates the same and lets the body be gzipped.
+     * switched compression off for the whole API. A weak tag validates the same and lets the body
+     * be gzipped.
      */
     @Bean
     public FilterRegistrationBean<ShallowEtagHeaderFilter> apiEtagFilter() {
@@ -103,7 +101,6 @@ public class SecurityConfig {
                 .addFilterBefore(apiKeyFilter, AuthorizationFilter.class)
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                        .requestMatchers("/api/v1/contract/**", "/api/v1/openapi/**", "/api/v1/openapi.json").permitAll()
                         .anyRequest().hasAuthority(ApiKeyFilter.ROLE))
                 .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) ->
                         ApiKeyFilter.problem(res, 401, "Unauthorized", "API key required")));

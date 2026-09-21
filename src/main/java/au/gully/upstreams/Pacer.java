@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The per-minute limit, held to (docs/06 item 6): a sliding window of the last minute's calls per
+ * The per-minute limit, held to: a sliding window of the last minute's calls per
  * upstream, and a short wait when it is full rather than a refused round trip. Nothing here is a
  * budget; the budget is the {@link Ledger}. This only stops a burst of cache misses arriving at the
  * upstream as a burst.

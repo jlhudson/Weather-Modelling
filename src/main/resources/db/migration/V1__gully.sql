@@ -1,12 +1,7 @@
--- Gully's schema, owned by Flyway from this version on (docs/06 items 2 and 13). Every table the
--- service reads or writes is here; there is no entity manager and nothing else creates a table.
---
--- Four tables predate this file, created by Hibernate in the service this one replaced: api_key,
--- console_user, log_event and api_access_log. They are declared IF NOT EXISTS with the columns
--- Hibernate gave them, so a database that has them keeps its rows (the keys issued to The Hub among
--- them) and an empty database gets the same shape. The four weather tables of the old service —
--- weather_anchor, weather_call, drought_cell, river_cell — are not touched: nothing reads them any
--- more, and retiring data is an operator's act. Drop them by hand once you have looked at them.
+-- Gully's schema, owned by Flyway. Every table the service reads or writes is here; there is no entity
+-- manager and nothing else creates a table. Started over on 21 September 2026 (W-1): the platform, the
+-- upstream ledger, the console's settings, and the Bureau's stations. What a station holds beyond its
+-- place - its latest values - lives in memory and is ten minutes old at most.
 
 -- ---------------------------------------------------------------- the platform
 
@@ -62,6 +57,15 @@ create table if not exists log_event (
 );
 create index if not exists ix_log_event_level_seen on log_event (level, last_seen_at);
 
+-- What the console sets and a restart must keep: one row per value, the value as text and the reader
+-- knowing its shape.
+create table if not exists setting (
+    key        varchar(64)  primary key,
+    value      text         not null,
+    updated_by varchar(64),
+    updated_at timestamptz  not null
+);
+
 -- ---------------------------------------------------------------- the upstreams
 
 -- Every upstream call, written before it is counted: the budget counts from here.
@@ -78,7 +82,7 @@ create index if not exists ix_upstream_call_upstream_at on upstream_call (upstre
 
 -- ---------------------------------------------------------------- the Bureau
 
--- Every station a state file has ever named, as the file describes it.
+-- Every station the state file has ever named, as the file describes it.
 create table if not exists station (
     id            varchar(16)  primary key,
     wmo_id        varchar(16),
@@ -92,93 +96,3 @@ create table if not exists station (
     first_seen_at timestamptz  not null,
     last_seen_at  timestamptz  not null
 );
-
--- The compact ledger behind the drought maths: one row per station every six hours.
-create table if not exists station_sample (
-    station_id         varchar(16) not null,
-    at                 timestamptz not null,
-    temperature_c      double precision,
-    max_temperature_c  double precision,
-    min_temperature_c  double precision,
-    rain_since_9am_mm  double precision,
-    rain_24h_mm        double precision,
-    humidity_pct       integer,
-    wind_speed_kmh     double precision,
-    wind_direction_deg integer,
-    wind_gust_kmh      double precision,
-    pressure_hpa       double precision,
-    primary key (station_id, at)
-);
-create index if not exists ix_station_sample_at on station_sample (at);
-
--- ---------------------------------------------------------------- the CFS
-
--- Grass curing per fire ban district, entered on the console.
-create table if not exists grass_curing (
-    district   varchar(64) primary key,
-    percent    integer     not null,
-    entered_on date        not null,
-    source     varchar(256),
-    updated_by varchar(64),
-    updated_at timestamptz not null
-);
-
--- ---------------------------------------------------------------- the hexagons
-
--- One row per hexagon the service holds: what it is made of, and what it holds.
-create table if not exists hexagon (
-    id                  varchar(24) primary key,
-    q                   integer not null,
-    r                   integer not null,
-    lat                 double precision not null,
-    lon                 double precision not null,
-    zone                varchar(48),
-    elevation_m         double precision,
-    elevation_from      varchar(16),
-    slope_deg           double precision,
-    land_use            jsonb,
-    fire_ban_district   varchar(64),
-    bureau_district     varchar(16),
-    station_id          varchar(16),
-    nearest_station_id  varchar(16),
-    nearest_station_km  double precision,
-    upstream            varchar(32),
-    forecast            jsonb,
-    forecast_fetched_at timestamptz,
-    current_expires_at  timestamptz,
-    forecast_expires_at timestamptz,
-    drought             jsonb,
-    drought_computed_for date,
-    river               jsonb,
-    river_computed_for  date,
-    created_at          timestamptz not null,
-    activated_at        timestamptz,
-    last_asked_at       timestamptz,
-    last_snapshot_at    timestamptz
-);
-create index if not exists ix_hexagon_station on hexagon (station_id);
-create index if not exists ix_hexagon_asked on hexagon (last_asked_at);
-
--- River discharge per 5 km river cell, once a day.
-create table if not exists river_discharge (
-    id           varchar(24) primary key,
-    lat          double precision not null,
-    lon          double precision not null,
-    computed_for date        not null,
-    has_river    boolean     not null,
-    series       jsonb       not null,
-    updated_at   timestamptz not null
-);
-
--- The history: a snapshot of a hexagon's current conditions and fire picture, taken only when an
--- incident is present. Nothing is ever deleted from this table by the service.
-create table if not exists reading_snapshot (
-    id         bigint generated always as identity primary key,
-    hexagon_id varchar(24)  not null,
-    at         timestamptz  not null,
-    asked_at   timestamptz  not null,
-    incident   varchar(128),
-    payload    jsonb        not null
-);
-create index if not exists ix_reading_snapshot_hexagon_at on reading_snapshot (hexagon_id, at);
-create index if not exists ix_reading_snapshot_asked on reading_snapshot (asked_at);

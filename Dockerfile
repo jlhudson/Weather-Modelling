@@ -10,8 +10,7 @@ RUN mvn -q -B -ntp -DskipTests package
 FROM eclipse-temurin:25-jre-alpine
 ENV TZ=UTC
 RUN apk add --no-cache wget tzdata \
-    && addgroup -S gully && adduser -S gully -G gully \
-    && mkdir -p /data /backups && chown gully:gully /data /backups
+    && addgroup -S gully && adduser -S gully -G gully
 USER gully
 WORKDIR /app
 COPY --from=build /src/target/weather-*.jar /app/gully.jar

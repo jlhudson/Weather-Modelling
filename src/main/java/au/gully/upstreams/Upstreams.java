@@ -1,25 +1,21 @@
 package au.gully.upstreams;
 
-import au.gully.hexagons.Cell;
 import au.gully.platform.GullyProperties;
 import au.gully.platform.UpstreamException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * The upstreams in the configured order, each behind its budget, its breaker and its pacer (docs/06
- * item 6): the first that is configured, inside its allowance and not paused answers; when the
- * primary's allowance for the day is used up or it is not answering, the fetch goes to the overflow
- * on the same hexagon with the same shape of answer. When none can answer the caller serves what it
- * last held, with its time.
+ * The upstreams in the configured order, each behind its budget, its breaker and its pacer: the
+ * first that is configured, inside its allowance and not paused answers; when the primary's
+ * allowance for the day is used up or it is not answering, the fetch goes to the overflow at the
+ * same point with the same shape of answer.
  */
 @Slf4j
 @Service
@@ -56,14 +52,15 @@ public class Upstreams {
     }
 
     /**
-     * One forecast for a cell, from the first upstream that can answer.
+     * One forecast for a point, from the first upstream that can answer.
      *
      * @throws NoUpstream when none could, naming why each was skipped
      */
-    public Forecast fetch(Cell cell) throws NoUpstream {
+    public Forecast fetch(double lat, double lon) throws NoUpstream {
         if (!properties.enabled()) {
             throw new NoUpstream("gully.enabled is false");
         }
+        String where = OpenMeteo.fixed(lat) + "," + OpenMeteo.fixed(lon);
         List<String> skipped = new ArrayList<>();
         for (String id : order()) {
             Upstream u = upstream(id).orElse(null);
@@ -78,17 +75,12 @@ public class Upstreams {
             }
             long started = System.nanoTime();
             try {
-                Forecast f = u.fetch(cell);
-                Duration latency = Duration.ofNanos(System.nanoTime() - started);
-                ledger.record(id, u.spec().unitsPerFetch(), true, latency, "forecast " + cell.id());
+                Forecast f = u.fetch(lat, lon);
+                ledger.record(id, u.spec().unitsPerFetch(), true, Duration.ofNanos(System.nanoTime() - started), "forecast " + where);
                 breaker.succeeded(id);
-                if (!skipped.isEmpty()) {
-                    log.debug("fetched {} from {} after skipping {}", cell.id(), id, String.join("; ", skipped));
-                }
                 return f;
             } catch (UpstreamException | RuntimeException e) {
-                Duration latency = Duration.ofNanos(System.nanoTime() - started);
-                failed(u, e, latency, "forecast " + cell.id(), u.spec().unitsPerFetch());
+                failed(u, e, Duration.ofNanos(System.nanoTime() - started), "forecast " + where, u.spec().unitsPerFetch());
                 skipped.add(id + ": " + e.getMessage());
             }
         }
@@ -96,46 +88,26 @@ public class Upstreams {
     }
 
     /**
-     * A year (or whatever is asked for) of daily rain and maximum temperature from the reanalysis
-     * archive, on Open-Meteo's budget at the archive's cost.
-     */
-    public Optional<List<OpenMeteo.DailyRow>> archive(double lat, double lon, LocalDate from, LocalDate to) {
-        return spend(OpenMeteo.ARCHIVE_UNITS, "archive " + from + " to " + to, () -> openMeteo.archive(lat, lon, from, to));
-    }
-
-    public Optional<List<OpenMeteo.DailyRow>> recentDays(double lat, double lon, int pastDays) {
-        return spend(OpenMeteo.SMALL_UNITS, "recent " + pastDays + " days", () -> openMeteo.recent(lat, lon, pastDays));
-    }
-
-    /**
-     * The ground height at a set of points, for a hexagon's mean elevation, on Open-Meteo's budget at one unit.
+     * The ground height at up to a hundred points, on Open-Meteo's budget at one unit; empty when
+     * the call could not be made or failed (the ledger and the breaker know why).
      */
     public Optional<List<Double>> elevation(List<double[]> points, String what) {
-        return spend(OpenMeteo.SMALL_UNITS, "elevation " + what, () -> openMeteo.elevation(points));
-    }
-
-    public Optional<List<OpenMeteo.DischargeRow>> discharge(double lat, double lon, int pastDays, int forecastDays) {
-        return spend(OpenMeteo.SMALL_UNITS, "river discharge", () -> openMeteo.discharge(lat, lon, pastDays, forecastDays));
-    }
-
-    private <T> Optional<T> spend(double units, String what, Call<T> call) {
         if (!properties.enabled()) {
             return Optional.empty();
         }
-        String held = gate(openMeteo, units);
+        String held = gate(openMeteo, OpenMeteo.ELEVATION_UNITS);
         if (held != null) {
-            log.debug("{} skipped: {}", what, held);
+            log.debug("elevation {} skipped: {}", what, held);
             return Optional.empty();
         }
         long started = System.nanoTime();
         try {
-            T out = call.run();
-            ledger.record(openMeteo.id(), units, true, Duration.ofNanos(System.nanoTime() - started), what);
+            List<Double> out = openMeteo.elevation(points);
+            ledger.record(openMeteo.id(), OpenMeteo.ELEVATION_UNITS, true, Duration.ofNanos(System.nanoTime() - started), "elevation " + what);
             breaker.succeeded(openMeteo.id());
             return Optional.of(out);
         } catch (UpstreamException | RuntimeException e) {
-            // failed() writes the ledger, tells the breaker and logs the one warning.
-            failed(openMeteo, e, Duration.ofNanos(System.nanoTime() - started), what, units);
+            failed(openMeteo, e, Duration.ofNanos(System.nanoTime() - started), "elevation " + what, OpenMeteo.ELEVATION_UNITS);
             return Optional.empty();
         }
     }
@@ -198,38 +170,12 @@ public class Upstreams {
         return out;
     }
 
-    /**
-     * How much of the day's allowance the upstream a fetch would go to has used, 0 to 1: the first
-     * configured upstream in the order whose breaker is closed, else 1 when none is usable (nothing
-     * fetched is the tightest budget there is). Cheap: two ledger sums.
-     */
-    public double dayFraction() {
-        for (String id : order()) {
-            Upstream u = upstream(id).orElse(null);
-            if (u == null || !u.configured() || breaker.status(id).openUntil() != null) {
-                continue;
-            }
-            Upstream.Limits limits = u.spec().limits();
-            Integer perDay = limits == null ? null : limits.perDay();
-            if (perDay == null || perDay <= 0) {
-                return 0;
-            }
-            return Math.min(1.0, ledger.spent(id, Duration.ofDays(1)) / perDay);
-        }
-        return 1;
-    }
-
     public Ledger ledger() {
         return ledger;
     }
 
     public Breaker breaker() {
         return breaker;
-    }
-
-    @FunctionalInterface
-    private interface Call<T> {
-        T run() throws UpstreamException;
     }
 
     /**

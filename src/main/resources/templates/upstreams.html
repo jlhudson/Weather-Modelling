@@ -4,11 +4,8 @@
 <section>
     <h1>Upstreams · spend, allowance, breakers</h1>
     <div class="figures">
-        <div><div class="v" th:text="${held.hexagons}">0</div><div class="k">hexagons</div></div>
-        <div><div class="v" th:text="${held.active}">0</div><div class="k">active</div></div>
-        <div><div class="v" th:text="${held.served}">0</div><div class="k">served</div></div>
-        <div><div class="v" th:text="${held.fetched}">0</div><div class="k">fetched</div></div>
-        <div><div class="v" th:text="${held.inFlight}">0</div><div class="k">in flight</div></div>
+        <div><div class="v" th:text="${held.stations}">0</div><div class="k">stations</div></div>
+        <div><div class="v" th:text="${held.reporting}">0</div><div class="k">reporting</div></div>
     </div>
 
     <!-- One row per budgeted upstream: each window as spent over its allowance, a meter under it. -->
@@ -83,20 +80,11 @@
     </table>
     <p class="muted" th:if="${#lists.isEmpty(breakerHistory)}">No breaker has opened this run.</p>
 
-    <h2>Sources</h2>
+    <h2>The Bureau</h2>
     <table class="table kv w-auto">
-        <tr><th>Bureau stations</th><td><span th:text="${sources.bureau.stations}"></span> stations · updated <span th:text="${fmt.ago(sources.bureau.lastUpdateAt)}"></span></td></tr>
-        <tr th:each="f : ${sources.bureau.files}"><th class="sub" th:text="${f.key}"></th>
-            <td><span th:text="${f.value.stations}"></span> stations · read <span th:text="${fmt.ago(f.value.readAt)}"></span> · checked <span th:text="${fmt.ago(f.value.checkedAt)}"></span>
-                <span class="text-danger" th:if="${f.value.failure != null}" th:text="' · ' + ${f.value.failure}"></span></td></tr>
-        <tr><th>Bureau warnings</th><td><span th:text="${sources.bureau.warnings}"></span> current · polled <span th:text="${fmt.ago(sources.bureau.warningsPolledAt)}"></span>
-            <span class="text-danger" th:unless="${#maps.isEmpty(sources.bureau.warningFailures)}" th:text="' · ' + ${sources.bureau.warningFailures}"></span></td></tr>
-        <tr><th>CFS ratings</th><td><span th:text="${sources.cfs.districts}"></span> districts · read <span th:text="${fmt.ago(sources.cfs.ratingsReadAt)}"></span>
-            <span class="text-danger" th:if="${sources.cfs.ratingsFailure != null}" th:text="' · ' + ${sources.cfs.ratingsFailure}"></span></td></tr>
-        <tr><th>CFS district shapes</th><td>read <span th:text="${fmt.ago(sources.cfs.districtShapesReadAt)}"></span>
-            <span class="text-danger" th:if="${sources.cfs.districtShapesFailure != null}" th:text="' · ' + ${sources.cfs.districtShapesFailure}"></span></td></tr>
-        <tr><th>curing</th><td><span th:text="${sources.cfs.curingDistricts}"></span> districts have a figure</td></tr>
-        <tr><th>terrain</th><td>elevation <span th:text="${fmt.n(sources.terrain.elevationFile)}"></span> · land cover <span th:text="${fmt.n(sources.terrain.landCoverFile)}"></span></td></tr>
+        <tr><th>station file</th><td><span class="mono" th:text="${bureau.state}"></span> · <span th:text="${bureau.stationsInFile}"></span> stations in the file · read <span th:text="${fmt.ago(bureau.readAt)}"></span> · checked <span th:text="${fmt.ago(bureau.checkedAt)}"></span> · every <span th:text="${fmt.human(T(java.time.Duration).parse(bureau.every))}"></span>
+            <span class="text-danger" th:if="${bureau.failure != null}" th:text="' · ' + ${bureau.failure} + ' (' + ${fmt.ago(bureau.failedAt)} + ')'"></span></td></tr>
+        <tr><th>register</th><td><span th:text="${held.stations}"></span> stations · <span th:text="${held.reporting}"></span> reporting inside 70 min · updated <span th:text="${fmt.ago(bureau.lastUpdateAt)}"></span></td></tr>
     </table>
 
     <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">

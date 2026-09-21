@@ -1,10 +1,9 @@
 package au.gully.platform.access;
 
 import java.time.Instant;
-import java.util.Set;
 
 /**
- * A key per consumer, rotatable and revocable individually, with a scope (docs/06 item 11): what it
+ * A key per consumer, rotatable and revocable individually, with a scope: what it
  * may read. {@code ALL} is what every key held before scopes existed and what the console issues by
  * default; a second consumer that needs less than everything gets less.
  *
@@ -30,16 +29,10 @@ public record ApiKey(long id, String consumer, String keyPrefix, String keyHash,
      */
     public enum Scope {
         ALL,
-        /** The readings, the fire-indices calculator, the status and the spend reads. */
+        /** The readings under {@code /api/v1}: the stations and what they say. */
         READINGS,
-        /** The hexagon layer and list only: a map. */
-        LAYER,
         /** The diagnostics reads and clears only: the morning agent. */
         DIAGNOSTICS;
-
-        static final Set<String> READING_PREFIXES = Set.of("/api/v1/readings", "/api/v1/now", "/api/v1/forecast", "/api/v1/drought",
-                "/api/v1/fire-indices", "/api/v1/status", "/api/v1/drift",
-                "/api/v1/upstreams", "/api/weather");
 
         public static Scope parse(String name) {
             if (name == null) {
@@ -55,8 +48,7 @@ public record ApiKey(long id, String consumer, String keyPrefix, String keyHash,
         boolean covers(String path) {
             return switch (this) {
                 case ALL -> true;
-                case READINGS -> READING_PREFIXES.stream().anyMatch(path::startsWith);
-                case LAYER -> path.startsWith("/api/v1/hexagons");
+                case READINGS -> path.startsWith("/api/v1/");
                 case DIAGNOSTICS -> path.startsWith("/api/diagnostics");
             };
         }

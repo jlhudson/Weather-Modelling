@@ -1,6 +1,6 @@
 package au.gully.console;
 
-import au.gully.api.StatusController;
+import au.gully.platform.Status;
 import au.gully.upstreams.Ledger;
 import au.gully.upstreams.Upstreams;
 import lombok.RequiredArgsConstructor;
@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The upstreams page (docs/06 item 8): every budgeted upstream's spend against its allowance in
+ * The upstreams page: every budgeted upstream's spend against its allowance in
  * one table, the spend over time as one chart from {@code spend.json}, the breaker's history, the
- * sources with when each last answered, and the recent calls - the budgeted upstreams' own and
+ * Bureau's file with when it last answered, and the recent calls - the budgeted upstreams' own and
  * every failure, the free sources' polls behind {@code ?calls=all}.
  */
 @Controller
@@ -36,7 +36,7 @@ public class UpstreamsController {
     private static final int RECENT = 40;
 
     private final Upstreams upstreams;
-    private final StatusController status;
+    private final Status status;
 
     @GetMapping
     public String page(@RequestParam(required = false) String calls, Model model) {
@@ -47,7 +47,7 @@ public class UpstreamsController {
         model.addAttribute("allCalls", all);
         model.addAttribute("recent", all ? upstreams.ledger().recent(RECENT)
                 : upstreams.ledger().recent(RECENT, statuses.stream().map(Upstreams.Status::id).toList()));
-        model.addAttribute("sources", status.sources());
+        model.addAttribute("bureau", status.bureau());
         model.addAttribute("held", status.held());
         return "upstreams";
     }

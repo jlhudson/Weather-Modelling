@@ -1,6 +1,5 @@
 package au.gully.platform.diagnostics;
 
-import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -19,7 +18,6 @@ import java.util.Map;
  * write is the clear. {@code window} is an ISO-8601 duration ({@code PT6H}, {@code P2D}), 24 hours
  * by default, 30 days at most. Needs a key with the {@code DIAGNOSTICS} or {@code ALL} scope.
  */
-@Hidden
 @RestController
 @RequestMapping(path = "/api/diagnostics", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor

@@ -1,5 +1,5 @@
 # One configuration, one environment, and as close to empty as it can be. Every setting this service
-# has carries its default in GullyProperties (or TerrainProperties, DiagnosticsProperties) and is
+# has carries its default in GullyProperties (or DiagnosticsProperties) and is
 # printed once at startup; what is here is Spring's own wiring plus the handful of values that differ
 # between one machine and the next, each read from an environment variable. Secrets never appear here.
 spring:
@@ -15,13 +15,9 @@ spring:
     hikari:
       maximum-pool-size: 10
       connection-timeout: 10000
-  # Flyway owns the schema (db/migration). baseline-version 0 so V1 runs on a database the old
-  # service's Hibernate built as well as on an empty one.
+  # Flyway owns the schema (db/migration).
   flyway:
     enabled: true
-    baseline-on-migrate: true
-    baseline-version: 0
-    baseline-description: before Gully
     locations: classpath:db/migration
   thymeleaf:
     cache: true
@@ -41,17 +37,9 @@ server:
   forward-headers-strategy: framework
   compression:
     enabled: true
-    mime-types: application/json, application/geo+json, application/problem+json, application/schema+json, text/html, text/css, application/javascript
+    mime-types: application/json, application/geo+json, application/problem+json, text/html, text/css, application/javascript
     min-response-size: 1024
 
-springdoc:
-  api-docs:
-    # Deliberately served (README, docs/02): said so, or springdoc warns at every start that it is on.
-    enabled: true
-    path: /api/v1/openapi.json
-  paths-to-match: /api/v1/**
-  swagger-ui:
-    enabled: false
 
 management:
   endpoints:
@@ -97,8 +85,3 @@ gully:
     code: ${WEATHER_CONSOLE_CODE:12345678}
   api:
     cors-origins: ${WEATHER_CORS_ORIGINS:}
-  history:
-    backups: ${WEATHER_BACKUPS_DIR:}
-  terrain:
-    elevation-file: ${WEATHER_ELEVATION_FILE:}
-    land-cover-file: ${WEATHER_LAND_COVER_FILE:}

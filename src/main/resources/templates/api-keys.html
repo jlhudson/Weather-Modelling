@@ -5,7 +5,7 @@
     <h1>API keys</h1>
     <p class="muted">One key per consumer, with a scope. Sent as <code>X-Api-Key</code> or <code>Authorization: Bearer</code>,
         never in the URL. Every read is logged; every key answers the <code>RateLimit-*</code> headers and stops at its
-        daily cap. Scopes: ALL; READINGS (readings, fire-indices, status, spend); LAYER (the hexagons); DIAGNOSTICS.</p>
+        daily cap. Scopes: ALL; READINGS (everything under /api/v1); DIAGNOSTICS (the morning agent).</p>
     <div class="alert alert-success py-1" th:if="${issued != null}">
         Key for <strong th:text="${issued.key.consumer}"></strong> (<span th:text="${issued.key.scope}"></span>), shown once:
         <code class="user-select-all" th:text="${issued.plaintext}"></code>
