@@ -41,11 +41,13 @@
                     <input aria-label="Reach in kilometres" id="reachKm" max="50" min="3" step="1" type="range" th:max="${reachMaxKm}" th:min="${reachMinKm}" th:value="${reachKm}">
                     <label for="kmPer100m">100 m of height costs <b id="kmPer100mValue" th:text="${kmPer100m}">10</b> km <span class="muted">of it</span></label>
                     <input aria-label="Kilometres per 100 metres" id="kmPer100m" max="30" min="0" step="0.5" type="range" th:max="${kmPer100mMax}" th:value="${kmPer100m}">
+                    <label for="coastalKm">A coastal station reaches at most <b id="coastalKmValue" th:text="${coastalKm}">25</b> km <span class="muted">inland</span></label>
+                    <input aria-label="A coastal station's limit in kilometres" id="coastalKm" max="50" min="3" step="1" type="range" th:max="${reachMaxKm}" th:min="${reachMinKm}" th:value="${coastalKm}">
                     <div class="control-row">
-                        <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-per=${kmPer100m},data-by=${reachBy},data-since=${reachSince}">set</span>
+                        <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-per=${kmPer100m},data-coastal=${coastalKm},data-by=${reachBy},data-since=${reachSince}">set</span>
                         <button class="pill" id="reachSet" title="Make this the rule: every reach is drawn by it, and the values survive a restart" type="button">set</button>
                     </div>
-                    <div class="muted control-note">A ray stops where its distance plus the cost of the greatest height difference it has crossed exceeds the reach: a ridge is a barrier, and the far side of it is another climate.</div>
+                    <div class="muted control-note">A ray stops where its distance plus the cost of the greatest height difference it has crossed exceeds the reach: a ridge is a barrier, and the far side of it is another climate. A ray ends at the water; a station with the sea inside 10 km is coastal, and held to the coastal limit on every bearing.</div>
                 </div>
                 <details class="group" id="moreShow" open>
                     <summary>Show</summary>

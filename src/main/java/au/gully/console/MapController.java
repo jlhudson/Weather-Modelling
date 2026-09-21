@@ -49,6 +49,7 @@ public class MapController {
         model.addAttribute("reachMinKm", ReachRule.MIN_KM);
         model.addAttribute("kmPer100m", r.kmPer100m());
         model.addAttribute("kmPer100mMax", ReachRule.MAX_KM_PER_100M);
+        model.addAttribute("coastalKm", r.coastalKm());
         model.addAttribute("reachBy", rule.by());
         model.addAttribute("reachSince", rule.since() == null ? null : rule.since().toString());
         return "map";
@@ -75,14 +76,15 @@ public class MapController {
      */
     @GetMapping(value = "/reach.geojson", produces = "application/geo+json")
     @ResponseBody
-    public Map<String, Object> reach(@RequestParam(required = false) Double km, @RequestParam(required = false) Double kmPer100m) {
-        return reaches.geojson(asked(km, kmPer100m));
+    public Map<String, Object> reach(@RequestParam(required = false) Double km, @RequestParam(required = false) Double kmPer100m,
+                                     @RequestParam(required = false) Double coastalKm) {
+        return reaches.geojson(asked(km, kmPer100m, coastalKm));
     }
 
-    private ReachRule.Rule asked(Double km, Double kmPer100m) {
+    private ReachRule.Rule asked(Double km, Double kmPer100m, Double coastalKm) {
         ReachRule.Rule r = rule.current();
-        return km == null && kmPer100m == null ? r
-                : ReachRule.Rule.of(km == null ? r.reachKm() : km, kmPer100m == null ? r.kmPer100m() : kmPer100m);
+        return km == null && kmPer100m == null && coastalKm == null ? r
+                : ReachRule.Rule.of(km == null ? r.reachKm() : km, kmPer100m == null ? r.kmPer100m() : kmPer100m, coastalKm == null ? r.coastalKm() : coastalKm);
     }
 
     /**
@@ -90,11 +92,12 @@ public class MapController {
      */
     @PostMapping(value = "/reach/rule", produces = "application/json")
     @ResponseBody
-    public Map<String, Object> setRule(@RequestParam double km, @RequestParam double kmPer100m) {
-        ReachRule.Rule r = rule.set(km, kmPer100m, ConsoleModel.operatorName(), Instant.now());
+    public Map<String, Object> setRule(@RequestParam double km, @RequestParam double kmPer100m, @RequestParam double coastalKm) {
+        ReachRule.Rule r = rule.set(km, kmPer100m, coastalKm, ConsoleModel.operatorName(), Instant.now());
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("reachKm", r.reachKm());
         out.put("kmPer100m", r.kmPer100m());
+        out.put("coastalKm", r.coastalKm());
         out.put("by", rule.by());
         out.put("since", rule.since() == null ? null : rule.since().toString());
         return out;

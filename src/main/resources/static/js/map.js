@@ -23,7 +23,7 @@
         {id: 'heightM', name: 'Height', hint: 'of the station', unit: 'm', icon: 'elevation', range: [0, 800], always: true},
         {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true}
     ];
-    var GROUND = '#3b82f6', NONE = '#6b7280';
+    var GROUND = '#3b82f6', NONE = '#6b7280', SEA = '#0ea5e9';
     function ramp(t) {
         t = Math.max(0, Math.min(1, t));
         var stops = [[0, [33, 102, 172]], [.5, [247, 247, 190]], [1, [178, 24, 43]]];
@@ -134,9 +134,11 @@
         var v = current(), z = map.getZoom(), r = Math.max(2.5, Math.min(5, z * .6));
         lastStations.features.forEach(function (f) {
             var p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]], c = colourOf(p, v);
-            var on = state.selected === p.id;
+            var on = state.selected === p.id, rf = reachFeature(p.id);
             if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
-            L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? '#22d3ee' : c, weight: on ? 2 : p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0})
+            // A coastal station (W-3) wears a thin ring in the sea's blue.
+            if (rf && rf.properties.coastal) L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: SEA, weight: 1, opacity: .8, fill: false, interactive: false}).addTo(stationLayer);
+            L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : c, weight: on ? 2 : p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0})
                 .bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
                 .addTo(stationLayer);
@@ -147,8 +149,10 @@
         });
     }
 
-    // ---- the reach (W-2): every station's polygon under the rule on the sliders, the clicked one's lit
-    function ruleOnSliders() { return {km: Number($('reachKm').value), per: Number($('kmPer100m').value)}; }
+    // ---- the reach (W-2, W-3): every station's polygon under the rule on the sliders, the clicked one's lit
+    function ruleOnSliders() { return {km: Number($('reachKm').value), per: Number($('kmPer100m').value), coastal: Number($('coastalKm').value)}; }
+    function ruleQuery(r) { return 'km=' + r.km + '&kmPer100m=' + r.per + '&coastalKm=' + r.coastal; }
+    function ruleWords(r) { return r.reachKm + ' km · 100 m costs ' + r.kmPer100m + ' km · coastal at most ' + r.coastalKm + ' km'; }
     var reachTimer = null, reachLoading = false, reachAgain = false;
     function loadReach(immediate) {
         clearTimeout(reachTimer);
@@ -156,10 +160,11 @@
             if (reachLoading) { reachAgain = true; return; }
             reachLoading = true;
             var r = ruleOnSliders();
-            fetch('/console/map/reach.geojson?km=' + r.km + '&kmPer100m=' + r.per).then(function (x) { return x.json(); }).then(function (fc) {
+            fetch('/console/map/reach.geojson?' + ruleQuery(r)).then(function (x) { return x.json(); }).then(function (fc) {
                 reachLoading = false;
                 lastReach = fc;
                 drawReach();
+                stations();
                 tiles();
                 reachHint();
                 if (reachAgain) { reachAgain = false; loadReach(true); }
@@ -171,14 +176,14 @@
         for (var i = 0; i < lastReach.features.length; i++) if (lastReach.features[i].properties.id === id) return lastReach.features[i];
         return null;
     }
+    // Subtle: a hairline of cyan and the faintest wash, the clicked one a little firmer.
     function reachStyle(lit) {
-        return lit ? {color: REACH, weight: 2, opacity: .95, fillColor: REACH, fillOpacity: .09, lineJoin: 'round'}
-            : {color: REACH, weight: 1, opacity: .45, fillColor: REACH, fillOpacity: .035, lineJoin: 'round'};
+        return lit ? {color: REACH, weight: 1.5, opacity: .85, fillColor: REACH, fillOpacity: .06, lineJoin: 'round'}
+            : {color: REACH, weight: 1, opacity: .5, fillColor: REACH, fillOpacity: .03, lineJoin: 'round'};
     }
     function reachTip(p) {
-        var r = lastReach.rule;
-        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + '</span><br>reach ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
-            + '<br><span class="muted">' + p.cut.height + ' rays cut by height · ' + p.cut.distance + ' at the reach' + (p.cut.unknown ? ' · ' + p.cut.unknown + ' unknown' : '') + ' · rule ' + r.reachKm + ' km, ' + r.kmPer100m + ' km/100 m</span>';
+        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.coastal ? ' · coastal' : '') + '</span><br>reach ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
+            + '<br><span class="muted">' + cutWords(p.cut) + ' · rule ' + ruleWords(lastReach.rule) + '</span>';
     }
     function drawReach() {
         allLayer.clearLayers();
@@ -202,20 +207,21 @@
         $('reachSet').disabled = !!inForce;
         $('reachKmValue').textContent = r.km;
         $('kmPer100mValue').textContent = r.per;
+        $('coastalKmValue').textContent = r.coastal;
     }
-    function reachSaved(km, per, by, since) {
+    function reachSaved(km, per, coastal, by, since) {
         var s = $('reachSaved');
-        s.dataset.km = km; s.dataset.per = per;
-        s.textContent = 'set to ' + km + ' km · ' + per + ' km/100 m' + (by ? ' by ' + by + ', ' + ago(since) : ' (default)');
+        s.dataset.km = km; s.dataset.per = per; s.dataset.coastal = coastal;
+        s.textContent = 'set to ' + km + ' km · ' + per + ' km/100 m · ' + coastal + ' km coastal' + (by ? ' by ' + by + ', ' + ago(since) : ' (default)');
         s.title = since ? when(since) : '';
     }
     function setReach() {
         var r = ruleOnSliders(), headers = window.gullyCsrf ? window.gullyCsrf() : {};
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
         $('reachSet').disabled = true;
-        fetch('/console/map/reach/rule', {method: 'POST', headers: headers, body: 'km=' + r.km + '&kmPer100m=' + r.per}).then(function (x) { return x.json(); }).then(function (o) {
-            reachSaved(o.reachKm, o.kmPer100m, o.by, o.since);
-            note('reach set: ' + o.reachKm + ' km, 100 m costs ' + o.kmPer100m + ' km');
+        fetch('/console/map/reach/rule', {method: 'POST', headers: headers, body: ruleQuery(r)}).then(function (x) { return x.json(); }).then(function (o) {
+            reachSaved(o.reachKm, o.kmPer100m, o.coastalKm, o.by, o.since);
+            note('reach set: ' + ruleWords(o));
             loadReach(true);
             if (state.selected) detail(state.selected);
         }).catch(function (e) { $('reachSet').disabled = false; note('set failed: ' + e); });
@@ -225,7 +231,7 @@
         var b = $('sampleNow');
         if (b) { b.disabled = true; b.textContent = 'sampling…'; }
         fetch('/console/map/terrain/' + encodeURIComponent(id), {method: 'POST', headers: headers}).then(function (x) { return x.json(); }).then(function (o) {
-            note(o.sampled ? 'terrain sampled: ' + o.terrain.calls + ' calls' : 'sampling failed: ' + (o.failure || ''));
+            note(o.sampled ? 'terrain sampled: ' + o.terrain.tiles + ' tiles fetched' : 'sampling failed: ' + (o.failure || ''));
             loadReach(true);
             detail(id);
         }).catch(function (e) { note('sampling failed: ' + e); detail(id); });
@@ -239,8 +245,10 @@
     }
     function cutWords(c) {
         var parts = [];
-        if (c.height) parts.push(c.height + ' by height');
         if (c.distance) parts.push(c.distance + ' at the reach');
+        if (c.height) parts.push(c.height + ' by height');
+        if (c.water) parts.push(c.water + ' at the water');
+        if (c.coastal) parts.push(c.coastal + ' at the coastal limit');
         if (c.unknown) parts.push(c.unknown + ' unknown');
         return parts.join(' · ');
     }
@@ -254,7 +262,8 @@
             ['area', fmt(r.areaKm2, 0) + ' km²'],
             ['reach', fmt(r.minKm, 0) + '–' + fmt(r.maxKm, 0) + ' km <span class="muted">mean ' + fmt(r.meanKm, 1) + '</span>'],
             ['rays', cutWords(r.cut) + ' <span class="muted">of ' + r.rays.length + '</span>'],
-            ['rule', r.rule.reachKm + ' km · 100 m costs ' + r.rule.kmPer100m + ' km'],
+            ['the sea', r.coastal ? '<span class="coastal">coastal</span> · water ' + fmt(r.waterKm, 0) + ' km away at the nearest' : r.waterKm != null ? 'water ' + fmt(r.waterKm, 0) + ' km away at the nearest' : 'none inside 50 km'],
+            ['rule', ruleWords(r.rule)],
             ['model height', fmt(t.elevationM, 0) + ' m' + (s.heightM != null ? ' <span class="muted">the Bureau says ' + s.heightM + '</span>' : '')],
             ['sampled', esc(ago(t.sampledAt)) + ' <span class="muted">' + t.tiles + ' tiles fetched · ' + esc(t.source) + '</span>']
         ]);
@@ -267,7 +276,9 @@
             svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + Math.cos(a) * len).toFixed(1) + '" y2="' + (cy + Math.sin(a) * len).toFixed(1) + '" class="ray ' + x.cut + '"><title>' + x.bearing + '°: ' + x.km + ' km, ' + x.cut + '</title></line>';
         });
         svg += '<text x="' + cx + '" y="' + (cy - R - 3) + '" text-anchor="middle">N</text><text x="' + (w - 2) + '" y="' + (h - 3) + '" text-anchor="end">' + fmt(max, 0) + ' km</text></svg>';
-        return html + '<div class="rose-wrap">' + svg + '<div class="rose-key"><span class="swatch"><i class="k-distance"></i>at the reach</span><span class="swatch"><i class="k-height"></i>cut by height</span>' + (r.cut.unknown ? '<span class="swatch"><i class="k-unknown"></i>unknown</span>' : '') + '</div></div>';
+        return html + '<div class="rose-wrap">' + svg + '<div class="rose-key"><span class="swatch"><i class="k-distance"></i>at the reach</span><span class="swatch"><i class="k-height"></i>cut by height</span>'
+            + (r.cut.water ? '<span class="swatch"><i class="k-water"></i>at the water</span>' : '') + (r.cut.coastal ? '<span class="swatch"><i class="k-coastal"></i>coastal limit</span>' : '')
+            + (r.cut.unknown ? '<span class="swatch"><i class="k-unknown"></i>unknown</span>' : '') + '</div></div>';
     }
     function detail(id) {
         state.selected = id;
@@ -342,12 +353,12 @@
         b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
-    $('reachKm').addEventListener('input', function () { reachHint(); loadReach(false); });
-    $('kmPer100m').addEventListener('input', function () { reachHint(); loadReach(false); });
-    $('reachKm').addEventListener('change', function () { loadReach(true); });
-    $('kmPer100m').addEventListener('change', function () { loadReach(true); });
+    ['reachKm', 'kmPer100m', 'coastalKm'].forEach(function (id) {
+        $(id).addEventListener('input', function () { reachHint(); loadReach(false); });
+        $(id).addEventListener('change', function () { loadReach(true); });
+    });
     $('reachSet').addEventListener('click', setReach);
-    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
+    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.coastal, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeDetail();
     });

@@ -79,6 +79,34 @@ class ReachTest {
     }
 
     @Test
+    void aRayEndsAtTheWaterHalfAStepShortAndTheStationIsCoastal() {
+        // The sea from 4 km out on bearings 12 to 36 (east round through south to west); land elsewhere.
+        Terrain t = terrain(10, (b, s) -> b >= 12 && b <= 36 && s >= 4 ? -5 : 10);
+        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10, 25));
+        assertThat(r.km()[24]).as("the first water sample at 4 km: the edge at 3.5").isEqualTo(3.5);
+        assertThat(r.cut()[24]).isEqualTo(Reach.Cut.WATER);
+        assertThat(r.coastal()).isTrue();
+        assertThat(r.waterKm()).isEqualTo(4);
+        // Coastal: the land rays are held to the coastal limit, and say so.
+        assertThat(r.km()[0]).isEqualTo(25);
+        assertThat(r.cut()[0]).isEqualTo(Reach.Cut.COASTAL);
+        assertThat(r.cuts()).containsEntry(Reach.Cut.WATER, 25).containsEntry(Reach.Cut.COASTAL, 23).containsEntry(Reach.Cut.DISTANCE, 0);
+        // A wider coastal limit than the reach changes nothing.
+        assertThat(Reach.of(t, ReachRule.Rule.of(20, 10, 50)).km()[0]).isEqualTo(20);
+        assertThat(Reach.of(t, ReachRule.Rule.of(20, 10, 50)).cut()[0]).isEqualTo(Reach.Cut.DISTANCE);
+        // Water only beyond ten kilometres: the ray still ends there, but the station is not coastal.
+        Reach inland = Reach.of(terrain(10, (b, s) -> b == 6 && s >= 30 ? 0 : 10), ReachRule.Rule.of(40, 10, 25));
+        assertThat(inland.coastal()).isFalse();
+        assertThat(inland.waterKm()).isEqualTo(30);
+        assertThat(inland.km()[6]).isEqualTo(29.5);
+        assertThat(inland.km()[0]).isEqualTo(40);
+        // A ridge crossed before the water: the ray stops at the ridge, and the water beyond is not seen.
+        Reach ridge = Reach.of(terrain(10, (b, s) -> b == 0 ? (s == 5 ? 600 : s >= 8 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10, 25));
+        assertThat(ridge.cut()[0]).isEqualTo(Reach.Cut.HEIGHT);
+        assertThat(ridge.coastal()).isFalse();
+    }
+
+    @Test
     void whereTheModelHasNothingTheRayStops() {
         double[] e = new double[Terrain.BEARINGS * Terrain.STEPS];
         Arrays.fill(e, 30);
@@ -94,7 +122,8 @@ class ReachTest {
         assertThat(ReachRule.Rule.of(1, 10).reachKm()).isEqualTo(ReachRule.MIN_KM);
         assertThat(ReachRule.Rule.of(40, -5).kmPer100m()).isEqualTo(0);
         assertThat(ReachRule.Rule.of(40, 99).kmPer100m()).isEqualTo(ReachRule.MAX_KM_PER_100M);
-        assertThat(ReachRule.Rule.of(40.3, 10.1)).as("to the quarter").isEqualTo(new ReachRule.Rule(40.25, 10));
+        assertThat(ReachRule.Rule.of(40.3, 10.1, 25)).as("to the quarter").isEqualTo(new ReachRule.Rule(40.25, 10, 25));
+        assertThat(ReachRule.Rule.of(40, 10, 99).coastalKm()).isEqualTo(Terrain.MAX_KM);
     }
 
     @Test

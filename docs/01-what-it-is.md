@@ -43,10 +43,19 @@ ground. The polygon is the 48 ray ends joined. Nothing about it is stored: it is
 the terrain in memory, so the sliders on the map preview another rule on every station at once, and
 *set* makes it the rule (kept in `setting`, so a restart keeps it).
 
-What this does around Adelaide: West Terrace (29 m) reaches the plains north and south and stops at
-the foothill scarp, never crossing to the Hills; Mount Lofty (700 m) keeps the ridge and not the
-plain; Murray Bridge (30 m) reaches east over the flat and stops short of the Hills to its west. Two
-reaches may overlap — a point inside several is for the interpolation, which comes next.
+**The ocean, a third number.** A ray ends at the water: the first sample at or below sea level
+(the tiles carry bathymetry, so the sea is negative and the shoreline zero) stops it half a step
+short, so the beach is inside and the sea is not. A station with water inside 10 km on any bearing
+is *coastal*, and every one of its rays is held to the rule's coastal limit, 25 km by default —
+about how far a sea breeze carries on a summer afternoon. Land below sea level reads as water too
+(Lake Eyre, at minus fifteen), which for a reach is right: a salt lake is not the station's ground.
+The drawer says whether a station is coastal and how near the water is; a coastal station wears a
+thin blue ring on the map.
+
+What this does around Adelaide: West Terrace (29 m) reaches the plains north and south, stops at the
+foothill scarp, never crosses to the Hills, and ends at the gulf; Mount Lofty (700 m) keeps the ridge
+and not the plain; Murray Bridge (30 m) reaches east over the flat and stops short of the Hills to its
+west. Two reaches may overlap — a point inside several is for the interpolation, which comes next.
 
 ## 3. The upstreams
 

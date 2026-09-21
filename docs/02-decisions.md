@@ -51,3 +51,20 @@ and honest — the shape only ever changes when the rule does. Temperature and h
 of the shape on purpose: they are what the polygon carries, and they belong in the interpolation
 between overlapping reaches (with the lapse rate) and as a check on the rule, not in its geometry.
 — James, 21 September 2026.
+
+### W-3 · The ocean: a ray ends at the water, a coastal station is held to a limit
+
+**The decision.** A ray ends at the water — the first terrain sample at or below sea level stops it
+half a step short, so the shore is inside the reach and the sea is not. A station with water inside
+10 km on any bearing is coastal, and every one of its rays is held to a third number on the rule, the
+coastal limit, 25 km by default and a third slider beside the other two. Land below sea level counts
+as water. The drawer says whether a station is coastal and how near the water is, the rose colours
+the rays the water and the limit stopped, and a coastal station wears a thin blue ring on the map.
+
+**Why.** A reach that ran out over Gulf St Vincent answered for water nobody stands on and, worse,
+for the far shore. Maritime air is its own climate — a coastal station's afternoon is the sea
+breeze's, cooler and damper than twenty kilometres inland — so a coastal station should reach along
+the coast as far as any, and inland only as far as its air does; twenty-five kilometres is roughly
+where a sea breeze gives out, and it is a slider because that is a guess to be looked at. Whether the
+inland side should shorten smoothly rather than at a wall is the next thing to see on the shapes. —
+James, 21 September 2026.

@@ -11,16 +11,30 @@ import java.util.Map;
  * <em>greatest</em> difference, not the current one, so a ridge is a barrier: the far side of a
  * hill is another climate even where it is the station's own height again. A ray cut by height
  * still reaches {@link ReachRule#MIN_KM}, so every station has some ground.
+ * <p>
+ * A ray ends at the water (W-3): the first sample at or below sea level stops it half a step short,
+ * so the shore is inside and the sea is not. A station with water inside {@link #COASTAL_WITHIN_KM}
+ * on any bearing is <em>coastal</em>, and every one of its rays is held to the rule's coastal limit:
+ * maritime air does not carry far inland, and the ground beyond the sea breeze is not the shore's.
  *
- * @param km    how far the reach goes on each bearing, in bearing order
- * @param cut   why each ray stopped: {@code distance} at the reach itself, {@code height} at the
- *              cost of the ground, {@code unknown} where the model had nothing
- * @param ring  the polygon, one vertex per bearing, closed (the first vertex again at the end), as
- *              {@code {lat, lon}}
+ * @param km      how far the reach goes on each bearing, in bearing order
+ * @param cut     why each ray stopped: {@code distance} at the reach itself, {@code height} at the
+ *                cost of the ground, {@code water} at the sea, {@code coastal} at a coastal
+ *                station's limit, {@code unknown} where the model had nothing
+ * @param coastal whether water lies inside {@link #COASTAL_WITHIN_KM} of the station
+ * @param waterKm how near the water is, on the bearing it is nearest, or null with none inside the terrain
+ * @param ring    the polygon, one vertex per bearing, closed (the first vertex again at the end), as
+ *                {@code {lat, lon}}
  */
-public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cut, double[][] ring, double areaKm2) {
+public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cut, boolean coastal, Double waterKm,
+                    double[][] ring, double areaKm2) {
 
-    public enum Cut { DISTANCE, HEIGHT, UNKNOWN }
+    public enum Cut { DISTANCE, HEIGHT, WATER, COASTAL, UNKNOWN }
+
+    /**
+     * How near the water makes a station coastal.
+     */
+    public static final double COASTAL_WITHIN_KM = 10;
 
     /**
      * The reach of a station under a rule, from its terrain.
@@ -28,6 +42,7 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
     public static Reach of(Terrain t, ReachRule.Rule rule) {
         double[] km = new double[Terrain.BEARINGS];
         Cut[] cut = new Cut[Terrain.BEARINGS];
+        Double nearestWater = null;
         for (int b = 0; b < Terrain.BEARINGS; b++) {
             double maxDiff = 0;
             double reached = 0;
@@ -39,6 +54,14 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
                     break;
                 }
                 double d = s * Terrain.STEP_KM;
+                if (e <= 0) {
+                    why = Cut.WATER;
+                    reached = d - Terrain.STEP_KM / 2;
+                    if (nearestWater == null || d < nearestWater) {
+                        nearestWater = d;
+                    }
+                    break;
+                }
                 maxDiff = Math.max(maxDiff, Math.abs(e - t.elevationM()));
                 double cost = d + rule.kmPer100m() * maxDiff / 100.0;
                 if (cost > rule.reachKm()) {
@@ -53,6 +76,15 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
             km[b] = reached;
             cut[b] = why;
         }
+        boolean coastal = nearestWater != null && nearestWater <= COASTAL_WITHIN_KM;
+        if (coastal) {
+            for (int b = 0; b < Terrain.BEARINGS; b++) {
+                if (km[b] > rule.coastalKm()) {
+                    km[b] = rule.coastalKm();
+                    cut[b] = Cut.COASTAL;
+                }
+            }
+        }
         double[][] ring = new double[Terrain.BEARINGS + 1][];
         for (int b = 0; b < Terrain.BEARINGS; b++) {
             ring[b] = Geo.destination(t.lat(), t.lon(), Terrain.bearingDeg(b), km[b]);
@@ -60,7 +92,7 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
         ring[Terrain.BEARINGS] = ring[0];
         double[][] open = new double[Terrain.BEARINGS][];
         System.arraycopy(ring, 0, open, 0, Terrain.BEARINGS);
-        return new Reach(t.stationId(), rule, km, cut, ring, Math.round(Geo.areaKm2(open) * 10) / 10.0);
+        return new Reach(t.stationId(), rule, km, cut, coastal, nearestWater, ring, Math.round(Geo.areaKm2(open) * 10) / 10.0);
     }
 
     public double minKm() {
