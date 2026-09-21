@@ -1,6 +1,8 @@
 // The map: South Australia's Bureau stations, each drawn where it is, coloured by what it last said,
-// and one question at a time - click a station for everything held for it. Deferred, so it runs
-// after Leaflet and console.js.
+// and each with its reach - the ground it speaks for, a polygon drawn from the terrain around it by
+// the rule on the sliders (W-2): the clicked station's in cyan, every station's at once on a toggle.
+// One question at a time: click a station for everything held for it. Deferred, so it runs after
+// Leaflet and console.js.
 (function () {
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
@@ -39,11 +41,15 @@
     L.control.zoom({position: 'bottomright'}).addTo(map);
     window.gullyBaseLayer(map);
     var canvas = L.canvas({padding: .3});
+    // The reaches under the stations: every station's faintly when All reaches is on, the clicked one's over them.
+    var allLayer = L.layerGroup().addTo(map);
+    var reachLayer = L.layerGroup().addTo(map);
     var stationLayer = L.layerGroup().addTo(map);
     var labelLayer = L.layerGroup().addTo(map);
     var state = {id: 'temperatureC', selected: null};
-    var togs = {labels: true};
-    var lastStations = null;
+    var togs = {labels: true, reach: true, all: false};
+    var lastStations = null, lastReach = null;
+    var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
 
     function current() {
         for (var i = 0; i < VARS.length; i++) if (VARS[i].id === state.id) return VARS[i];
@@ -93,13 +99,16 @@
     function tiles() {
         var props = lastStations ? lastStations.features.map(function (f) { return f.properties; }) : [];
         var fresh = props.filter(function (p) { return p.fresh; });
+        var reaches = lastReach ? lastReach.features.map(function (f) { return f.properties; }) : [];
         var t = [
             {v: props.length, k: 'stations'},
             {v: fresh.length, k: 'reporting', cls: 'ground'},
             {v: lastStations && lastStations.updatedAt ? ago(lastStations.updatedAt) : '—', k: 'file read'},
-            {v: fresh.length ? fmt(fresh.reduce(function (a, p) { return a + (p.temperatureC || 0); }, 0) / fresh.filter(function (p) { return p.temperatureC != null; }).length, 1) + ' °C' : '—', k: 'mean temperature'}
+            {v: fresh.length ? fmt(fresh.reduce(function (a, p) { return a + (p.temperatureC || 0); }, 0) / fresh.filter(function (p) { return p.temperatureC != null; }).length, 1) + ' °C' : '—', k: 'mean temperature'},
+            {v: lastReach ? reaches.length + (reaches.length < props.length ? ' of ' + props.length : '') : '—', k: 'reaches drawn', cls: 'reach', t: 'Stations whose terrain has been sampled; the rest follow, one every fifteen seconds'},
+            {v: reaches.length ? fmt(reaches.reduce(function (a, p) { return a + p.areaKm2; }, 0) / reaches.length, 0) + ' km²' : '—', k: 'mean reach area', cls: 'reach'}
         ];
-        $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '"><div class="v">' + esc(x.v) + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
+        $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '"><div class="v">' + esc(x.v) + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
     }
 
     // ---- the stations
@@ -138,15 +147,132 @@
         });
     }
 
+    // ---- the reach (W-2): every station's polygon under the rule on the sliders, the clicked one's lit
+    function ruleOnSliders() { return {km: Number($('reachKm').value), per: Number($('kmPer100m').value)}; }
+    var reachTimer = null, reachLoading = false, reachAgain = false;
+    function loadReach(immediate) {
+        clearTimeout(reachTimer);
+        reachTimer = setTimeout(function () {
+            if (reachLoading) { reachAgain = true; return; }
+            reachLoading = true;
+            var r = ruleOnSliders();
+            fetch('/console/map/reach.geojson?km=' + r.km + '&kmPer100m=' + r.per).then(function (x) { return x.json(); }).then(function (fc) {
+                reachLoading = false;
+                lastReach = fc;
+                drawReach();
+                tiles();
+                reachHint();
+                if (reachAgain) { reachAgain = false; loadReach(true); }
+            }).catch(function (e) { reachLoading = false; note('reach failed: ' + e); });
+        }, immediate ? 0 : 150);
+    }
+    function reachFeature(id) {
+        if (!lastReach) return null;
+        for (var i = 0; i < lastReach.features.length; i++) if (lastReach.features[i].properties.id === id) return lastReach.features[i];
+        return null;
+    }
+    function reachStyle(lit) {
+        return lit ? {color: REACH, weight: 2, opacity: .95, fillColor: REACH, fillOpacity: .09, lineJoin: 'round'}
+            : {color: REACH, weight: 1, opacity: .45, fillColor: REACH, fillOpacity: .035, lineJoin: 'round'};
+    }
+    function reachTip(p) {
+        var r = lastReach.rule;
+        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + '</span><br>reach ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
+            + '<br><span class="muted">' + p.cut.height + ' rays cut by height · ' + p.cut.distance + ' at the reach' + (p.cut.unknown ? ' · ' + p.cut.unknown + ' unknown' : '') + ' · rule ' + r.reachKm + ' km, ' + r.kmPer100m + ' km/100 m</span>';
+    }
+    function drawReach() {
+        allLayer.clearLayers();
+        reachLayer.clearLayers();
+        if (!lastReach) return;
+        lastReach.features.forEach(function (f) {
+            var p = f.properties, lit = p.id === state.selected;
+            if (lit && togs.reach) {
+                L.geoJSON(f, {style: reachStyle(true), interactive: false}).addTo(reachLayer);
+            } else if (togs.all) {
+                L.geoJSON(f, {style: reachStyle(false)}).bindTooltip(function () { return reachTip(p); }, {sticky: true, className: 'hx-tip'})
+                    .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); }).addTo(allLayer);
+            }
+        });
+    }
+    function reachHint() {
+        var r = ruleOnSliders(), s = $('reachSaved');
+        var inForce = lastReach && lastReach.inForce;
+        $('reachHint').textContent = inForce ? '' : 'preview';
+        $('reach').classList.toggle('on', !inForce);
+        $('reachSet').disabled = !!inForce;
+        $('reachKmValue').textContent = r.km;
+        $('kmPer100mValue').textContent = r.per;
+    }
+    function reachSaved(km, per, by, since) {
+        var s = $('reachSaved');
+        s.dataset.km = km; s.dataset.per = per;
+        s.textContent = 'set to ' + km + ' km · ' + per + ' km/100 m' + (by ? ' by ' + by + ', ' + ago(since) : ' (default)');
+        s.title = since ? when(since) : '';
+    }
+    function setReach() {
+        var r = ruleOnSliders(), headers = window.gullyCsrf ? window.gullyCsrf() : {};
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        $('reachSet').disabled = true;
+        fetch('/console/map/reach/rule', {method: 'POST', headers: headers, body: 'km=' + r.km + '&kmPer100m=' + r.per}).then(function (x) { return x.json(); }).then(function (o) {
+            reachSaved(o.reachKm, o.kmPer100m, o.by, o.since);
+            note('reach set: ' + o.reachKm + ' km, 100 m costs ' + o.kmPer100m + ' km');
+            loadReach(true);
+            if (state.selected) detail(state.selected);
+        }).catch(function (e) { $('reachSet').disabled = false; note('set failed: ' + e); });
+    }
+    function sampleTerrain(id) {
+        var headers = window.gullyCsrf ? window.gullyCsrf() : {};
+        var b = $('sampleNow');
+        if (b) { b.disabled = true; b.textContent = 'sampling…'; }
+        fetch('/console/map/terrain/' + encodeURIComponent(id), {method: 'POST', headers: headers}).then(function (x) { return x.json(); }).then(function (o) {
+            note(o.sampled ? 'terrain sampled: ' + o.terrain.calls + ' calls' : 'sampling failed: ' + (o.failure || ''));
+            loadReach(true);
+            detail(id);
+        }).catch(function (e) { note('sampling failed: ' + e); detail(id); });
+    }
+
     // ---- the drawer: everything held for one station
     function kv(rows) {
         var s = '<table class="table table-sm kv mb-1">';
         rows.forEach(function (r) { if (r[1] != null && r[1] !== '' && r[1] !== '—') s += '<tr><th>' + esc(r[0]) + '</th><td class="mono">' + r[1] + '</td></tr>'; });
         return s + '</table>';
     }
+    function cutWords(c) {
+        var parts = [];
+        if (c.height) parts.push(c.height + ' by height');
+        if (c.distance) parts.push(c.distance + ' at the reach');
+        if (c.unknown) parts.push(c.unknown + ' unknown');
+        return parts.join(' · ');
+    }
+    function reachSection(s) {
+        var t = s.terrain, r = s.reach, html = '<h2>Reach <span class="muted">the ground it speaks for</span></h2>';
+        if (!t || !t.sampled) {
+            return html + '<p class="muted mb-1">Its terrain has not been sampled yet: ' + (t ? t.points : '') + ' points of the elevation model, ' + (t ? t.callsToSample : '') + ' calls, once. The background job takes one station every fifteen seconds; or</p>'
+                + '<button class="pill" id="sampleNow" type="button">' + icon('reach') + ' sample it now</button>';
+        }
+        html += kv([
+            ['area', fmt(r.areaKm2, 0) + ' km²'],
+            ['reach', fmt(r.minKm, 0) + '–' + fmt(r.maxKm, 0) + ' km <span class="muted">mean ' + fmt(r.meanKm, 1) + '</span>'],
+            ['rays', cutWords(r.cut) + ' <span class="muted">of ' + r.rays.length + '</span>'],
+            ['rule', r.rule.reachKm + ' km · 100 m costs ' + r.rule.kmPer100m + ' km'],
+            ['model height', fmt(t.elevationM, 0) + ' m' + (s.heightM != null ? ' <span class="muted">the Bureau says ' + s.heightM + '</span>' : '')],
+            ['sampled', esc(ago(t.sampledAt)) + ' <span class="muted">' + t.calls + ' calls</span>']
+        ]);
+        // The rays as a rose: each bearing's reach as a bar, coloured by why it stopped.
+        var w = 240, h = 120, cx = w / 2, cy = h / 2, R = 56, max = Math.max.apply(null, r.rays.map(function (x) { return x.km; })) || 1;
+        var svg = '<svg class="rose" viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '">';
+        svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" class="ring"/><circle cx="' + cx + '" cy="' + cy + '" r="' + (R / 2) + '" class="ring"/>';
+        r.rays.forEach(function (x) {
+            var a = (x.bearing - 90) * Math.PI / 180, len = R * x.km / max;
+            svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + Math.cos(a) * len).toFixed(1) + '" y2="' + (cy + Math.sin(a) * len).toFixed(1) + '" class="ray ' + x.cut + '"><title>' + x.bearing + '°: ' + x.km + ' km, ' + x.cut + '</title></line>';
+        });
+        svg += '<text x="' + cx + '" y="' + (cy - R - 3) + '" text-anchor="middle">N</text><text x="' + (w - 2) + '" y="' + (h - 3) + '" text-anchor="end">' + fmt(max, 0) + ' km</text></svg>';
+        return html + '<div class="rose-wrap">' + svg + '<div class="rose-key"><span class="swatch"><i class="k-distance"></i>at the reach</span><span class="swatch"><i class="k-height"></i>cut by height</span>' + (r.cut.unknown ? '<span class="swatch"><i class="k-unknown"></i>unknown</span>' : '') + '</div></div>';
+    }
     function detail(id) {
         state.selected = id;
         stations();
+        drawReach();
         fetch('/console/map/station/' + encodeURIComponent(id)).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
             var el = $('detail');
             if (!s) { el.innerHTML = '<div class="drawer-head"><h3>' + esc(id) + '</h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div><p class="muted">not held</p>'; el.classList.remove('hidden'); $('close').addEventListener('click', closeDetail); return; }
@@ -173,6 +299,7 @@
             } else {
                 html += '<p class="muted">Nothing reported since the start.</p>';
             }
+            html += reachSection(s);
             if (s.recent && s.recent.length > 1) {
                 html += '<h2>Last readings <span class="muted">newest first, since the start</span></h2><table class="table table-sm recent"><thead><tr><th>at</th><th class="num">°C</th><th class="num">%</th><th class="num">km/h</th><th>from</th><th class="num">gust</th><th class="num">mm</th></tr></thead><tbody>';
                 s.recent.forEach(function (x) { html += '<tr><td class="mono">' + clock(x.at) + '</td><td class="num">' + fmt(x.temperatureC, 1) + '</td><td class="num">' + fmt(x.humidityPct) + '</td><td class="num">' + fmt(x.windSpeedKmh) + '</td><td class="dir">' + (x.windDirectionDeg != null ? '<span class="arrow" style="transform:rotate(' + ((x.windDirectionDeg + 180) % 360) + 'deg)">↑</span> ' + x.windDirectionDeg + '°' : '—') + '</td><td class="num">' + fmt(x.windGustKmh) + '</td><td class="num">' + fmt(x.rainSince9amMm, 1) + '</td></tr>'; });
@@ -181,9 +308,10 @@
             el.innerHTML = html;
             el.classList.remove('hidden');
             $('close').addEventListener('click', closeDetail);
+            if ($('sampleNow')) $('sampleNow').addEventListener('click', function () { sampleTerrain(id); });
         }).catch(function (e) { note('station failed: ' + e); });
     }
-    function closeDetail() { $('detail').classList.add('hidden'); state.selected = null; stations(); }
+    function closeDetail() { $('detail').classList.add('hidden'); state.selected = null; stations(); drawReach(); }
 
     // ---- the footer: read now, and live
     var noteTimer = null;
@@ -211,21 +339,30 @@
 
     // ---- wiring
     document.querySelectorAll('.tog').forEach(function (b) {
-        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); stations(); });
+        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
+    $('reachKm').addEventListener('input', function () { reachHint(); loadReach(false); });
+    $('kmPer100m').addEventListener('input', function () { reachHint(); loadReach(false); });
+    $('reachKm').addEventListener('change', function () { loadReach(true); });
+    $('kmPer100m').addEventListener('change', function () { loadReach(true); });
+    $('reachSet').addEventListener('click', setReach);
+    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeDetail();
     });
     map.on('zoomend', stations);
     map.on('click', closeDetail);
-    document.addEventListener('gully:theme', stations);
-    document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) load(); });
+    document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; stations(); drawReach(); });
+    document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); loadReach(true); } });
 
     buildSide();
     legend();
     tiles();
     load();
+    loadReach(true);
     setInterval(liveTick, 1000);
     setInterval(function () { if (!document.hidden) load(); }, 60000);
+    // The reaches follow the sampler: a station sampled since the last look appears on the next.
+    setInterval(function () { if (!document.hidden && lastReach && lastStations && lastReach.sampled < lastStations.stations) loadReach(true); }, 20000);
 })();

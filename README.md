@@ -29,7 +29,8 @@ limits in the `RateLimit-*` headers.
 | Route | What it answers |
 |---|---|
 | `GET /api/v1/stations.geojson` | Every station as a point, with its latest values and how old they are. |
-| `GET /api/v1/stations/{id}` | One station with its last readings. |
+| `GET /api/v1/stations/{id}` | One station with its last readings, its terrain and its reach. |
+| `GET /api/v1/reach.geojson` | Every station's reach under the rule in force, as polygons. |
 | `GET /api/diagnostics`, `/logs`, `/logs/{id}`, the two `DELETE`s | The shape The Hub's morning agent reads. |
 
 ## Running it

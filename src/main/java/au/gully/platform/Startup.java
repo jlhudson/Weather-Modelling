@@ -4,6 +4,9 @@ import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
 import au.gully.platform.access.ConsoleUsers;
 import au.gully.platform.diagnostics.StartupHistory;
+import au.gully.reach.ReachRule;
+import au.gully.reach.TerrainSampler;
+import au.gully.reach.TerrainStore;
 import au.gully.upstreams.Ledger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +24,8 @@ import java.time.Instant;
  * <ol>
  *   <li>the console user;</li>
  *   <li>the registers back into memory from the database;</li>
- *   <li>the timers: the Bureau's file every ten minutes, and the hourly sweep.</li>
+ *   <li>the timers: the Bureau's file every ten minutes, the terrain sampler until every station has
+ *       its terrain, and the hourly sweep.</li>
  * </ol>
  * Nothing touches the network before the service is ready.
  */
@@ -33,6 +37,9 @@ public class Startup implements ApplicationRunner {
     private final ConsoleUsers consoleUsers;
     private final StationRegistry stations;
     private final StationReader stationReader;
+    private final TerrainStore terrain;
+    private final TerrainSampler sampler;
+    private final ReachRule reachRule;
     private final Ledger ledger;
     private final GullyProperties properties;
     private final StartupHistory history;
@@ -43,7 +50,11 @@ public class Startup implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         settings.print();
         step(1, "console user", consoleUsers::ensureUser);
-        step(2, "registers from the database", stations::rehydrate);
+        step(2, "registers from the database", () -> {
+            stations.rehydrate();
+            terrain.rehydrate();
+            reachRule.rehydrate();
+        });
         step(3, "timers", this::schedule);
         history.ready();
     }
@@ -52,8 +63,10 @@ public class Startup implements ApplicationRunner {
         Instant soon = Instant.now().plusSeconds(2);
         if (properties.enabled()) {
             scheduler.scheduleWithFixedDelay(guarded("bureau", stationReader::read), soon, StationReader.EVERY);
+            // The terrain, one station a tick until every station has it: a few hundred elevation calls, once.
+            scheduler.scheduleWithFixedDelay(guarded("terrain", sampler::tick), soon.plusSeconds(10), TerrainSampler.EVERY);
         } else {
-            log.info("gully.enabled is false: the Bureau's file is not read");
+            log.info("gully.enabled is false: the Bureau's file is not read and no terrain is sampled");
         }
         scheduler.scheduleWithFixedDelay(guarded("sweep", ledger::prune), soon.plusSeconds(60), Duration.ofHours(1));
     }

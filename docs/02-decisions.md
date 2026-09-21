@@ -25,3 +25,27 @@ drift, the drought's rings — was a way of arguing with that. The stations are 
 one speaks for should be a shape drawn from the ground, not a tiling drawn from arithmetic. Starting
 from the stations, with nothing derived until the shape is right, is cheaper than unpicking. — James,
 21 September 2026.
+
+### W-2 · The reach: a polygon per station, drawn once from the terrain by a cost rule
+
+**The decision.** Every station carries a reach — the ground it speaks for — as a polygon. The
+terrain around each station is sampled once from Open-Meteo's elevation model (the station and every
+kilometre out to 50 km on 48 bearings, 2,401 points, 25 calls) by a background job that takes one
+station every fifteen seconds, and kept. The polygon is arithmetic over those samples under a rule
+of two numbers, both sliders on the map: the *reach* (40 km) and *what a hundred metres of height
+costs* of it (10 km). A ray stops where its distance plus the cost of the greatest height difference
+it has crossed exceeds the reach — the greatest, so a ridge is a barrier — with a 3 km floor. The
+sliders preview any rule on every station at once; *set* makes it the rule and a restart keeps it.
+The clicked station's reach is drawn in cyan, every station's on a toggle; the drawer carries the
+area, the range of the rays, why each stopped (as a rose), the model's height against the Bureau's,
+and a *sample it now* for a station the job has not reached. `/api/v1/reach.geojson` is the same
+collection for a caller.
+
+**Why.** Distance alone made one answer for Adelaide, the Hills and the plains beyond; a hard height
+cutoff would make a station count or not with nothing between. A cost trades the two smoothly, and
+taking the greatest difference crossed rather than the difference at the point is what keeps the
+far side of a ridge out. Sampling once and drawing on demand is what makes the sliders free to turn
+and honest — the shape only ever changes when the rule does. Temperature and humidity are kept out
+of the shape on purpose: they are what the polygon carries, and they belong in the interpolation
+between overlapping reaches (with the lapse rate) and as a check on the rule, not in its geometry.
+— James, 21 September 2026.

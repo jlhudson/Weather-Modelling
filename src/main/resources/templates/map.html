@@ -14,6 +14,8 @@
         <symbol id="i-station" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M7 7a7 7 0 0 0 0 10"/><path d="M17 7a7 7 0 0 1 0 10"/><path d="M4.5 4.5a10.5 10.5 0 0 0 0 15"/><path d="M19.5 4.5a10.5 10.5 0 0 1 0 15"/></symbol>
         <symbol id="i-label" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h13"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></symbol>
+        <symbol id="i-reach" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3c5 0 9 4 9 9 0 3-2 5-3 7-2 2-4 2-6 2s-4 0-6-2C4 17 3 15 3 12c0-5 4-9 9-9Z"/></symbol>
+        <symbol id="i-reaches" viewBox="0 0 24 24"><circle cx="9" cy="10" r="6"/><circle cx="15" cy="14" r="6"/></symbol>
         <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></symbol>
     </svg>
 
@@ -31,10 +33,26 @@
                     <div class="group-title">Colour by</div>
                     <div class="chips" id="varChips"></div>
                 </div>
+                <!-- The reach (W-2): the rule every polygon is drawn by. The sliders preview another rule on every
+                     station with terrain; set makes it the rule, and a restart keeps it. -->
+                <div class="control" id="reach">
+                    <div class="group-title">Reach <span class="muted" id="reachHint"></span></div>
+                    <label for="reachKm">A station reaches <b id="reachKmValue" th:text="${reachKm}">40</b> km <span class="muted">over flat ground</span></label>
+                    <input aria-label="Reach in kilometres" id="reachKm" max="50" min="3" step="1" type="range" th:max="${reachMaxKm}" th:min="${reachMinKm}" th:value="${reachKm}">
+                    <label for="kmPer100m">100 m of height costs <b id="kmPer100mValue" th:text="${kmPer100m}">10</b> km <span class="muted">of it</span></label>
+                    <input aria-label="Kilometres per 100 metres" id="kmPer100m" max="30" min="0" step="0.5" type="range" th:max="${kmPer100mMax}" th:value="${kmPer100m}">
+                    <div class="control-row">
+                        <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-per=${kmPer100m},data-by=${reachBy},data-since=${reachSince}">set</span>
+                        <button class="pill" id="reachSet" title="Make this the rule: every reach is drawn by it, and the values survive a restart" type="button">set</button>
+                    </div>
+                    <div class="muted control-note">A ray stops where its distance plus the cost of the greatest height difference it has crossed exceeds the reach: a ridge is a barrier, and the far side of it is another climate.</div>
+                </div>
                 <details class="group" id="moreShow" open>
                     <summary>Show</summary>
                     <div class="toggles" id="toggles">
                         <button class="tog on" data-tog="labels" title="The value beside every reporting station, from zoom 8" type="button"><svg class="ico"><use href="#i-label"/></svg><span>Labels</span></button>
+                        <button class="tog on" data-tog="reach" title="The clicked station's reach: the ground it speaks for" type="button"><svg class="ico"><use href="#i-reach"/></svg><span>Reach</span></button>
+                        <button class="tog" data-tog="all" title="Every station's reach at once, so the overlaps show" type="button"><svg class="ico"><use href="#i-reaches"/></svg><span>All reaches</span></button>
                     </div>
                 </details>
                 <details class="group" id="moreFigures" open>
@@ -51,7 +69,7 @@
             </div>
             <div class="side-foot">
                 <button class="pill" id="readNow" title="Read the Bureau's file now, whatever the timer says" type="button"><svg class="ico"><use href="#i-refresh"/></svg> read now</button>
-                <span class="live" id="live" title="The stations every minute; the Bureau's file is read every ten"><i></i><span id="liveText">live</span></span>
+                <span class="live" id="live" title="The stations every minute; the Bureau's file is read every ten; the terrain one station at a time until every station has it"><i></i><span id="liveText">live</span></span>
             </div>
         </aside>
 

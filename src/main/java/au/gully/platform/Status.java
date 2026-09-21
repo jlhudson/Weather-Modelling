@@ -2,6 +2,8 @@ package au.gully.platform;
 
 import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
+import au.gully.reach.TerrainSampler;
+import au.gully.reach.TerrainStore;
 import au.gully.upstreams.Upstreams;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -30,6 +32,8 @@ public class Status {
     private final Upstreams upstreams;
     private final StationReader reader;
     private final StationRegistry stations;
+    private final TerrainStore terrain;
+    private final TerrainSampler sampler;
 
     public Map<String, Object> status() {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -82,12 +86,17 @@ public class Status {
     }
 
     /**
-     * What is held: the stations, and how many of them have reported inside {@link #STALE}.
+     * What is held: the stations, how many of them have reported inside {@link #STALE}, and how many
+     * have their terrain.
      */
     public Map<String, Object> held() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("stations", stations.size());
         m.put("reporting", stations.reporting(Instant.now().minus(STALE)));
+        m.put("terrainSampled", terrain.size());
+        m.put("terrainPending", sampler.pending().size());
+        m.put("terrainFailure", sampler.lastFailure());
+        m.put("terrainFailedAt", sampler.lastFailedAt());
         return m;
     }
 

@@ -3,6 +3,9 @@ package au.gully;
 import au.gully.bureau.StationFile;
 import au.gully.bureau.StationRegistry;
 import au.gully.platform.Hashing;
+import au.gully.reach.ReachRule;
+import au.gully.reach.Terrain;
+import au.gully.reach.TerrainStore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +58,12 @@ class EndToEndTest {
 
     @Autowired
     StationRegistry stations;
+
+    @Autowired
+    TerrainStore terrain;
+
+    @Autowired
+    ReachRule reachRule;
 
     @BeforeAll
     static void dockerOrSkip() {
@@ -120,6 +129,56 @@ class EndToEndTest {
         assertThat(anonymous.getBody()).containsEntry("status", 401);
     }
 
+    /**
+     * A station's terrain planted as the sampler would keep it: flat at the station's height, so the
+     * reach is a disc at the rule.
+     */
+    private void plantFlatTerrain(String id, double lat, double lon, double heightM) {
+        double[] e = new double[Terrain.BEARINGS * Terrain.STEPS];
+        java.util.Arrays.fill(e, heightM);
+        terrain.put(new Terrain(id, lat, lon, heightM, e, Instant.now(), 25));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theReachIsDrawnFromTheTerrainUnderTheRuleAndTheRuleIsKept() throws Exception {
+        issueHubKey();
+        takeInTheFixture();
+        // No terrain yet: the collection is empty, and the station's drawer says so.
+        ResponseEntity<Map> none = client().get().uri("/api/v1/reach.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(none.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(none.getBody()).containsEntry("sampled", 0).containsEntry("inForce", true);
+        Map<String, Object> before = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat((Map<String, Object>) before.get("terrain")).containsEntry("sampled", false).containsEntry("callsToSample", 25);
+        assertThat(before.get("reach")).isNull();
+
+        plantFlatTerrain("023000", -34.9257, 138.5832, 29);
+        ResponseEntity<Map> one = client().get().uri("/api/v1/reach.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(one.getBody()).containsEntry("sampled", 1);
+        List<Map<String, Object>> features = (List<Map<String, Object>>) one.getBody().get("features");
+        Map<String, Object> props = (Map<String, Object>) features.getFirst().get("properties");
+        assertThat(props).containsEntry("id", "023000").containsEntry("minKm", ReachRule.DEFAULT_KM).containsEntry("maxKm", ReachRule.DEFAULT_KM);
+        Map<String, Object> geometry = (Map<String, Object>) features.getFirst().get("geometry");
+        assertThat(geometry).containsEntry("type", "Polygon");
+        assertThat(((List<List<List<Double>>>) geometry.get("coordinates")).getFirst()).hasSize(Terrain.BEARINGS + 1);
+        Map<String, Object> after = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat((Map<String, Object>) after.get("terrain")).containsEntry("sampled", true).containsEntry("elevationM", 29.0);
+        assertThat((Map<String, Object>) after.get("reach")).containsEntry("meanKm", ReachRule.DEFAULT_KM);
+
+        // The rule set from the console is what the API draws by, and a restart reads it back.
+        reachRule.set(20, 5, "test", Instant.now());
+        ResponseEntity<Map> narrower = client().get().uri("/api/v1/reach.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat((Map<String, Object>) narrower.getBody().get("rule")).containsEntry("reachKm", 20.0).containsEntry("kmPer100m", 5.0);
+        reachRule.rehydrate();
+        assertThat(reachRule.current()).isEqualTo(new ReachRule.Rule(20, 5));
+        assertThat(reachRule.by()).isEqualTo("test");
+        // The terrain too.
+        terrain.rehydrate();
+        assertThat(terrain.get("023000")).isPresent();
+        assertThat(terrain.get("023000").get().at(3, 3)).isEqualTo(29);
+        reachRule.set(ReachRule.DEFAULT_KM, ReachRule.DEFAULT_KM_PER_100M, "test", Instant.now());
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void theDiagnosticsAnswerTheMorningAgent() {
@@ -175,10 +234,10 @@ class EndToEndTest {
             assertThat(r.getStatusCode()).as(page).isEqualTo(HttpStatus.OK);
             assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");
             if (page.equals("/console/map")) {
-                assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"legend\"").contains("id=\"detail\"").contains("/js/map.js");
+                assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"legend\"").contains("id=\"detail\"").contains("/js/map.js").contains("id=\"reachKm\"").contains("id=\"kmPer100m\"");
             }
         }
-        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json",
+        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5",
                 "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);

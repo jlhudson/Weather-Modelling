@@ -17,10 +17,33 @@ written to the database: it is ten minutes old at most and the next file replace
 
 A station is *reporting* when its latest observation is under seventy minutes old.
 
-## 2. The reach *(W-2, to come)*
+## 2. The reach
 
-Each station will carry a polygon — its reach — drawn once from the terrain around it and recomputed
-from those samples whenever the rule is turned. See W-2 in the decisions.
+Each station carries a polygon — its reach — which is the ground it speaks for.
+
+**The terrain, sampled once.** For each station, 2,401 points of Open-Meteo's elevation model (the
+Copernicus 90 m DEM): the station itself, then every kilometre out to 50 km along 48 bearings, 7.5°
+apart. A hundred points to a call, 25 calls a station, on Open-Meteo's allowance at one unit each —
+about two thousand calls for the 82 stations, once. A background job takes one station every
+fifteen seconds until every station has its terrain; the console can sample one station now from
+its drawer. The samples are kept in `terrain` (eight-byte doubles, the station's own first) with the
+position they were taken at, so a station that moves is sampled again. A new station in the file is
+picked up by the job on its own.
+
+**The rule, two numbers.** *Reach* — how far a station reaches over flat ground, 40 km by default —
+and *what a hundred metres of height costs* of that reach, 10 km by default. Along each bearing a
+ray walks out a kilometre at a time and stops when `distance + kmPer100m × (greatest height
+difference crossed so far ÷ 100)` exceeds the reach. The *greatest* difference, not the height at
+the point: a ridge is a barrier, and the far side of it is another climate even where it is the
+station's own height again. A ray cut by height still reaches 3 km, so every station has some
+ground. The polygon is the 48 ray ends joined. Nothing about it is stored: it is arithmetic over
+the terrain in memory, so the sliders on the map preview another rule on every station at once, and
+*set* makes it the rule (kept in `setting`, so a restart keeps it).
+
+What this does around Adelaide: West Terrace (29 m) reaches the plains north and south and stops at
+the foothill scarp, never crossing to the Hills; Mount Lofty (700 m) keeps the ridge and not the
+plain; Murray Bridge (30 m) reaches east over the flat and stops short of the Hills to its west. Two
+reaches may overlap — a point inside several is for the interpolation, which comes next.
 
 ## 3. The upstreams
 
@@ -42,11 +65,11 @@ startup record. API keys issues and revokes keys with a scope.
 
 ## 5. The API
 
-`/api/v1/stations.geojson` is what the map draws; `/api/v1/stations/{id}` is what the click opens;
-`/api/diagnostics` is the shape The Hub's morning agent reads. Every route needs a key.
+`/api/v1/stations.geojson` and `/api/v1/reach.geojson` are what the map draws; `/api/v1/stations/{id}`
+is what the click opens; `/api/diagnostics` is the shape The Hub's morning agent reads. Every route needs a key.
 
 ## 6. Storage
 
-Seven tables, all in `V1__gully.sql`: `api_key`, `console_user`, `api_access_log`, `log_event`,
-`setting` (what the console sets and a restart must keep), `upstream_call`, `station`. One in-memory
-register, rebuilt from `station` at start.
+Eight tables: `api_key`, `console_user`, `api_access_log`, `log_event`, `setting` (what the console
+sets and a restart must keep), `upstream_call`, `station` (`V1`), and `terrain` (`V2`). Two in-memory
+registers, the stations and their terrain, rebuilt at start.

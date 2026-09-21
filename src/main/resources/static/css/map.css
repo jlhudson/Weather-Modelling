@@ -52,6 +52,8 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .control { margin: .45rem 0 .2rem; padding: .4rem .5rem; border: 1px solid var(--p-line); border-radius: 9px; font-size: .76rem; }
 .control.hidden { display: none; }
 .control.on { border-color: var(--p-reach); background: color-mix(in srgb, var(--p-reach) 8%, transparent); }
+.control .group-title { margin-bottom: .3rem; }
+.control .group-title .muted { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--p-reach); }
 .control label { display: block; margin-bottom: .15rem; }
 .control label b { font-family: var(--g-mono); font-weight: 600; }
 .control input[type=range] { width: 100%; margin: .1rem 0 .25rem; accent-color: var(--p-reach); }
@@ -120,6 +122,18 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .drawer .kv th { width: 9.5rem; }
 .drawer .recent td.dir { font-family: var(--g-mono); white-space: nowrap; }
 .drawer .recent .arrow { display: inline-block; transform-origin: 50% 50%; }
+/* The reach's rose: a ray per bearing, its length the reach, its colour why it stopped. */
+.rose-wrap { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin: .2rem 0 .4rem; }
+.rose { display: block; overflow: visible; }
+.rose .ring { fill: none; stroke: var(--p-line-strong); stroke-width: 1; stroke-dasharray: 2 3; }
+.rose .ray { stroke-width: 2.2; stroke-linecap: round; stroke: var(--p-reach); }
+.rose .ray.height { stroke: #f97316; }
+.rose .ray.unknown { stroke: var(--p-muted); }
+.rose text { fill: var(--p-muted); font: 500 9px var(--g-mono); }
+.rose-key { display: flex; flex-direction: column; gap: .25rem; }
+.rose-key .swatch i.k-distance { background: var(--p-reach); }
+.rose-key .swatch i.k-height { background: #f97316; }
+.rose-key .swatch i.k-unknown { background: var(--p-muted); }
 .meter-row { display: flex; align-items: center; gap: .5rem; font-size: .78rem; margin: .15rem 0; }
 .meter-row .bar { flex: 1 1 auto; height: 6px; border-radius: 3px; background: rgba(127, 127, 127, .25); position: relative; overflow: hidden; }
 .meter-row .bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }

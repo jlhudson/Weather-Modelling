@@ -1,6 +1,7 @@
 package au.gully.api;
 
 import au.gully.bureau.StationsFeed;
+import au.gully.reach.Reaches;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -13,8 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * The stations, for a caller with a key: every station as a point with its latest values, and one
- * station with its last readings. The same shape the console map draws.
+ * The stations, for a caller with a key: every station as a point with its latest values, one
+ * station with its last readings and its reach, and every reach under the rule in force. The same
+ * shapes the console map draws.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -22,6 +24,7 @@ import java.util.Map;
 public class StationsController {
 
     private final StationsFeed feed;
+    private final Reaches reaches;
 
     @GetMapping(value = "/stations.geojson", produces = {"application/geo+json", "application/json"})
     public Map<String, Object> stations() {
@@ -30,7 +33,14 @@ public class StationsController {
 
     @GetMapping(value = "/stations/{id}", produces = "application/json")
     public Map<String, Object> station(@PathVariable String id) {
-        return feed.detail(id).orElseThrow(() -> new ErrorResponseException(HttpStatus.NOT_FOUND,
+        Map<String, Object> d = feed.detail(id).orElseThrow(() -> new ErrorResponseException(HttpStatus.NOT_FOUND,
                 ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "no station " + id), null));
+        d.putAll(reaches.detail(id));
+        return d;
+    }
+
+    @GetMapping(value = "/reach.geojson", produces = {"application/geo+json", "application/json"})
+    public Map<String, Object> reach() {
+        return reaches.geojson();
     }
 }
