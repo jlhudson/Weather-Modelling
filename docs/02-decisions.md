@@ -198,3 +198,25 @@ wind when it is chosen - "I don't need an additional wind button." A separate sw
 arrows a second thing to remember, and drew them over a map coloured by something else; the
 direction is part of what *wind* means, so it belongs to the chip. The mean arrow still waits for
 zoom 8 because two arrows a station at the whole-state zoom is a thicket. — James, 22 September 2026.
+
+### W-12 · The ocean border is back, except for an island: a station the water would take three quarters of
+
+**The decision.** A ray ends at the water again, as W-3 had it, and a coastal station is held to
+its limit as before. But a station the water would end at least three quarters of the rays of - 36
+of 48 - is an *island*, and for it the water ends none: the sea is ground at sea level for the
+height cost and nothing more, and the station reaches across it to the shore beyond. It is still
+coastal, still held to the coastal limit. The share is one constant, `ISLAND_SHARE`, not a slider.
+The drawer says how many rays the water ends, or for an island would have, and calls the station
+an island; on the map an island's coastal ring is dashed. W-10 is undone but for the clamp it
+introduced, which the island rule needs.
+
+**Why.** James took W-10 back: he wants the ocean border on the polygons - a shore station should
+not answer for the far side of a gulf - but not for the little islands, whose station a few
+hundred metres out to sea had no reach at all. The two cases differ in how much of the station the
+water would take: a shore takes half a station's rays, a headland two thirds, a jetty or an islet
+nearly all. Three quarters is the line James named; on the South Australian stations it takes in
+the two that stand in the sea - Neptune Island (48 of 48) and Black Pole (44) - and six headlands,
+Cape Willoughby (44), Stenhouse Bay (42), Robe (42), Point Avoid (39), Thevenard and Warburto Point
+(36 each), and leaves Edithburgh and Cape Borda (34) their borders. It is a constant, not a slider,
+because the honest fix for a station on the wrong side of it is to look at that station, not to move
+every one. — James, 22 September 2026.

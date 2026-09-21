@@ -130,12 +130,14 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .rose .ring { fill: none; stroke: var(--p-line-strong); stroke-width: 1; stroke-dasharray: 2 3; }
 .rose .ray { stroke-width: 2.2; stroke-linecap: round; stroke: var(--p-reach); }
 .rose .ray.height { stroke: #f97316; }
+.rose .ray.water { stroke: #0ea5e9; }
 .rose .ray.coastal { stroke: #0ea5e9; stroke-dasharray: 2 2; }
 .rose .ray.unknown { stroke: var(--p-muted); }
 .rose text { fill: var(--p-muted); font: 500 9px var(--g-mono); }
 .rose-key { display: flex; flex-direction: column; gap: .25rem; }
 .rose-key .swatch i.k-distance { background: var(--p-reach); }
 .rose-key .swatch i.k-height { background: #f97316; }
+.rose-key .swatch i.k-water { background: #0ea5e9; }
 .rose-key .swatch i.k-coastal { background: repeating-linear-gradient(90deg, #0ea5e9 0 3px, transparent 3px 5px); }
 .rose-key .swatch i.k-unknown { background: var(--p-muted); }
 .drawer .coastal { color: #0ea5e9; font-weight: 600; }

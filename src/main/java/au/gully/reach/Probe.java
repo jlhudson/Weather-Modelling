@@ -117,6 +117,7 @@ public class Probe {
         return switch (cut) {
             case DISTANCE -> "at its reach";
             case HEIGHT -> "cut by height";
+            case WATER -> "at the water";
             case COASTAL -> "at its coastal limit";
             case UNKNOWN -> "where the model had nothing";
         };

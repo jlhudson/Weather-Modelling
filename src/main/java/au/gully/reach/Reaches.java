@@ -89,6 +89,8 @@ public class Reaches {
         p.put("maxKm", r.maxKm());
         p.put("coastal", r.coastal());
         p.put("waterKm", r.waterKm());
+        p.put("island", r.island());
+        p.put("waterRays", r.waterRays());
         Map<String, Object> cuts = new LinkedHashMap<>();
         r.cuts().forEach((k, v) -> cuts.put(k.name().toLowerCase(), v));
         p.put("cut", cuts);

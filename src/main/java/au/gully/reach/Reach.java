@@ -12,32 +12,46 @@ import java.util.Map;
  * hill is another climate even where it is the station's own height again. A ray cut by height
  * still reaches {@link ReachRule#MIN_KM}, so every station has some ground.
  * <p>
- * Water does not end a ray (W-10): the sea is ground at sea level for the height cost and no more,
- * so a station on a headland or an island reaches across the water as it reaches across a plain.
- * Water is still <em>seen</em>: where it is at least {@link #WATER_ACROSS_KM} across along the ray
- * (a river is a line and never is, the sea and the big lakes are areas and always are) and inside
- * {@link #COASTAL_WITHIN_KM} of the station, the station is <em>coastal</em>, and every one of its
- * rays is held to the rule's coastal limit: maritime air does not carry far inland, and the ground
- * beyond the sea breeze is not the shore's.
+ * A ray ends at the water (W-3, W-12): the first sample of it stops the ray half a step short, so
+ * the shore is inside the reach and the sea is not. Water is water where it is at least
+ * {@link #WATER_ACROSS_KM} across along the ray — a river is a line and never is, the sea and the
+ * big lakes are areas and always are. A station with such water inside {@link #COASTAL_WITHIN_KM}
+ * is <em>coastal</em>, and every one of its rays is held to the rule's coastal limit: maritime air
+ * does not carry far inland, and the ground beyond the sea breeze is not the shore's.
+ * <p>
+ * Unless the station is an <em>island</em> (W-12): where the water would end at least
+ * {@link #ISLAND_SHARE} of its rays — a station on a small island, or a few hundred metres out to sea
+ * on a jetty — the water ends none of them. The sea is then ground at sea level for the height cost
+ * and no more, and the station reaches across it to the shore beyond as it would across a plain; it
+ * is still coastal, and still held to the coastal limit. A station on a bordered coast keeps its
+ * border; a station the sea would take everything from keeps its reach.
  *
- * @param km      how far the reach goes on each bearing, in bearing order
- * @param cut     why each ray stopped: {@code distance} at the reach itself, {@code height} at the
- *                cost of the ground, {@code coastal} at a coastal station's limit, {@code unknown}
- *                where the model had nothing
- * @param coastal whether water lies inside {@link #COASTAL_WITHIN_KM} of the station
- * @param waterKm how near the water is, on the bearing it is nearest, or null with none inside the terrain
- * @param ring    the polygon, one vertex per bearing, closed (the first vertex again at the end), as
- *                {@code {lat, lon}}
+ * @param km        how far the reach goes on each bearing, in bearing order
+ * @param cut       why each ray stopped: {@code distance} at the reach itself, {@code height} at the
+ *                  cost of the ground, {@code water} at the water's edge, {@code coastal} at a coastal
+ *                  station's limit, {@code unknown} where the model had nothing
+ * @param coastal   whether water lies inside {@link #COASTAL_WITHIN_KM} of the station
+ * @param waterKm   how near the water is, on the bearing it is nearest, or null with none inside the terrain
+ * @param island    whether the water would end at least {@link #ISLAND_SHARE} of the rays, so ends none
+ * @param waterRays how many rays the water ends, or for an island would have ended
+ * @param ring      the polygon, one vertex per bearing, closed (the first vertex again at the end), as
+ *                  {@code {lat, lon}}
  */
 public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cut, boolean coastal, Double waterKm,
-                    double[][] ring, double areaKm2) {
+                    boolean island, int waterRays, double[][] ring, double areaKm2) {
 
-    public enum Cut { DISTANCE, HEIGHT, COASTAL, UNKNOWN }
+    public enum Cut { DISTANCE, HEIGHT, WATER, COASTAL, UNKNOWN }
 
     /**
      * How near the water makes a station coastal.
      */
     public static final double COASTAL_WITHIN_KM = 10;
+
+    /**
+     * The share of a station's rays the water would have to end for the station to be an island,
+     * and the water to end none: three quarters.
+     */
+    public static final double ISLAND_SHARE = 0.75;
 
     /**
      * How wide water has to be along a ray to be water: three samples in a row at or below sea
@@ -72,12 +86,14 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
     public static Reach of(Terrain t, ReachRule.Rule rule) {
         double[] km = new double[Terrain.BEARINGS];
         Cut[] cut = new Cut[Terrain.BEARINGS];
+        int[] water = new int[Terrain.BEARINGS];
         Double nearestWater = null;
+        // First every ray as if the water were ground at sea level: the distance and the height end it.
         for (int b = 0; b < Terrain.BEARINGS; b++) {
             double maxDiff = 0;
             double reached = 0;
             Cut why = Cut.DISTANCE;
-            int water = waterAt(t, b);
+            water[b] = waterAt(t, b);
             for (int s = 1; s <= Terrain.STEPS; s++) {
                 double e = t.at(b, s);
                 if (Double.isNaN(e)) {
@@ -85,7 +101,7 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
                     break;
                 }
                 double d = s * Terrain.STEP_KM;
-                if (s == water && (nearestWater == null || d < nearestWater)) {
+                if (s == water[b] && (nearestWater == null || d < nearestWater)) {
                     nearestWater = d;
                 }
                 // The sea is sea level for the cost, whatever depth the tiles give it.
@@ -112,6 +128,24 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
                 }
             }
         }
+        // Then the water: the rays it lies across would end at its edge, half a step short of the first sample.
+        double[] edge = new double[Terrain.BEARINGS];
+        int waterRays = 0;
+        for (int b = 0; b < Terrain.BEARINGS; b++) {
+            edge[b] = water[b] > 0 ? water[b] * Terrain.STEP_KM - Terrain.STEP_KM / 2 : Double.NaN;
+            if (edge[b] < km[b]) {
+                waterRays++;
+            }
+        }
+        boolean island = waterRays >= ISLAND_SHARE * Terrain.BEARINGS;
+        if (!island) {
+            for (int b = 0; b < Terrain.BEARINGS; b++) {
+                if (edge[b] < km[b]) {
+                    km[b] = edge[b];
+                    cut[b] = Cut.WATER;
+                }
+            }
+        }
         double[][] ring = new double[Terrain.BEARINGS + 1][];
         for (int b = 0; b < Terrain.BEARINGS; b++) {
             ring[b] = Geo.destination(t.lat(), t.lon(), Terrain.bearingDeg(b), km[b]);
@@ -119,7 +153,7 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
         ring[Terrain.BEARINGS] = ring[0];
         double[][] open = new double[Terrain.BEARINGS][];
         System.arraycopy(ring, 0, open, 0, Terrain.BEARINGS);
-        return new Reach(t.stationId(), rule, km, cut, coastal, nearestWater, ring, Math.round(Geo.areaKm2(open) * 10) / 10.0);
+        return new Reach(t.stationId(), rule, km, cut, coastal, nearestWater, island, waterRays, ring, Math.round(Geo.areaKm2(open) * 10) / 10.0);
     }
 
     public double minKm() {
