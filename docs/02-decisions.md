@@ -84,3 +84,20 @@ the gulf plainly does. Width is the honest difference between the two, and three
 narrowest the 125 m tiles can be trusted to tell. Telling a lake from the sea by depth is the next
 refinement if a lake-side station ever reads as coastal wrongly; no South Australian station does
 today. — James, 21 September 2026.
+
+### W-5 · The probe: which stations speak for a point, laid out and not blended
+
+**The decision.** A click anywhere on the map, and `/api/v1/stations/at?lat=&lon=` with a key,
+answers with the stations whose reach contains the point — nearest first, each with its distance,
+bearing, height above or below the point, what it last said and how old that is, and how far past
+the point its ray goes — and the nearest three whose reach does not, with why their ray towards the
+point stopped short. On the map: a crosshair at the point, cyan spokes to the stations in reach and
+their reaches faintly, grey dashed spokes to the three outside. The point's own height is one read of
+the elevation tiles, which are already cached. Nothing is interpolated.
+
+**Why.** James wanted to see the stations within range of a point before any blending exists — the
+ingredients before the recipe — so the membership rule can be judged on its own, and an omission can
+be seen rather than wondered about. The endpoint is the one a reading at a point will grow on, and
+the one the Hub's `/api/weather` can be pointed at when it does. The five ways to blend them — nearest
+station, inverse distance, height-corrected inverse distance, Barnes successive correction, kriging
+with an elevation drift — were laid out on 21 September and none chosen yet. — James, 21 September 2026.

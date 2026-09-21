@@ -60,7 +60,17 @@ foothill scarp, never crosses to the Hills, and ends at the gulf; Mount Lofty (7
 and not the plain; Murray Bridge (30 m) reaches east over the flat and stops short of the Hills to its
 west. Two reaches may overlap — a point inside several is for the interpolation, which comes next.
 
-## 3. The upstreams
+## 3. The probe
+
+Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the
+stations that speak for that point (W-5): every station whose reach contains it, nearest first, each
+with its distance and bearing, how far above or below the point it sits (the point's own height is
+one read of the elevation tiles), what it last said and how old that is, and how far past the point
+its ray towards it goes; then the nearest three whose reach does not contain it, with why their ray
+stopped short. Nothing is blended: these are the ingredients a reading at the point will be made
+from, and the interpolation between them is the next decision.
+
+## 4. The upstreams
 
 Open-Meteo is the primary and Google Weather the overflow, each behind a budget (the published
 allowance, retired at 90 % of it), a breaker (open after three failures, or at once when the refusal
@@ -68,7 +78,7 @@ names the window that ran out) and a pacer (the real per-minute limit). Every ca
 `upstream_call`, written before it is counted, which is what the Upstreams page and the budget read.
 Open-Meteo's forecast costs three units. Nothing fetches a forecast yet.
 
-## 4. The console
+## 5. The console
 
 One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
 where it is, filled when it is reporting and hollow when it is not, coloured by what it last said;
@@ -76,12 +86,12 @@ a click opens everything held for it. The Upstreams page is the allowance table,
 breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
 startup record. API keys issues and revokes keys with a scope.
 
-## 5. The API
+## 6. The API
 
 `/api/v1/stations.geojson` and `/api/v1/reach.geojson` are what the map draws; `/api/v1/stations/{id}`
-is what the click opens; `/api/diagnostics` is the shape The Hub's morning agent reads. Every route needs a key.
+is what a click on a station opens and `/api/v1/stations/at?lat=&lon=` what a click anywhere else opens; `/api/diagnostics` is the shape The Hub's morning agent reads. Every route needs a key.
 
-## 6. Storage
+## 7. Storage
 
 Eight tables: `api_key`, `console_user`, `api_access_log`, `log_event`, `setting` (what the console
 sets and a restart must keep), `upstream_call`, `station` (`V1`), and `terrain` (`V2`). Two in-memory

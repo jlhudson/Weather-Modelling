@@ -165,6 +165,23 @@ class EndToEndTest {
         assertThat((Map<String, Object>) after.get("terrain")).containsEntry("sampled", true).containsEntry("elevationM", 29.0);
         assertThat((Map<String, Object>) after.get("reach")).containsEntry("meanKm", ReachRule.DEFAULT_KM);
 
+        // The probe (W-5): a point 10 km north of Adelaide is inside its reach; the other two stations are outside, with why.
+        double[] north = au.gully.reach.Geo.destination(-34.9257, 138.5832, 0, 10);
+        Map<String, Object> at = client().get().uri("/api/v1/stations/at?lat=" + north[0] + "&lon=" + north[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        List<Map<String, Object>> inReach = (List<Map<String, Object>>) at.get("inReach");
+        assertThat(inReach).hasSize(1);
+        assertThat(inReach.getFirst()).containsEntry("id", "023000").containsEntry("km", 10.0).containsEntry("rayKm", 40.0).containsEntry("margin", 30.0);
+        assertThat((Integer) inReach.getFirst().get("bearingDeg")).isEqualTo(180);
+        List<Map<String, Object>> outside = (List<Map<String, Object>>) at.get("outside");
+        assertThat(outside).allSatisfy(s -> assertThat((String) s.get("why")).contains("not sampled"));
+        assertThat(at).containsEntry("water", false);
+        double[] farOut = au.gully.reach.Geo.destination(-34.9257, 138.5832, 90, 45);
+        Map<String, Object> beyond = client().get().uri("/api/v1/stations/at?lat=" + farOut[0] + "&lon=" + farOut[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat((List<?>) beyond.get("inReach")).isEmpty();
+        assertThat((String) ((List<Map<String, Object>>) beyond.get("outside")).getFirst().get("why")).contains("stops at 40.0 km");
+        ResponseEntity<Map> bad = client().get().uri("/api/v1/stations/at?lat=95&lon=0").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
+        assertThat(bad.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
         // The rule set from the console is what the API draws by, and a restart reads it back.
         reachRule.set(20, 5, 15, "test", Instant.now());
         ResponseEntity<Map> narrower = client().get().uri("/api/v1/reach.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
@@ -237,7 +254,7 @@ class EndToEndTest {
                 assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"legend\"").contains("id=\"detail\"").contains("/js/map.js").contains("id=\"reachKm\"").contains("id=\"kmPer100m\"");
             }
         }
-        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&coastalKm=15",
+        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&coastalKm=15", "/console/map/probe?lat=-34.9&lon=138.6",
                 "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);

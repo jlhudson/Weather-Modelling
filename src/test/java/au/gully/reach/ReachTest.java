@@ -178,4 +178,23 @@ class ReachTest {
         assertThat(east[1]).isGreaterThan(LON);
         assertThat(east[0]).isCloseTo(LAT, within(0.2));
     }
+    @Test
+    void aPointIsInsideTheReachWhereTheMapDrawsIt() {
+        // Flat ground: a 40 km disc. Twenty kilometres north is inside, fifty is not, and the ring is what decides.
+        Reach r = Reach.of(terrain(30, (b, s) -> 30), ReachRule.Rule.of(40, 10));
+        org.locationtech.jts.geom.GeometryFactory gf = new org.locationtech.jts.geom.GeometryFactory();
+        double[] near = Geo.destination(LAT, LON, 0, 20), far = Geo.destination(LAT, LON, 0, 50), edge = Geo.destination(LAT, LON, 3.75, 39.95);
+        assertThat(Probe.polygon(r).contains(gf.createPoint(new org.locationtech.jts.geom.Coordinate(near[1], near[0])))).isTrue();
+        assertThat(Probe.polygon(r).contains(gf.createPoint(new org.locationtech.jts.geom.Coordinate(far[1], far[0])))).isFalse();
+        // Between two ray ends the edge is a chord, 86 m inside the arc: 39.95 km out halfway between bearings is outside.
+        assertThat(Probe.polygon(r).contains(gf.createPoint(new org.locationtech.jts.geom.Coordinate(edge[1], edge[0])))).isFalse();
+        // The ray a point lies on: bearings are 7.5° apart, the nearest counts, and 359° is the first.
+        assertThat(Probe.bearingIndex(0)).isEqualTo(0);
+        assertThat(Probe.bearingIndex(3.7)).isEqualTo(0);
+        assertThat(Probe.bearingIndex(3.8)).isEqualTo(1);
+        assertThat(Probe.bearingIndex(90)).isEqualTo(12);
+        assertThat(Probe.bearingIndex(359)).isEqualTo(0);
+        assertThat(Geo.bearingDeg(LAT, LON, near[0], near[1])).isCloseTo(0, within(0.01));
+        assertThat(Geo.bearingDeg(LAT, LON, LAT, LON + 1)).isCloseTo(90, within(0.5));
+    }
 }

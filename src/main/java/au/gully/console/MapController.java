@@ -4,6 +4,7 @@ import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
 import au.gully.bureau.StationsFeed;
 import au.gully.platform.Status;
+import au.gully.reach.Probe;
 import au.gully.reach.ReachRule;
 import au.gully.reach.Reaches;
 import au.gully.reach.TerrainSampler;
@@ -40,6 +41,7 @@ public class MapController {
     private final Reaches reaches;
     private final ReachRule rule;
     private final TerrainSampler sampler;
+    private final Probe probe;
 
     @GetMapping
     public String page(Model model) {
@@ -101,6 +103,15 @@ public class MapController {
         out.put("by", rule.by());
         out.put("since", rule.since() == null ? null : rule.since().toString());
         return out;
+    }
+
+    /**
+     * A point on the map: the stations whose reach contains it, and the nearest few whose does not (W-5).
+     */
+    @GetMapping(value = "/probe", produces = "application/json")
+    @ResponseBody
+    public Map<String, Object> probe(@RequestParam double lat, @RequestParam double lon) {
+        return probe.at(lat, lon);
     }
 
     /**

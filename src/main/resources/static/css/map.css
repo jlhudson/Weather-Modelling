@@ -167,3 +167,16 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
     .chips { grid-template-columns: 1fr 1fr 1fr; }
     .leaflet-bottom.leaflet-right .leaflet-control-zoom { display: none; }
 }
+
+/* ---- the probe (W-5): a crosshair at the point, spokes to the stations that speak for it */
+.probe-mark { background: none; border: 0; pointer-events: none; }
+.probe-mark > i { display: block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--p-reach); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-bg-solid) 70%, transparent); position: relative; }
+.probe-mark > i::before, .probe-mark > i::after { content: ""; position: absolute; background: var(--p-reach); }
+.probe-mark > i::before { left: 50%; top: -5px; bottom: -5px; width: 1.5px; margin-left: -.75px; }
+.probe-mark > i::after { top: 50%; left: -5px; right: -5px; height: 1.5px; margin-top: -.75px; }
+.drawer .probe td, .drawer .probe th { white-space: nowrap; }
+.drawer .probe a { color: var(--p-fg); text-decoration: none; border-bottom: 1px dotted var(--p-line-strong); }
+.drawer .probe a:hover { color: var(--p-reach); }
+.drawer .probe tr.stale td { color: var(--p-muted); }
+.drawer .probe tr.why td { font-size: .72rem; padding-top: 0; border-top: 0; }
+.drawer .probe td.mono { font-family: var(--g-mono); }

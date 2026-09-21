@@ -26,6 +26,16 @@ public final class Geo {
     }
 
     /**
+     * The initial bearing from one point to another, degrees clockwise from north, 0 to 360.
+     */
+    public static double bearingDeg(double lat1, double lon1, double lat2, double lon2) {
+        double f1 = Math.toRadians(lat1), f2 = Math.toRadians(lat2), dl = Math.toRadians(lon2 - lon1);
+        double y = Math.sin(dl) * Math.cos(f2);
+        double x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+        return (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    /**
      * The great-circle distance between two points, kilometres.
      */
     public static double distanceKm(double lat1, double lon1, double lat2, double lon2) {

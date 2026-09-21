@@ -1,8 +1,8 @@
 // The map: South Australia's Bureau stations, each drawn where it is, coloured by what it last said,
 // and each with its reach - the ground it speaks for, a polygon drawn from the terrain around it by
 // the rule on the sliders (W-2): the clicked station's in cyan, every station's at once on a toggle.
-// One question at a time: click a station for everything held for it. Deferred, so it runs after
-// Leaflet and console.js.
+// One question at a time: click a station for everything held for it, or click anywhere for the
+// stations whose reach contains the point (W-5). Deferred, so it runs after Leaflet and console.js.
 (function () {
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
@@ -46,7 +46,8 @@
     var reachLayer = L.layerGroup().addTo(map);
     var stationLayer = L.layerGroup().addTo(map);
     var labelLayer = L.layerGroup().addTo(map);
-    var state = {id: 'temperatureC', selected: null};
+    var probeLayer = L.layerGroup().addTo(map);
+    var state = {id: 'temperatureC', selected: null, probe: null};
     var togs = {labels: true, reach: true, all: false};
     var lastStations = null, lastReach = null;
     var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
@@ -190,9 +191,12 @@
         reachLayer.clearLayers();
         if (!lastReach) return;
         lastReach.features.forEach(function (f) {
-            var p = f.properties, lit = p.id === state.selected;
+            var p = f.properties, lit = p.id === state.selected, probed = state.probe && state.probe.ids.indexOf(p.id) >= 0;
             if (lit && togs.reach) {
                 L.geoJSON(f, {style: reachStyle(true), interactive: false}).addTo(reachLayer);
+            } else if (probed && togs.reach) {
+                // The reaches that contain the probed point, faintly, so the membership shows.
+                L.geoJSON(f, {style: reachStyle(false), interactive: false}).addTo(reachLayer);
             } else if (togs.all) {
                 L.geoJSON(f, {style: reachStyle(false)}).bindTooltip(function () { return reachTip(p); }, {sticky: true, className: 'hx-tip'})
                     .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); }).addTo(allLayer);
@@ -280,8 +284,49 @@
             + (r.cut.water ? '<span class="swatch"><i class="k-water"></i>at the water</span>' : '') + (r.cut.coastal ? '<span class="swatch"><i class="k-coastal"></i>coastal limit</span>' : '')
             + (r.cut.unknown ? '<span class="swatch"><i class="k-unknown"></i>unknown</span>' : '') + '</div></div>';
     }
+    // ---- the probe (W-5): click anywhere, and see which stations speak for the point
+    function clearProbe() { state.probe = null; probeLayer.clearLayers(); }
+    function probe(lat, lon) {
+        state.selected = null;
+        clearProbe();
+        stations();
+        drawReach();
+        probeLayer.addLayer(L.marker([lat, lon], {icon: L.divIcon({className: 'probe-mark', html: '<i></i>', iconSize: [18, 18], iconAnchor: [9, 9]}), interactive: false, keyboard: false}));
+        fetch('/console/map/probe?lat=' + lat.toFixed(5) + '&lon=' + lon.toFixed(5)).then(function (r) { return r.json(); }).then(function (o) {
+            state.probe = {lat: lat, lon: lon, ids: o.inReach.map(function (s) { return s.id; })};
+            drawReach();
+            o.inReach.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: REACH, weight: 1.5, opacity: .85, interactive: false}).addTo(probeLayer); });
+            o.outside.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: NONE, weight: 1, opacity: .6, dashArray: '4 5', interactive: false}).addTo(probeLayer); });
+            var el = $('detail');
+            var html = '<div class="drawer-head"><h3>' + (o.water ? 'A point on the water' : 'A point') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.heightM != null ? ' · ' + fmt(o.heightM, 0) + ' m' : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            html += '<h2>In reach <span class="muted">' + o.inReach.length + (o.inReach.length === 1 ? ' station speaks' : ' stations speak') + ' for it · nearest first</span></h2>';
+            if (!o.inReach.length) html += '<p class="muted">No station\'s reach contains this point. A reading here would come from the model.</p>';
+            else html += stationRows(o.inReach, true);
+            if (o.outside.length) {
+                html += '<h2>Not in reach <span class="muted">the nearest ' + o.outside.length + ', and why</span></h2>' + stationRows(o.outside, false);
+            }
+            html += '<p class="muted control-note mb-0">Nothing is blended here: these are the ingredients a reading at this point would be made from, under the rule ' + esc(ruleWords(o.rule)) + '.</p>';
+            el.innerHTML = html;
+            el.classList.remove('hidden');
+            $('close').addEventListener('click', closeDetail);
+            el.querySelectorAll('[data-station]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); detail(a.dataset.station); }); });
+        }).catch(function (e) { note('probe failed: ' + e); });
+    }
+    function stationRows(list, inReach) {
+        var html = '<table class="table table-sm probe"><thead><tr><th>station</th><th class="num">km</th><th>from</th><th class="num">Δ m</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">mm</th><th>age</th></tr></thead><tbody>';
+        list.forEach(function (s) {
+            html += '<tr' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#" data-station="' + esc(s.id) + '">' + esc(s.name) + '</a>' + (s.coastal ? ' <span class="coastal" title="coastal">~</span>' : '') + '</td>'
+                + '<td class="num">' + fmt(s.km, 1) + '</td><td class="mono">' + dirWord(s.bearingDeg) + '</td><td class="num">' + (s.aboveM != null ? (s.aboveM > 0 ? '+' : '') + s.aboveM : '—') + '</td>'
+                + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
+            if (!inReach) html += '<tr class="why"><td colspan="9" class="muted">' + esc(s.why) + '</td></tr>';
+            else if (s.margin != null) html += '<tr class="why"><td colspan="9" class="muted">its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
+        });
+        return html + '</tbody></table>';
+    }
+
     function detail(id) {
         state.selected = id;
+        clearProbe();
         stations();
         drawReach();
         fetch('/console/map/station/' + encodeURIComponent(id)).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
@@ -322,7 +367,7 @@
             if ($('sampleNow')) $('sampleNow').addEventListener('click', function () { sampleTerrain(id); });
         }).catch(function (e) { note('station failed: ' + e); });
     }
-    function closeDetail() { $('detail').classList.add('hidden'); state.selected = null; stations(); drawReach(); }
+    function closeDetail() { $('detail').classList.add('hidden'); state.selected = null; clearProbe(); stations(); drawReach(); }
 
     // ---- the footer: read now, and live
     var noteTimer = null;
@@ -363,7 +408,7 @@
         if (e.key === 'Escape') closeDetail();
     });
     map.on('zoomend', stations);
-    map.on('click', closeDetail);
+    map.on('click', function (e) { probe(e.latlng.lat, e.latlng.lng); });
     document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; stations(); drawReach(); });
     document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); loadReach(true); } });
 
