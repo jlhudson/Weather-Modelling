@@ -60,6 +60,14 @@ public class TerrainStore {
     }
 
     /**
+     * A station's terrain gone: a dropped point that expired.
+     */
+    public void remove(String stationId) {
+        db.sql("delete from terrain where station_id = :id").param("id", stationId).update();
+        byStation.remove(stationId);
+    }
+
+    /**
      * Whether the terrain held for a station was sampled where the station now is: a station that
      * has moved more than about a hundred metres wants sampling again.
      */

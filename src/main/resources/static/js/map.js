@@ -1,6 +1,8 @@
 // The map: South Australia's Bureau stations, each drawn where it is, coloured by what it last said,
 // and each with its reach - the ground it speaks for, a polygon drawn from the terrain around it by
-// the rule on the sliders (W-2): the clicked station's in cyan, every station's at once on a toggle.
+// the rule on the sliders (W-2): the clicked station's in cyan, every station's at once on a toggle, each in
+// its station's colour. A click anywhere asks for the reading there (W-8): the weather now and the drought
+// blended from the stations in reach, or from a point of ours (W-7, an amber diamond) where none reaches.
 // One question at a time: click a station for everything held for it, or click anywhere for the
 // stations whose reach contains the point (W-5). Deferred, so it runs after Leaflet and console.js.
 (function () {
@@ -25,7 +27,13 @@
         {id: 'heightM', name: 'Height', hint: 'of the station', unit: 'm', icon: 'elevation', range: [0, 800], always: true},
         {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true}
     ];
-    var GROUND = '#3b82f6', NONE = '#6b7280', SEA = '#0ea5e9';
+    var GROUND = '#3b82f6', NONE = '#6b7280', SEA = '#0ea5e9', MODEL = '#f59e0b';
+    // A diamond of a size in pixels at a place, as a polygon in the map's own units: it keeps its size across zoom.
+    function diamond(ll, px, style) {
+        var c = map.latLngToLayerPoint(ll), pts = [[c.x, c.y - px], [c.x + px, c.y], [c.x, c.y + px], [c.x - px, c.y]].map(function (q) { return map.layerPointToLatLng(L.point(q[0], q[1])); });
+        style.renderer = canvas;
+        return L.polygon(pts, style);
+    }
     function ramp(t) {
         t = Math.max(0, Math.min(1, t));
         var stops = [[0, [33, 102, 172]], [.5, [247, 247, 190]], [1, [178, 24, 43]]];
@@ -82,7 +90,7 @@
             b.className = 'chip' + (x.id === state.id ? ' on' : '');
             b.innerHTML = icon(x.icon) + '<span>' + esc(x.name) + (x.hint ? '<small>' + esc(x.hint) + '</small>' : '') + '</span>';
             b.title = x.name + (x.unit ? ' in ' + x.unit : '');
-            b.addEventListener('click', function () { state.id = x.id; buildSide(); stations(); legend(); });
+            b.addEventListener('click', function () { state.id = x.id; buildSide(); stations(); legend(); if (togs.all) drawReach(); });
             chips.appendChild(b);
         });
         Object.keys(togs).forEach(function (k) { var b = document.querySelector('.tog[data-tog=' + k + ']'); if (b) b.classList.toggle('on', togs[k]); });
@@ -100,15 +108,17 @@
             + '<div class="ramp-labels"><span>min ' + fmt(min, v.d || 0) + '</span><span>mean ' + fmt(mean, v.d || 1) + '</span><span>max ' + fmt(max, v.d || 0) + '</span></div>';
     }
     function tiles() {
-        var props = lastStations ? lastStations.features.map(function (f) { return f.properties; }) : [];
+        var all = lastStations ? lastStations.features.map(function (f) { return f.properties; }) : [];
+        var props = all.filter(function (p) { return p.kind !== 'point'; }), pts = all.filter(function (p) { return p.kind === 'point'; });
         var fresh = props.filter(function (p) { return p.fresh; });
         var reaches = lastReach ? lastReach.features.map(function (f) { return f.properties; }) : [];
         var t = [
             {v: props.length, k: 'stations'},
             {v: fresh.length, k: 'reporting', cls: 'ground'},
+            {v: pts.length, k: 'points of ours', cls: 'model', t: "Places nobody's reach contained when asked, dropped as stations of our own: the model's current, a year of the archive, the same reach"},
             {v: lastStations && lastStations.updatedAt ? ago(lastStations.updatedAt) : '—', k: 'file read'},
             {v: fresh.length ? fmt(fresh.reduce(function (a, p) { return a + (p.temperatureC || 0); }, 0) / fresh.filter(function (p) { return p.temperatureC != null; }).length, 1) + ' °C' : '—', k: 'mean temperature'},
-            {v: lastReach ? reaches.length + (reaches.length < props.length ? ' of ' + props.length : '') : '—', k: 'reaches drawn', cls: 'reach', t: 'Stations whose terrain has been sampled; the rest follow, one every fifteen seconds'},
+            {v: lastReach ? reaches.length + (reaches.length < all.length ? ' of ' + all.length : '') : '—', k: 'reaches drawn', cls: 'reach', t: 'Stations whose terrain has been sampled; the rest follow, one every fifteen seconds'},
             {v: reaches.length ? fmt(reaches.reduce(function (a, p) { return a + p.areaKm2; }, 0) / reaches.length, 0) + ' km²' : '—', k: 'mean reach area', cls: 'reach'}
         ];
         $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '"><div class="v">' + esc(x.v) + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
@@ -121,12 +131,13 @@
             stations();
             legend();
             tiles();
+            if (togs.all) drawReach();
         }).catch(function (e) { note('stations failed: ' + e); });
     }
     function dirWord(deg) { return deg == null ? '—' : ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(deg / 22.5) % 16]; }
     function windWords(deg, kmh, gust) { return deg == null && kmh == null ? '—' : (deg != null ? dirWord(deg) + ' ' + deg + '°' : '—') + ' ' + (kmh != null ? Math.round(kmh) : '—') + ' km/h' + (gust != null ? ' <span class="muted">gust ' + Math.round(gust) + '</span>' : ''); }
     function tip(p) {
-        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.heightM != null ? ' · ' + p.heightM + ' m' : '') + '</span><br>'
+        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours, from the model' : '') + (p.heightM != null ? ' · ' + Math.round(p.heightM) + ' m' : '') + '</span><br>'
             + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + '<br><span class="muted">' + when(p.at) + '</span>'
                 : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) : 'nothing reported yet') + '</span>');
     }
@@ -141,8 +152,15 @@
             if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
             // A coastal station (W-3) wears a thin ring in the sea's blue.
             if (rf && rf.properties.coastal) L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: SEA, weight: 1, opacity: .8, fill: false, interactive: false}).addTo(stationLayer);
-            L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : c, weight: on ? 2 : p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0})
-                .bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
+            var mark;
+            if (p.kind === 'point') {
+                // A point of ours (W-7): a diamond in the model's amber, its fill the value, so it is never taken for a station.
+                var d = on ? r * 1.6 : r * 1.25;
+                mark = diamond(ll, d, {color: on ? REACH : MODEL, weight: on ? 2 : 1.3, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0});
+            } else {
+                mark = L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : c, weight: on ? 2 : p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0});
+            }
+            mark.bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
                 .addTo(stationLayer);
             var x = valueOf(p, v);
@@ -184,6 +202,17 @@
         return lit ? {color: REACH, weight: 1.5, opacity: .85, fillColor: REACH, fillOpacity: .06, lineJoin: 'round'}
             : {color: REACH, weight: 1, opacity: .5, fillColor: REACH, fillOpacity: .03, lineJoin: 'round'};
     }
+    // Every reach at once, in its station's colour on the ramp for what the map is coloured by, so the
+    // value and the ground it speaks for read together; grey where the station has no value.
+    function reachStyleBy(id) {
+        var p = stationProps(id), c = p ? colourOf(p) : NONE;
+        return {color: c, weight: 1, opacity: .75, fillColor: c, fillOpacity: .16, lineJoin: 'round'};
+    }
+    function stationProps(id) {
+        if (!lastStations) return null;
+        for (var i = 0; i < lastStations.features.length; i++) if (lastStations.features[i].properties.id === id) return lastStations.features[i].properties;
+        return null;
+    }
     function reachTip(p) {
         return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.coastal ? ' · coastal' : '') + '</span><br>reach ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
             + '<br><span class="muted">' + cutWords(p.cut) + ' · rule ' + ruleWords(lastReach.rule) + '</span>';
@@ -200,7 +229,7 @@
                 // The reaches that contain the probed point, faintly, so the membership shows.
                 L.geoJSON(f, {style: reachStyle(false), interactive: false}).addTo(reachLayer);
             } else if (togs.all) {
-                L.geoJSON(f, {style: reachStyle(false)}).bindTooltip(function () { return reachTip(p); }, {sticky: true, className: 'hx-tip'})
+                L.geoJSON(f, {style: reachStyleBy(p.id)}).bindTooltip(function () { return reachTip(p); }, {sticky: true, className: 'hx-tip'})
                     .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); }).addTo(allLayer);
             }
         });
@@ -286,7 +315,9 @@
             + (r.cut.water ? '<span class="swatch"><i class="k-water"></i>at the water</span>' : '') + (r.cut.coastal ? '<span class="swatch"><i class="k-coastal"></i>coastal limit</span>' : '')
             + (r.cut.unknown ? '<span class="swatch"><i class="k-unknown"></i>unknown</span>' : '') + '</div></div>';
     }
-    // ---- the probe (W-5): click anywhere, and see which stations speak for the point
+    // ---- the reading (W-8): click anywhere, and ask - the weather now and the drought, blended from the
+    // stations whose reach contains the point, or from a point of ours where none can say; then the
+    // stations that fed it with their shares, and the nearest outside with why (the probe, W-5).
     function clearProbe() { state.probe = null; probeLayer.clearLayers(); }
     function probe(lat, lon) {
         state.selected = null;
@@ -294,30 +325,48 @@
         stations();
         drawReach();
         probeLayer.addLayer(L.marker([lat, lon], {icon: L.divIcon({className: 'probe-mark', html: '<i></i>', iconSize: [18, 18], iconAnchor: [9, 9]}), interactive: false, keyboard: false}));
-        fetch('/console/map/probe?lat=' + lat.toFixed(5) + '&lon=' + lon.toFixed(5)).then(function (r) { return r.json(); }).then(function (o) {
-            state.probe = {lat: lat, lon: lon, ids: o.inReach.map(function (s) { return s.id; })};
-            drawReach();
-            o.inReach.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: REACH, weight: 1.5, opacity: .85, interactive: false}).addTo(probeLayer); });
-            o.outside.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: NONE, weight: 1, opacity: .6, dashArray: '4 5', interactive: false}).addTo(probeLayer); });
-            var el = $('detail');
-            var html = '<div class="drawer-head"><h3>' + (o.water ? 'A point on the water' : 'A point') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.heightM != null ? ' · ' + fmt(o.heightM, 0) + ' m' : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
-            html += '<h2>In reach <span class="muted">' + o.inReach.length + (o.inReach.length === 1 ? ' station speaks' : ' stations speak') + ' for it · nearest first</span></h2>';
-            if (!o.inReach.length) html += '<p class="muted">No station\'s reach contains this point. A reading here would come from the model.</p>';
-            else html += stationRows(o.inReach, true);
-            if (o.outside.length) {
-                html += '<h2>Not in reach <span class="muted">the nearest ' + o.outside.length + ', and why</span></h2>' + stationRows(o.outside, false);
-            }
-            html += '<p class="muted control-note mb-0">Nothing is blended here: these are the ingredients a reading at this point would be made from, under the rule ' + esc(ruleWords(o.rule)) + '.</p>';
+        note('asking…');
+        var q = 'lat=' + lat.toFixed(5) + '&lon=' + lon.toFixed(5);
+        Promise.all([fetch('/console/map/reading?' + q).then(function (r) { return r.json(); }), fetch('/console/map/probe?' + q).then(function (r) { return r.json(); })]).then(function (both) {
+            var o = both[0], pr = both[1];
+            var ids = o.stations.map(function (s) { return s.id; });
+            state.probe = {lat: lat, lon: lon, ids: ids};
+            if (o.from !== 'stations') { lastStations = null; load(); loadReach(true); } else drawReach();
+            o.stations.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: REACH, weight: 1.5, opacity: .85, interactive: false}).addTo(probeLayer); });
+            var outside = pr.outside.filter(function (s) { return ids.indexOf(s.id) < 0; });
+            outside.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: NONE, weight: 1, opacity: .6, dashArray: '4 5', interactive: false}).addTo(probeLayer); });
+            var el = $('detail'), c = o.current, d = o.drought, f = o.fire;
+            var html = '<div class="drawer-head"><h3>' + (o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            html += '<p class="muted mb-1">' + (o.from === 'stations' ? 'From the Bureau\'s stations whose reach contains this point' : o.from === 'point' ? 'From a point of ours whose reach contains this place: the model\'s current, its own year of record' : 'Nobody\'s reach contained this place: a point of ours dropped here just now, with the model\'s current and a year of the archive') + '.</p>';
+            html += '<div class="reading">'
+                + tile(fmt(c.temperatureC, 1) + ' °C', 'temperature', c.from.temperatureC, 'ground')
+                + tile(fmt(c.humidityPct, 0) + ' %', 'humidity', c.from.humidityPct, 'ground')
+                + tile(c.windSpeedKmh != null ? dirWord(c.windDirectionDeg) + ' ' + fmt(c.windSpeedKmh, 0) + '<small>km/h' + (c.windGustKmh != null ? ' · gust ' + fmt(c.windGustKmh, 0) : '') + '</small>' : '—', 'wind', c.from.windSpeedKmh, 'ground')
+                + tile(fmt(c.rainSince9amMm, 1) + '<small>mm</small>', 'rain since 9 am', c.from.rainSince9amMm, 'ground')
+                + tile(fmt(d.kbdiMm, 0) + '<small>mm' + (d.band ? ' · ' + esc(String(d.band).toLowerCase()) : '') + '</small>', 'KBDI', d.from, 'drought')
+                + tile(fmt(d.droughtFactor, 1) + '<small>of 10' + (d.complete === false ? ' · spin-up short' : '') + '</small>', 'drought factor', d.from, 'drought')
+                + tile(f.ffdi != null ? fmt(f.ffdi, 0) + '<small>' + esc(String(f.ffdiRating).toLowerCase()) + '</small>' : '—', 'FFDI', f.ffdi != null ? null : Object.keys(f.inputs).filter(function (k) { return !f.inputs[k]; }), 'fire')
+                + tile(c.dewPointC != null ? fmt(c.dewPointC, 1) + ' °C' : '—', 'dew point', c.from.dewPointC, 'ground')
+                + '</div>';
+            html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';
+            html += '<h2>The stations <span class="muted">' + o.stations.length + ' in reach · their share of the blend</span></h2>' + stationRows(o.stations, true);
+            if (outside.length) html += '<h2>Not in reach <span class="muted">the nearest ' + outside.length + ', and why</span></h2>' + stationRows(outside, false);
             el.innerHTML = html;
             el.classList.add('wide');
             el.classList.remove('hidden');
+            $('note').classList.add('hidden');
             // The point, and the nearest station in reach, into the clear between the panel and the drawer.
             var pad = {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [el.offsetWidth + 24, 24]};
             map.panInside([lat, lon], pad);
-            if (o.inReach.length) map.panInside([o.inReach[0].lat, o.inReach[0].lon], pad);
+            if (o.stations.length) map.panInside([o.stations[0].lat, o.stations[0].lon], pad);
             $('close').addEventListener('click', closeDetail);
             el.querySelectorAll('[data-station]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); detail(a.dataset.station); }); });
-        }).catch(function (e) { note('probe failed: ' + e); });
+        }).catch(function (e) { note('reading failed: ' + e); });
+    }
+    // One figure of the reading: the value, what it is, and the stations it came from - or what it lacked.
+    function tile(v, k, from, cls) {
+        var who = from && from.length ? (k === 'FFDI' ? 'missing ' + from.join(', ') : from.join(', ')) : (from ? 'nothing gave it' : '');
+        return '<div class="tile ' + cls + '"><div class="v">' + v + '</div><div class="k">' + esc(k) + '</div><div class="who" title="' + esc(who) + '">' + esc(who) + '</div></div>';
     }
     function stationRows(list, inReach) {
         var html = '<table class="table table-sm probe"><thead><tr><th>station</th><th class="num">km</th><th>from</th><th class="num">Δ m</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">mm</th><th class="num" title="Keetch-Byram drought index, mm">KBDI</th><th class="num" title="drought factor, 0 to 10">DF</th><th>age</th></tr></thead><tbody>';
@@ -326,7 +375,7 @@
                 + '<td class="num">' + fmt(s.km, 1) + '</td><td class="mono">' + dirWord(s.bearingDeg) + '</td><td class="num">' + (s.aboveM != null ? (s.aboveM > 0 ? '+' : '') + s.aboveM : '—') + '</td>'
                 + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="num">' + fmt(s.kbdiMm, 0) + '</td><td class="num">' + fmt(s.droughtFactor, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
             if (!inReach) html += '<tr class="why"><td colspan="11" class="muted">' + esc(s.why) + '</td></tr>';
-            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
+            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
         });
         return html + '</tbody></table>';
     }

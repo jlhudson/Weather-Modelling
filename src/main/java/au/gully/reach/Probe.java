@@ -109,7 +109,7 @@ public class Probe {
         return m;
     }
 
-    static int bearingIndex(double bearingDeg) {
+    public static int bearingIndex(double bearingDeg) {
         return (int) Math.round(bearingDeg / (360.0 / Terrain.BEARINGS)) % Terrain.BEARINGS;
     }
 
@@ -127,7 +127,7 @@ public class Probe {
      * The reach as a JTS polygon in longitude and latitude, for the containment test: the same
      * ring the map draws, so what the map shows inside is inside.
      */
-    static Polygon polygon(Reach r) {
+    public static Polygon polygon(Reach r) {
         Coordinate[] coords = new Coordinate[r.ring().length];
         for (int i = 0; i < coords.length; i++) {
             coords[i] = new Coordinate(r.ring()[i][1], r.ring()[i][0]);

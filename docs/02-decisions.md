@@ -123,3 +123,33 @@ drought factor does and keeps the record where it belongs, with the station. Bac
 missing days, and resting a station six hours between attempts, is what keeps a hundred stations at
 a few hundred units a day at worst and nothing at best. A day without both a rain total and a
 maximum is left for the archive rather than written half-known. — James, 21 September 2026.
+
+### W-7 · The points of our own: a place nobody reaches becomes a station
+
+**The decision.** A place no Bureau station's reach contains - or that only stations without a
+temperature reach - is dropped as a station of the kind `point`: the same terrain, reach and rule,
+its current from Open-Meteo (one hour's life), a year of record from the archive. A later ask inside
+its reach reuses it and fills only what is missing; one unasked for 548 days is dropped again. It
+has no six-hour ledger. On the map it is an amber diamond, never a dot.
+
+**Why.** James asked that a point outside every station become a drought station of ours, updated
+only when the next ask inside its polygon comes, its days backfilled rather than kept current. Making
+it a station of a second kind, rather than a second machinery, is what lets the reach, the record,
+the drought and the map treat it as one thing with one exception - where its current comes from. —
+James, 22 September 2026.
+
+### W-8 · The reading: height-corrected inverse-distance weighting, per value, over one polygon
+
+**The decision.** A reading at a point blends the stations whose reach contains it: weights
+`1 / cost²` with the cost measured along the ray as the reach is; temperature, dew point and the
+day's maximum brought to the point's height by the lapse rate first; humidity, wind, rain and each
+station's own KBDI and drought factor blended as they are; the wind's direction as a vector. A
+station lacking a value stays out of that value's blend. The FFDI is computed from the blend and is
+null when any input is missing. A click on the map asks for the reading; `/api/v1/reading` answers
+a caller. Every value names the stations behind it.
+
+**Why.** James chose height-corrected IDW from the five laid out on 21 September, and asked that the
+drought use the same polygon as the current and that a station without the right values be left out
+rather than guessed for. Taking the cost along the ray, rather than the bare distance, is what keeps
+a station across a ridge from counting as much as one across the plain, and it costs nothing - the
+terrain is already there. — James, 22 September 2026.

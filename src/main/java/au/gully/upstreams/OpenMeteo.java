@@ -38,7 +38,11 @@ public class OpenMeteo implements Upstream {
 
     public static final int FORECAST_DAYS = 7;
     public static final int FORECAST_HOURS = 72;
-    public static final int PAST_HOURS = 24;
+    /**
+     * The hours behind now the series carries: enough to reach back to 9 am yesterday from any hour,
+     * which is what the day's total to 9 am and the rain since 9 am are summed from.
+     */
+    public static final int PAST_HOURS = 48;
 
     /**
      * What the archive costs: Open-Meteo's published weighting counts a fortnight of up to ten

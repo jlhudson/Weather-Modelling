@@ -5,6 +5,7 @@ import au.gully.bureau.StationRegistry;
 import au.gully.platform.access.ConsoleUsers;
 import au.gully.platform.diagnostics.StartupHistory;
 import au.gully.reach.ReachRule;
+import au.gully.reading.Points;
 import au.gully.record.Backfill;
 import au.gully.record.Record;
 import au.gully.reach.TerrainSampler;
@@ -44,6 +45,7 @@ public class Startup implements ApplicationRunner {
     private final ReachRule reachRule;
     private final Record record;
     private final Backfill backfill;
+    private final Points points;
     private final Ledger ledger;
     private final GullyProperties properties;
     private final StartupHistory history;
@@ -75,7 +77,7 @@ public class Startup implements ApplicationRunner {
         } else {
             log.info("gully.enabled is false: the Bureau's file is not read and no terrain is sampled");
         }
-        scheduler.scheduleWithFixedDelay(guarded("sweep", () -> { ledger.prune(); record.prune(Instant.now()); }), soon.plusSeconds(60), Duration.ofHours(1));
+        scheduler.scheduleWithFixedDelay(guarded("sweep", () -> { ledger.prune(); record.prune(Instant.now()); points.expire(Instant.now()); }), soon.plusSeconds(60), Duration.ofHours(1));
     }
 
     /**

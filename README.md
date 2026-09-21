@@ -31,6 +31,7 @@ limits in the `RateLimit-*` headers.
 | `GET /api/v1/stations.geojson` | Every station as a point, with its latest values and how old they are. |
 | `GET /api/v1/stations/{id}` | One station with its last readings, its terrain and reach, its drought and the record behind it. |
 | `GET /api/v1/reach.geojson` | Every station's reach under the rule in force, as polygons. |
+| `GET /api/v1/reading?lat=&lon=` | The weather now and the drought at a point, blended from the stations in reach or from a point of ours, and the FFDI; every value names its stations. |
 | `GET /api/v1/stations/at?lat=&lon=` | The stations that speak for a point: those whose reach contains it, and the nearest three that do not, with why. |
 | `GET /api/diagnostics`, `/logs`, `/logs/{id}`, the two `DELETE`s | The shape The Hub's morning agent reads. |
 

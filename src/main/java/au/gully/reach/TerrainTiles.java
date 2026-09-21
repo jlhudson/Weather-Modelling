@@ -45,6 +45,8 @@ public class TerrainTiles {
 
     private final TileFetch http;
     private final Ledger ledger;
+    /** Off with {@code gully.enabled}: nothing is fetched, and a height is simply not known. */
+    private final boolean enabled;
     private final Map<String, float[]> cache = new LinkedHashMap<>(CACHE_TILES, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, float[]> eldest) {
@@ -53,13 +55,18 @@ public class TerrainTiles {
     };
 
     @Autowired
-    public TerrainTiles(HttpFetcher http, Ledger ledger) {
-        this(http::get, ledger);
+    public TerrainTiles(HttpFetcher http, Ledger ledger, au.gully.platform.GullyProperties properties) {
+        this(http::get, ledger, properties.enabled());
     }
 
     TerrainTiles(TileFetch http, Ledger ledger) {
+        this(http, ledger, true);
+    }
+
+    TerrainTiles(TileFetch http, Ledger ledger, boolean enabled) {
         this.http = http;
         this.ledger = ledger;
+        this.enabled = enabled;
     }
 
     /**
@@ -78,6 +85,9 @@ public class TerrainTiles {
      * @throws UpstreamException when a tile cannot be fetched or decoded: the whole sampling is abandoned
      */
     public Sampled elevations(List<double[]> points) throws UpstreamException {
+        if (!enabled) {
+            throw new UpstreamException(ID + ": gully.enabled is false");
+        }
         List<Double> out = new ArrayList<>(points.size());
         int fetched = 0;
         for (double[] p : points) {

@@ -8,6 +8,7 @@ import au.gully.reach.Probe;
 import au.gully.reach.ReachRule;
 import au.gully.reach.Reaches;
 import au.gully.reach.TerrainSampler;
+import au.gully.reading.Readings;
 import au.gully.record.Droughts;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -44,6 +45,7 @@ public class MapController {
     private final TerrainSampler sampler;
     private final Probe probe;
     private final Droughts droughts;
+    private final Readings readings;
 
     @GetMapping
     public String page(Model model) {
@@ -111,6 +113,15 @@ public class MapController {
     /**
      * A point on the map: the stations whose reach contains it, and the nearest few whose does not (W-5).
      */
+    /**
+     * The reading at a point (W-8): what a click asks for.
+     */
+    @GetMapping(value = "/reading", produces = "application/json")
+    @ResponseBody
+    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon) {
+        return readings.at(lat, lon);
+    }
+
     @GetMapping(value = "/probe", produces = "application/json")
     @ResponseBody
     public Map<String, Object> probe(@RequestParam double lat, @RequestParam double lon) {

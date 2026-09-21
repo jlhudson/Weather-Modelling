@@ -86,7 +86,33 @@ Nothing is stored - it is arithmetic over the record, memoised until the record 
 and it travels on the stations feed (`kbdiMm`, `droughtFactor`) and the station's detail, with the
 last thirty days and eight windows of the record behind it.
 
-## 4. The probe
+## 4. The reading, and the points of our own
+
+**A click, or `/api/v1/reading?lat=&lon=`, asks for the weather at a point** (W-8). The Bureau's
+stations whose reach contains it are the members; each weighs `1 / cost²`, the cost being the distance
+plus what the greatest height difference along the ray towards the point costs - the reach's own
+arithmetic, so a station across rising ground counts for less. Temperature, apparent temperature,
+dew point and the day's maximum are brought to the point's height by the lapse rate (6.5 °C per
+kilometre; 2 for the dew point) before they are blended; humidity, wind, gust, pressure and rain
+are blended as they are, the wind's direction as a vector. Each station's KBDI and drought factor
+are blended by the same weights - one polygon per station carries its current and its drought
+alike. A station lacking a value stays out of that value's blend, and the reading names the
+stations behind every value. The forest fire danger index (McArthur Mk 5, Noble, Bary and Gill 1980)
+is computed from the blended temperature, humidity, wind and drought factor, and is null when any
+is missing rather than made from a guess.
+
+**Where no station can say what the weather is** - none reaches, or those that do carry no
+temperature - **a point of our own answers** (W-7). One already dropped whose reach contains the
+place is used: its current fetched again if older than an hour, its record filled for the missing
+days, the ask remembered. Otherwise a new one is dropped there, as a station with the kind `point`:
+its terrain sampled and its reach drawn by the same rule, its current from Open-Meteo (the current
+block, with the rain since 9 am and the day's total summed from the 48 hours of series behind it),
+and a year of the archive for its record. The first ask at a new place takes a few seconds; every
+later ask inside its reach is immediate. A point no ask has used for 548 days is dropped again,
+record and all. A point never gets a six-hour ledger: its days come from the archive, not from
+folding its fetches. On the map a point is an amber diamond, filled with its value like a station.
+
+## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the
 stations that speak for that point (W-5): every station whose reach contains it, nearest first, each
@@ -96,7 +122,7 @@ its ray towards it goes; then the nearest three whose reach does not contain it,
 stopped short. Nothing is blended: these are the ingredients a reading at the point will be made
 from, and the interpolation between them is the next decision.
 
-## 5. The upstreams
+## 6. The upstreams
 
 Open-Meteo is the primary and Google Weather the overflow, each behind a budget (the published
 allowance, retired at 90 % of it), a breaker (open after three failures, or at once when the refusal
@@ -104,7 +130,7 @@ names the window that ran out) and a pacer (the real per-minute limit). Every ca
 `upstream_call`, written before it is counted, which is what the Upstreams page and the budget read.
 Open-Meteo's forecast costs three units. Nothing fetches a forecast yet.
 
-## 6. The console
+## 7. The console
 
 One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
 where it is, filled when it is reporting and hollow when it is not, coloured by what it last said;
@@ -112,12 +138,12 @@ a click opens everything held for it. The Upstreams page is the allowance table,
 breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
 startup record. API keys issues and revokes keys with a scope.
 
-## 7. The API
+## 8. The API
 
 `/api/v1/stations.geojson` and `/api/v1/reach.geojson` are what the map draws; `/api/v1/stations/{id}`
 is what a click on a station opens and `/api/v1/stations/at?lat=&lon=` what a click anywhere else opens; `/api/diagnostics` is the shape The Hub's morning agent reads. Every route needs a key.
 
-## 8. Storage
+## 9. Storage
 
 Ten tables: `api_key`, `console_user`, `api_access_log`, `log_event`, `setting` (what the console
 sets and a restart must keep), `upstream_call`, `station` (`V1`), `terrain` (`V2`), `station_hour6`

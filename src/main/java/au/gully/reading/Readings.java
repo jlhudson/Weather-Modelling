@@ -1,0 +1,279 @@
+package au.gully.reading;
+
+import au.gully.bureau.Observation;
+import au.gully.bureau.Station;
+import au.gully.bureau.StationRegistry;
+import au.gully.bureau.StationsFeed;
+import au.gully.fire.FireDanger;
+import au.gully.fire.Kbdi;
+import au.gully.platform.Status;
+import au.gully.platform.UpstreamException;
+import au.gully.reach.Geo;
+import au.gully.reach.Probe;
+import au.gully.reach.Reach;
+import au.gully.reach.ReachRule;
+import au.gully.reach.Reaches;
+import au.gully.reach.Terrain;
+import au.gully.reach.TerrainStore;
+import au.gully.reach.TerrainTiles;
+import au.gully.record.Drought;
+import au.gully.record.Droughts;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+
+/**
+ * The reading at a point (W-8): the weather now and the drought, blended from the stations whose
+ * reach contains it, and the forest fire danger index from the blend.
+ * <p>
+ * The Bureau's stations answer where they reach. Where none of them can say what the weather is -
+ * none reaches, or the ones that do carry no temperature - a point of our own answers ({@link Points}):
+ * one already dropped whose reach contains the place, or a new one dropped here. A station lacking a
+ * value stays out of that value's blend, and every value names the stations it came from.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class Readings {
+
+    private final StationRegistry stations;
+    private final StationsFeed feed;
+    private final TerrainStore terrain;
+    private final ReachRule rule;
+    private final TerrainTiles tiles;
+    private final Droughts droughts;
+    private final Points points;
+    private final GeometryFactory geometry = new GeometryFactory();
+
+    /**
+     * One station in reach, with what the blend needs of it.
+     */
+    record Member(Station station, Terrain terrain, Reach reach, double km, int bearingIndex, double costKm, double weight,
+                  Double heightM, Observation latest, boolean fresh, Optional<Drought> drought) {
+    }
+
+    public Map<String, Object> at(double lat, double lon) {
+        return at(lat, lon, Instant.now());
+    }
+
+    public Map<String, Object> at(double lat, double lon, Instant now) {
+        ReachRule.Rule r = rule.current();
+        org.locationtech.jts.geom.Point here = geometry.createPoint(new Coordinate(lon, lat));
+        Double height = height(lat, lon);
+
+        // The Bureau's stations whose reach contains the point.
+        List<Member> members = new ArrayList<>();
+        for (Station s : stations.bureau()) {
+            member(s, lat, lon, height, r, here, now).ifPresent(members::add);
+        }
+        String from = "stations";
+        // None can say what the weather is: a point of ours, found or dropped.
+        if (members.stream().noneMatch(m -> m.fresh() && m.latest().temperatureC() != null)) {
+            Station found = points.within(lat, lon).orElse(null);
+            if (found != null) {
+                points.use(found, now);
+                from = "point";
+            } else {
+                from = "new point";
+            }
+            Station p = found != null ? found : points.drop(lat, lon, now);
+            Optional<Member> m = member(p, lat, lon, height, r, here, now);
+            members.add(m.isPresent() ? m.get() : bare(p, lat, lon, height, now));
+        }
+        members.sort(Comparator.comparingDouble(Member::costKm));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("at", now.toString());
+        Map<String, Object> point = new LinkedHashMap<>();
+        point.put("lat", lat);
+        point.put("lon", lon);
+        point.put("heightM", height);
+        point.put("water", height != null && height <= 0);
+        out.put("point", point);
+        out.put("from", from);
+        out.put("rule", Reaches.rule(r));
+        Map<String, Object> current = current(members, height, now);
+        Map<String, Object> drought = drought(members);
+        out.put("current", current);
+        out.put("drought", drought);
+        out.put("fire", fire(current, drought));
+        List<Map<String, Object>> listed = new ArrayList<>();
+        for (Member m : members) {
+            listed.add(station(m, lat, lon, height, now));
+        }
+        out.put("stations", listed);
+        return out;
+    }
+
+    private Double height(double lat, double lon) {
+        try {
+            return tiles.elevations(List.of(new double[]{lat, lon})).elevations().getFirst();
+        } catch (UpstreamException | RuntimeException e) {
+            log.debug("reading {},{}: no height ({})", lat, lon, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * A station as a member of the blend at a point, if its reach contains the point.
+     */
+    private Optional<Member> member(Station s, double lat, double lon, Double height, ReachRule.Rule r, org.locationtech.jts.geom.Point here, Instant now) {
+        Terrain t = terrain.get(s.id()).orElse(null);
+        if (t == null) {
+            return Optional.empty();
+        }
+        Reach reach = Reach.of(t, r);
+        if (!Probe.polygon(reach).contains(here)) {
+            return Optional.empty();
+        }
+        double km = Geo.distanceKm(lat, lon, s.lat(), s.lon());
+        int b = Probe.bearingIndex(Geo.bearingDeg(s.lat(), s.lon(), lat, lon));
+        double cost = cost(t, b, km, r);
+        Observation o = stations.latest(s.id()).orElse(null);
+        boolean fresh = o != null && o.at() != null && Duration.between(o.at(), now).compareTo(Status.STALE) < 0;
+        return Optional.of(new Member(s, t, reach, km, b, cost, Blend.weight(cost), t.elevationM(), o, fresh, droughts.of(s, now)));
+    }
+
+    /**
+     * A point of ours whose terrain is not there yet: a member at its distance, so what it has is used.
+     */
+    private Member bare(Station p, double lat, double lon, Double height, Instant now) {
+        double km = Geo.distanceKm(lat, lon, p.lat(), p.lon());
+        Observation o = stations.latest(p.id()).orElse(null);
+        boolean fresh = o != null && o.at() != null && Duration.between(o.at(), now).compareTo(Status.STALE) < 0;
+        return new Member(p, null, null, km, 0, km, Blend.weight(km), p.heightM(), o, fresh, droughts.of(p, now));
+    }
+
+    /**
+     * The cost from a station to a point along the ray towards it: the distance plus what the
+     * greatest height difference crossed on the way costs, the reach's own arithmetic.
+     */
+    static double cost(Terrain t, int bearing, double km, ReachRule.Rule r) {
+        double maxDiff = 0;
+        int steps = (int) Math.min(Terrain.STEPS, Math.round(km / Terrain.STEP_KM));
+        for (int s = 1; s <= steps; s++) {
+            double e = t.at(bearing, s);
+            if (!Double.isNaN(e)) {
+                maxDiff = Math.max(maxDiff, Math.abs(e - t.elevationM()));
+            }
+        }
+        return Math.round((km + r.kmPer100m() * maxDiff / 100.0) * 100) / 100.0;
+    }
+
+    // ---------------------------------------------------------------- the blends
+
+    private Map<String, Object> current(List<Member> members, Double height, Instant now) {
+        List<Member> fresh = members.stream().filter(Member::fresh).toList();
+        Map<String, Object> c = new LinkedHashMap<>();
+        Map<String, List<String>> from = new LinkedHashMap<>();
+        value(c, from, "temperatureC", fresh, m -> Blend.toHeight(m.latest().temperatureC(), m.heightM(), height, Blend.LAPSE_C_PER_KM), 1);
+        value(c, from, "apparentTemperatureC", fresh, m -> Blend.toHeight(m.latest().apparentTemperatureC(), m.heightM(), height, Blend.LAPSE_C_PER_KM), 1);
+        value(c, from, "dewPointC", fresh, m -> Blend.toHeight(m.latest().dewPointC(), m.heightM(), height, Blend.DEW_POINT_LAPSE_C_PER_KM), 1);
+        value(c, from, "humidityPct", fresh, m -> m.latest().humidityPct() == null ? null : m.latest().humidityPct().doubleValue(), 0);
+        value(c, from, "windSpeedKmh", fresh, m -> m.latest().windSpeedKmh(), 0);
+        value(c, from, "windGustKmh", fresh, m -> m.latest().windGustKmh(), 0);
+        List<Blend.Part> dirs = parts(fresh, m -> m.latest().windDirectionDeg() == null ? null : m.latest().windDirectionDeg().doubleValue());
+        c.put("windDirectionDeg", Blend.meanBearing(dirs));
+        from.put("windDirectionDeg", dirs.stream().map(Blend.Part::id).toList());
+        value(c, from, "pressureMslHpa", fresh, m -> m.latest().pressureMslHpa(), 1);
+        value(c, from, "rainSince9amMm", fresh, m -> m.latest().rainSince9amMm(), 1);
+        value(c, from, "rain24hMm", fresh, m -> m.latest().rain24hMm(), 1);
+        value(c, from, "maxTemperatureC", fresh, m -> Blend.toHeight(m.latest().maxTemperatureC(), m.heightM(), height, Blend.LAPSE_C_PER_KM), 1);
+        Instant newest = fresh.stream().map(m -> m.latest().at()).max(Comparator.naturalOrder()).orElse(null);
+        c.put("at", newest == null ? null : newest.toString());
+        c.put("ageMinutes", newest == null ? null : Duration.between(newest, now).toMinutes());
+        c.put("from", from);
+        return c;
+    }
+
+    private static void value(Map<String, Object> c, Map<String, List<String>> from, String name, List<Member> members,
+                              Function<Member, Double> get, int decimals) {
+        List<Blend.Part> parts = parts(members, get);
+        Double v = Blend.mean(parts);
+        double f = Math.pow(10, decimals);
+        c.put(name, v == null ? null : Math.round(v * f) / f);
+        from.put(name, parts.stream().map(Blend.Part::id).toList());
+    }
+
+    private static List<Blend.Part> parts(List<Member> members, Function<Member, Double> get) {
+        List<Blend.Part> parts = new ArrayList<>();
+        for (Member m : members) {
+            Double v = get.apply(m);
+            if (v != null) {
+                parts.add(new Blend.Part(m.station().id(), m.weight(), v));
+            }
+        }
+        return parts;
+    }
+
+    private Map<String, Object> drought(List<Member> members) {
+        List<Member> held = members.stream().filter(m -> m.drought().isPresent()).toList();
+        Map<String, Object> d = new LinkedHashMap<>();
+        List<Blend.Part> kbdi = parts(held, m -> m.drought().get().kbdiMm());
+        List<Blend.Part> df = parts(held, m -> m.drought().get().droughtFactor());
+        Double k = Blend.mean(kbdi), f = Blend.mean(df);
+        d.put("kbdiMm", k == null ? null : Math.round(k * 10) / 10.0);
+        d.put("band", k == null ? null : Kbdi.band(k));
+        d.put("droughtFactor", f == null ? null : Math.round(f * 10) / 10.0);
+        d.put("complete", !held.isEmpty() && held.stream().allMatch(m -> m.drought().get().complete()));
+        d.put("from", kbdi.stream().map(Blend.Part::id).toList());
+        d.put("computedFor", held.isEmpty() ? null : held.getFirst().drought().get().computedFor().toString());
+        return d;
+    }
+
+    private static Map<String, Object> fire(Map<String, Object> current, Map<String, Object> drought) {
+        Map<String, Object> f = new LinkedHashMap<>();
+        Double ffdi = FireDanger.of((Double) current.get("temperatureC"), (Double) current.get("humidityPct"),
+                (Double) current.get("windSpeedKmh"), (Double) drought.get("droughtFactor"));
+        f.put("ffdi", ffdi);
+        f.put("ffdiRating", ffdi == null ? null : FireDanger.rating(ffdi));
+        f.put("inputs", Map.of("temperatureC", current.get("temperatureC") != null, "humidityPct", current.get("humidityPct") != null,
+                "windSpeedKmh", current.get("windSpeedKmh") != null, "droughtFactor", drought.get("droughtFactor") != null));
+        return f;
+    }
+
+    /**
+     * One member as the reading lists it: what the probe says of a station, and its part in the blend.
+     */
+    private Map<String, Object> station(Member m, double lat, double lon, Double height, Instant now) {
+        Map<String, Object> s = new LinkedHashMap<>(feed.properties(m.station(), now));
+        s.put("lat", m.station().lat());
+        s.put("lon", m.station().lon());
+        s.put("km", Math.round(m.km() * 10) / 10.0);
+        s.put("bearingDeg", (int) Math.round(Geo.bearingDeg(lat, lon, m.station().lat(), m.station().lon())));
+        s.put("costKm", m.costKm());
+        s.put("weight", m.weight());
+        s.put("elevationM", m.heightM());
+        s.put("aboveM", height == null || m.heightM() == null ? null : Math.round(m.heightM() - height));
+        s.put("coastal", m.reach() != null && m.reach().coastal());
+        s.put("rayKm", m.reach() == null ? null : m.reach().km()[m.bearingIndex()]);
+        s.put("margin", m.reach() == null ? null : Math.round((m.reach().km()[m.bearingIndex()] - m.km()) * 10) / 10.0);
+        s.put("gives", gives(m));
+        return s;
+    }
+
+    private static List<String> gives(Member m) {
+        List<String> out = new ArrayList<>();
+        Observation o = m.latest();
+        if (m.fresh() && o != null) {
+            if (o.temperatureC() != null) out.add("temperature");
+            if (o.humidityPct() != null) out.add("humidity");
+            if (o.windSpeedKmh() != null) out.add("wind");
+            if (o.rainSince9amMm() != null) out.add("rain");
+        }
+        if (m.drought().isPresent()) out.add("drought");
+        return out;
+    }
+}

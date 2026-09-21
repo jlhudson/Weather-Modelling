@@ -50,7 +50,8 @@ public class StationsFeed {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("type", "FeatureCollection");
         out.put("at", now.toString());
-        out.put("stations", features.size());
+        out.put("stations", features.stream().filter(f -> !Station.POINT.equals(((Map<?, ?>) f.get("properties")).get("kind"))).count());
+        out.put("points", features.stream().filter(f -> Station.POINT.equals(((Map<?, ?>) f.get("properties")).get("kind"))).count());
         out.put("fresh", fresh);
         out.put("updatedAt", stations.lastUpdateAt() == null ? null : stations.lastUpdateAt().toString());
         out.put("features", features);
@@ -66,6 +67,7 @@ public class StationsFeed {
         p.put("id", s.id());
         p.put("wmoId", s.wmoId());
         p.put("name", s.name());
+        p.put("kind", s.kind());
         p.put("state", s.state());
         p.put("district", s.district());
         p.put("zone", s.zone());

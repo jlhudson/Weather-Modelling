@@ -95,7 +95,8 @@ public class Status {
      */
     public Map<String, Object> held() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("stations", stations.size());
+        m.put("stations", stations.bureau().size());
+        m.put("points", stations.points().size());
         m.put("reporting", stations.reporting(Instant.now().minus(STALE)));
         m.put("terrainSampled", terrain.size());
         m.put("terrainPending", sampler.pending().size());

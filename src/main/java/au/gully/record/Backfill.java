@@ -76,7 +76,7 @@ public class Backfill {
      * in the year behind today to the last, when more than the tolerance is missing and any of it
      * is old enough for the archive or the recent week to hold.
      */
-    Range wants(Station s, Instant now) {
+    public Range wants(Station s, Instant now) {
         Instant last = attempted.get(s.id());
         if (last != null && Duration.between(last, now).compareTo(REST) < 0) {
             return null;
@@ -90,7 +90,7 @@ public class Backfill {
         return new Range(missing.getFirst(), missing.getLast(), missing.size());
     }
 
-    record Range(LocalDate from, LocalDate to, int missing) {
+    public record Range(LocalDate from, LocalDate to, int missing) {
     }
 
     /**

@@ -55,7 +55,7 @@ public class Reaches {
         return geojson(rule.current());
     }
 
-    static Map<String, Object> rule(ReachRule.Rule r) {
+    public static Map<String, Object> rule(ReachRule.Rule r) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("reachKm", r.reachKm());
         m.put("kmPer100m", r.kmPer100m());

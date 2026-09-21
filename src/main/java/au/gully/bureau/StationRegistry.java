@@ -37,6 +37,7 @@ public class StationRegistry {
     private final Map<String, Station> stations = new ConcurrentHashMap<>();
     private final Map<String, Observation> latest = new ConcurrentHashMap<>();
     private final Map<String, ArrayDeque<Observation>> recent = new ConcurrentHashMap<>();
+    private final Map<String, Instant> lastAsked = new ConcurrentHashMap<>();
     private final List<java.util.function.BiConsumer<Station, Observation>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile Instant lastUpdateAt;
 
@@ -56,17 +57,19 @@ public class StationRegistry {
      */
     public void rehydrate() {
         stations.clear();
-        for (Station s : db.sql("select id, wmo_id, name, lat, lon, height_m, zone, district, state from station")
+        for (Station s : db.sql("select id, wmo_id, name, lat, lon, height_m, zone, district, state, kind from station")
                 .query(StationRegistry::station).list()) {
             stations.put(s.id(), s);
         }
-        log.info("stations rehydrated: {}", stations.size());
+        db.sql("select id, last_asked_at from station where kind = :kind").param("kind", Station.POINT).query().listOfRows()
+                .forEach(row -> { Instant at = Db.instant(row.get("last_asked_at")); if (at != null) lastAsked.put((String) row.get("id"), at); });
+        log.info("stations rehydrated: {} ({} points of our own)", stations.size(), points().size());
     }
 
     private static Station station(ResultSet rs, int i) throws SQLException {
         return new Station(rs.getString("id"), rs.getString("wmo_id"), rs.getString("name"),
                 rs.getDouble("lat"), rs.getDouble("lon"), (Double) rs.getObject("height_m"),
-                rs.getString("zone"), rs.getString("district"), rs.getString("state"));
+                rs.getString("zone"), rs.getString("district"), rs.getString("state"), rs.getString("kind"));
     }
 
     /**
@@ -166,5 +169,71 @@ public class StationRegistry {
      */
     public long reporting(Instant since) {
         return latest.values().stream().filter(o -> o.at() != null && o.at().isAfter(since)).count();
+    }
+
+    // ---------------------------------------------------------------- the points of our own (W-7)
+
+    public List<Station> bureau() {
+        return stations.values().stream().filter(s -> !s.isPoint()).sorted(Comparator.comparing(Station::id)).toList();
+    }
+
+    public List<Station> points() {
+        return stations.values().stream().filter(Station::isPoint).sorted(Comparator.comparing(Station::id)).toList();
+    }
+
+    /**
+     * A point dropped: written with the moment as its first ask, and in the register from now on.
+     */
+    public void addPoint(Station p, Instant now) {
+        db.sql("""
+                insert into station (id, wmo_id, name, lat, lon, height_m, zone, district, state, kind, first_seen_at, last_seen_at, last_asked_at)
+                values (:id, null, :name, :lat, :lon, :height, :zone, null, :state, :kind, :now, :now, :now)
+                on conflict (id) do update set last_seen_at = excluded.last_seen_at, last_asked_at = excluded.last_asked_at""")
+                .param("id", p.id()).param("name", p.name()).param("lat", p.lat()).param("lon", p.lon()).param("height", p.heightM())
+                .param("zone", p.zone()).param("state", p.state()).param("kind", Station.POINT).param("now", Db.ts(now)).update();
+        stations.put(p.id(), p);
+        lastAsked.put(p.id(), now);
+    }
+
+    /**
+     * A point asked about again: what its expiry counts from.
+     */
+    public void touch(String pointId, Instant now) {
+        Instant last = lastAsked.get(pointId);
+        if (last != null && java.time.Duration.between(last, now).toMinutes() < 10) {
+            return;
+        }
+        lastAsked.put(pointId, now);
+        db.sql("update station set last_asked_at = :now, last_seen_at = :now where id = :id").param("now", Db.ts(now)).param("id", pointId).update();
+    }
+
+    public Instant lastAsked(String pointId) {
+        return lastAsked.get(pointId);
+    }
+
+    /**
+     * The model's current at a point, as the point's latest: kept like a reading, but the record's
+     * listeners are not told - a point's days come from the archive, not from folding its fetches.
+     */
+    public void acceptModel(Station p, Observation o) {
+        latest.put(p.id(), o);
+        ArrayDeque<Observation> d = recent.computeIfAbsent(p.id(), k -> new ArrayDeque<>());
+        synchronized (d) {
+            d.addFirst(o);
+            while (d.size() > RECENT) {
+                d.removeLast();
+            }
+        }
+    }
+
+    /**
+     * A point gone: its row and what the register held of it. Its terrain and record are the callers' to forget.
+     */
+    public void remove(String pointId) {
+        db.sql("delete from station where id = :id and kind = :kind").param("id", pointId).param("kind", Station.POINT).update();
+        stations.remove(pointId);
+        latest.remove(pointId);
+        recent.remove(pointId);
+        lastAsked.remove(pointId);
     }
 }

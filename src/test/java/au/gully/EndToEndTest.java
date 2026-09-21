@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Skipped where Docker is not available.
  */
 @Testcontainers(disabledWithoutDocker = true)
+@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {"gully.enabled=false", "gully.console.code=12345678", "spring.flyway.clean-disabled=true"})
 class EndToEndTest {
@@ -97,19 +98,21 @@ class EndToEndTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Order(1)
     void theMigrationBuiltTheTablesAndTheStationsAreKept() throws Exception {
         for (String table : new String[]{"api_key", "console_user", "api_access_log", "log_event", "setting", "upstream_call", "station", "terrain", "station_hour6", "station_day"}) {
             assertThat(db.sql("select to_regclass('public." + table + "')").query(String.class).single()).as(table).isEqualTo(table);
         }
         takeInTheFixture();
-        assertThat(db.sql("select count(*) from station where state = 'sa'").query(Long.class).single()).isEqualTo(3L);
+        assertThat(db.sql("select count(*) from station where state = 'sa' and kind = 'bureau'").query(Long.class).single()).isEqualTo(3L);
         assertThat(db.sql("select name from station where id = '023000'").query(String.class).single()).isEqualTo("ADELAIDE (WEST TERRACE / NGAYIRDAPIRA)");
         // A restart reads them back.
         stations.rehydrate();
-        assertThat(stations.size()).isEqualTo(3);
+        assertThat(stations.bureau()).hasSize(3);
     }
 
     @Test
+    @org.junit.jupiter.api.Order(2)
     void theStationsAnswerWithAKeyAndRefuseWithout() throws Exception {
         issueHubKey();
         takeInTheFixture();
@@ -143,6 +146,7 @@ class EndToEndTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Order(3)
     @SuppressWarnings("unchecked")
     void theReachIsDrawnFromTheTerrainUnderTheRuleAndTheRuleIsKept() throws Exception {
         issueHubKey();
@@ -204,6 +208,7 @@ class EndToEndTest {
      * them on the station's detail, and the ledger rows the fixture's reading opens.
      */
     @Test
+    @org.junit.jupiter.api.Order(4)
     @SuppressWarnings("unchecked")
     void theRecordFeedsTheDroughtAndTheDetailCarriesBoth() throws Exception {
         issueHubKey();
@@ -243,7 +248,79 @@ class EndToEndTest {
         assertThat(held).containsKeys("recordDays", "recordWindows", "backfillPending");
     }
 
+    /**
+     * The reading (W-8): inside Adelaide's reach it is Adelaide's values brought to the point's height,
+     * with Adelaide's drought; outside every reach a point of ours is dropped (W-7) - with the
+     * upstreams off it has no current and no record, and the reading says so.
+     */
     @Test
+    @org.junit.jupiter.api.Order(5)
+    @SuppressWarnings("unchecked")
+    void theReadingBlendsTheStationsInReachAndDropsAPointWhereNoneReaches() throws Exception {
+        issueHubKey();
+        takeInTheFixture();
+        plantFlatTerrain("023000", -34.9257, 138.5832, 29);
+        java.time.LocalDate today = au.gully.record.Record.dayOf(Instant.now(), java.time.ZoneId.of("Australia/Adelaide"));
+        List<au.gully.upstreams.OpenMeteo.DailyRow> year = new java.util.ArrayList<>();
+        for (int i = 1; i <= 365; i++) {
+            year.add(new au.gully.upstreams.OpenMeteo.DailyRow(today.minusDays(i), i % 15 == 0 ? 12.0 : 0.0, 30.0));
+        }
+        record.fill("023000", year);
+        // The fixture's reading is from September 2026 and is stale by now; make it fresh, as the file would.
+        List<StationFile.StationReading> readings;
+        try (InputStream in = getClass().getResourceAsStream("/fixtures/IDS60920-three-stations.xml")) {
+            readings = StationFile.parse(in.readAllBytes(), "sa");
+        }
+        StationFile.StationReading adelaide = readings.stream().filter(x -> x.station().id().equals("023000")).findFirst().orElseThrow();
+        au.gully.bureau.Observation o = adelaide.observation();
+        stations.accept(List.of(new StationFile.StationReading(adelaide.station(), new au.gully.bureau.Observation(o.stationId(), Instant.now().minusSeconds(300),
+                o.temperatureC(), o.apparentTemperatureC(), o.dewPointC(), o.humidityPct(), o.windSpeedKmh(), o.windDirectionDeg(), o.windDirection(), o.windGustKmh(),
+                o.pressureMslHpa(), o.rainSince9amMm(), o.rain24hMm(), o.maxTemperatureC(), o.minTemperatureC(), o.visibilityKm(), o.cloud(), o.cloudOktas(), o.deltaTC()))), Instant.now());
+
+        double[] north = au.gully.reach.Geo.destination(-34.9257, 138.5832, 0, 10);
+        Map<String, Object> r = client().get().uri("/api/v1/reading?lat=" + north[0] + "&lon=" + north[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(r).containsEntry("from", "stations");
+        Map<String, Object> current = (Map<String, Object>) r.get("current");
+        // Adelaide says 15.0 at 29 m; the point's height is unknown (no tiles in the test), so no lapse correction.
+        assertThat(current).containsEntry("temperatureC", 15.0).containsEntry("humidityPct", 45.0).containsEntry("windSpeedKmh", 11.0).containsEntry("windDirectionDeg", 42);
+        assertThat((Map<String, List<String>>) current.get("from")).containsEntry("temperatureC", List.of("023000"));
+        Map<String, Object> drought = (Map<String, Object>) r.get("drought");
+        assertThat(drought).containsEntry("from", List.of("023000")).containsEntry("complete", true);
+        assertThat((Double) drought.get("droughtFactor")).isBetween(0.0, 10.0);
+        Map<String, Object> fire = (Map<String, Object>) r.get("fire");
+        assertThat((Double) fire.get("ffdi")).isGreaterThan(0);
+        assertThat(fire.get("ffdiRating")).isNotNull();
+        List<Map<String, Object>> members = (List<Map<String, Object>>) r.get("stations");
+        assertThat(members).hasSize(1);
+        assertThat(members.getFirst()).containsEntry("id", "023000").containsEntry("costKm", 10.0);
+        assertThat((List<String>) members.getFirst().get("gives")).contains("temperature", "humidity", "wind", "rain", "drought");
+
+        // Far from every reach: a point of ours, dropped and kept, with nothing in it while the upstreams are off.
+        double[] far = au.gully.reach.Geo.destination(-34.9257, 138.5832, 90, 120);
+        Map<String, Object> out = client().get().uri("/api/v1/reading?lat=" + far[0] + "&lon=" + far[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(out).containsEntry("from", "new point");
+        List<Map<String, Object>> pm = (List<Map<String, Object>>) out.get("stations");
+        assertThat(pm).hasSize(1);
+        String pointId = (String) pm.getFirst().get("id");
+        assertThat(pointId).startsWith("p-");
+        assertThat(pm.getFirst()).containsEntry("kind", "point");
+        assertThat(((Map<String, Object>) out.get("current")).get("temperatureC")).isNull();
+        assertThat(((Map<String, Object>) out.get("fire")).get("ffdi")).isNull();
+        assertThat(db.sql("select kind from station where id = :id").param("id", pointId).query(String.class).single()).isEqualTo("point");
+        // Asked again: the same point, found rather than dropped.
+        Map<String, Object> again = client().get().uri("/api/v1/reading?lat=" + far[0] + "&lon=" + far[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(again).containsEntry("from", "point");
+        assertThat(((List<Map<String, Object>>) again.get("stations")).getFirst()).containsEntry("id", pointId);
+        // It is a station to the feed, marked as ours.
+        Map<String, Object> feed = client().get().uri("/api/v1/stations.geojson").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(((List<Map<String, Object>>) feed.get("features")).stream().map(f -> (Map<String, Object>) f.get("properties")).filter(p -> pointId.equals(p.get("id"))).findFirst().orElseThrow()).containsEntry("kind", "point");
+        // A restart reads it back as a point.
+        stations.rehydrate();
+        assertThat(stations.points()).extracting(au.gully.bureau.Station::id).contains(pointId);
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(6)
     @SuppressWarnings("unchecked")
     void theDiagnosticsAnswerTheMorningAgent() {
         issueHubKey();
@@ -257,6 +334,7 @@ class EndToEndTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Order(7)
     void healthIsPublicAndReadyIncludesTheDatabase() {
         ResponseEntity<Map> r = client().get().uri("/actuator/health/readiness").retrieve().toEntity(Map.class);
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -269,6 +347,7 @@ class EndToEndTest {
      * the same walk with a cookie jar.
      */
     @Test
+    @org.junit.jupiter.api.Order(8)
     void theConsoleLogsInAndEveryPageRenders() throws Exception {
         takeInTheFixture();
         ResponseEntity<String> loginPage = client().get().uri("/login").retrieve().toEntity(String.class);
@@ -301,13 +380,13 @@ class EndToEndTest {
                 assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"legend\"").contains("id=\"detail\"").contains("/js/map.js").contains("id=\"reachKm\"").contains("id=\"kmPer100m\"");
             }
         }
-        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&coastalKm=15", "/console/map/probe?lat=-34.9&lon=138.6",
+        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&coastalKm=15", "/console/map/probe?lat=-34.9&lon=138.6", "/console/map/reading?lat=-34.93&lon=138.6",
                 "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }
         String points = client().get().uri("/console/map/stations.geojson").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
-        assertThat(points).contains("\"stations\":3").contains("\"fresh\":");
+        assertThat(points).contains("\"stations\":3").contains("\"points\":").contains("\"fresh\":");
         // Without the cookie, the console is the login page.
         ResponseEntity<Void> anonymous = client().get().uri("/console/map").retrieve().toEntity(Void.class);
         assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);
