@@ -341,15 +341,17 @@
     // stations whose reach contains the point, or from a point of ours where none can say; then the
     // stations that fed it with their shares, and the nearest outside with why (the probe, W-5).
     function clearProbe() { state.probe = null; probeLayer.clearLayers(); }
-    function probe(lat, lon) {
+    // The reading at a point; forced (W-13), the upstreams are asked first - the Bureau's file now, the days the stations
+    // in reach are missing, a point of ours' current again - and the drawer says what came.
+    function probe(lat, lon, force) {
         state.selected = null;
         clearProbe();
         stations();
         drawReach();
         probeLayer.addLayer(L.marker([lat, lon], {icon: L.divIcon({className: 'probe-mark', html: '<i></i>', iconSize: [18, 18], iconAnchor: [9, 9]}), interactive: false, keyboard: false}));
-        note('asking…');
+        note(force ? 'grabbing…' : 'asking…');
         var q = 'lat=' + lat.toFixed(5) + '&lon=' + lon.toFixed(5);
-        Promise.all([fetch('/console/map/reading?' + q).then(function (r) { return r.json(); }), fetch('/console/map/probe?' + q).then(function (r) { return r.json(); })]).then(function (both) {
+        Promise.all([fetch('/console/map/reading?' + q + (force ? '&force=true' : '')).then(function (r) { return r.json(); }), fetch('/console/map/probe?' + q).then(function (r) { return r.json(); })]).then(function (both) {
             var o = both[0], pr = both[1];
             var ids = o.stations.map(function (s) { return s.id; });
             state.probe = {lat: lat, lon: lon, ids: ids};
@@ -358,8 +360,9 @@
             var outside = pr.outside.filter(function (s) { return ids.indexOf(s.id) < 0; });
             outside.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: NONE, weight: 1, opacity: .6, dashArray: '4 5', interactive: false}).addTo(probeLayer); });
             var el = $('detail'), c = o.current, d = o.drought, f = o.fire;
-            var html = '<div class="drawer-head"><h3>' + (o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            var html = '<div class="drawer-head"><h3>' + (o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span></h3><button class="pill" id="grab" title="Ask the upstreams now, whatever the timers say: the Bureau\'s file, the days the stations in reach are missing, a point of ours\' current" type="button">' + icon('refresh') + ' force grab</button><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
             html += '<p class="muted mb-1">' + (o.from === 'stations' ? 'From the Bureau\'s stations whose reach contains this point' : o.from === 'point' ? 'From a point of ours whose reach contains this place: the model\'s current, its own year of record' : 'Nobody\'s reach contained this place: a point of ours dropped here just now, with the model\'s current and a year of the archive') + '.</p>';
+            if (o.grabbed) html += '<p class="grabbed">' + icon('refresh') + ' Grabbed just now: ' + esc(grabWords(o.grabbed, o.from)) + '</p>';
             html += '<div class="reading">'
                 + tile(fmt(c.temperatureC, 1) + ' °C', 'temperature', c.from.temperatureC, 'ground')
                 + tile(fmt(c.humidityPct, 0) + ' %', 'humidity', c.from.humidityPct, 'ground')
@@ -382,8 +385,17 @@
             map.panInside([lat, lon], pad);
             if (o.stations.length) map.panInside([o.stations[0].lat, o.stations[0].lon], pad);
             $('close').addEventListener('click', closeDetail);
+            $('grab').addEventListener('click', function () { probe(lat, lon, true); });
             el.querySelectorAll('[data-station]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); detail(a.dataset.station); }); });
         }).catch(function (e) { note('reading failed: ' + e); });
+    }
+    // What a forced ask brought, in a line.
+    function grabWords(g, from) {
+        var parts = [];
+        parts.push(g.bureauDownloaded ? 'a new Bureau file' : 'the Bureau file, unchanged');
+        if (from !== 'stations') parts.push(g.currentFetched ? 'the model\'s current' + (from === 'point' ? ' again' : '') : 'the model\'s current could not be fetched');
+        parts.push(g.daysFilled ? g.daysFilled + ' missing day' + (g.daysFilled === 1 ? '' : 's') + ' of record filled' : 'no days of record were missing');
+        return parts.join(' · ') + '.';
     }
     // One figure of the reading: the value, what it is, and the stations it came from - or what it lacked.
     function tile(v, k, from, cls) {

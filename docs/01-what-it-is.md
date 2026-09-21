@@ -125,6 +125,13 @@ later ask inside its reach is immediate. A point no ask has used for 548 days is
 record and all. A point never gets a six-hour ledger: its days come from the archive, not from
 folding its fetches. On the map a point is an amber diamond, filled with its value like a station.
 
+**A forced ask** - the *force grab* pill in the reading's drawer, or `&force=true` on the route (W-13) -
+goes to the upstreams first, whatever the timers say: the Bureau's file is read now, the days each
+station in reach is missing are filled (any missing day, rest or no rest), and a point of ours has
+its current fetched again however young it is. The reading then carries `grabbed` - whether a new
+Bureau file came, whether the model's current was fetched, how many days of record were filled -
+and the drawer says it in a line. It is the same reading, just fetched first; nothing is guessed.
+
 ## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the

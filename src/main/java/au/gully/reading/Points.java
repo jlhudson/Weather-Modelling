@@ -122,12 +122,27 @@ public class Points {
      * filled for the days missing, and the ask remembered.
      */
     public void use(Station p, Instant now) {
+        use(p, now, false);
+    }
+
+    /**
+     * A point asked about; forced (W-13), its current is fetched again however young it is, and
+     * every day its record is missing is asked for, whatever the backfill's rest.
+     */
+    public Used use(Station p, Instant now, boolean force) {
         stations.touch(p.id(), now);
         if (!terrain.current(p.id(), p.lat(), p.lon())) {
             sampler.sample(p);
         }
-        refresh(p, now);
-        fill(p, now);
+        boolean fetched = refresh(p, now, force);
+        int days = fill(p, now, force);
+        return new Used(fetched, days);
+    }
+
+    /**
+     * What an ask brought a point: whether the model's current was fetched, and how many days of record.
+     */
+    public record Used(boolean currentFetched, int daysFilled) {
     }
 
     /**
@@ -139,25 +154,33 @@ public class Points {
     }
 
     private void refresh(Station p, Instant now) {
-        if (currentLives(p, now)) {
-            return;
+        refresh(p, now, false);
+    }
+
+    private boolean refresh(Station p, Instant now, boolean force) {
+        if (!force && currentLives(p, now)) {
+            return false;
         }
         try {
             Forecast f = upstreams.fetch(p.lat(), p.lon());
             Observation o = PointCurrent.of(p.id(), f, Record.zoneOf(p));
             if (o != null) {
                 stations.acceptModel(p, o);
+                return true;
             }
         } catch (Upstreams.NoUpstream e) {
             log.warn("point {}: no current ({})", p.id(), e.getMessage());
         }
+        return false;
     }
 
     private void fill(Station p, Instant now) {
-        Backfill.Range r = backfill.wants(p, now);
-        if (r != null) {
-            backfill.fill(p, r, now);
-        }
+        fill(p, now, false);
+    }
+
+    private int fill(Station p, Instant now, boolean force) {
+        Backfill.Range r = backfill.wants(p, now, force);
+        return r == null ? 0 : backfill.fill(p, r, now);
     }
 
     /**

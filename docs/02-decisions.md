@@ -220,3 +220,20 @@ Cape Willoughby (44), Stenhouse Bay (42), Robe (42), Point Avoid (39), Thevenard
 (36 each), and leaves Edithburgh and Cape Borda (34) their borders. It is a constant, not a slider,
 because the honest fix for a station on the wrong side of it is to look at that station, not to move
 every one. — James, 22 September 2026.
+
+### W-13 · A force grab on the reading: the upstreams asked first, whatever the timers say
+
+**The decision.** The reading's drawer has a *force grab* pill, and the reading route takes
+`force=true`. A forced ask reads the Bureau's file now, fills every day each station in reach is
+missing (any missing day, rest or no rest), and fetches a point of ours' current again however young
+it is - then gives the same reading as ever, with a `grabbed` block saying what came: a new Bureau
+file or the same one, the model's current or not, how many days of record. The drawer says it in a
+line under the reading's source. A forced ask inside stations' reach makes no model call and drops
+no point.
+
+**Why.** James asked for "a little force grab button to force grab the weather & drought at that
+point" - a way past the timers when he is looking at a place now: the Bureau's ten minutes, the
+hour a point's current is kept, the backfill's six-hour rest and three-day tolerance. Asked what a
+force should do where stations reach, he chose the Bureau re-read over asking the model at the
+exact point: the blend is the reading there, and a point dropped inside a reach would be a second
+answer to argue with. — James, 22 September 2026.

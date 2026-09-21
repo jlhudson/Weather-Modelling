@@ -77,14 +77,21 @@ public class Backfill {
      * is old enough for the archive or the recent week to hold.
      */
     public Range wants(Station s, Instant now) {
+        return wants(s, now, false);
+    }
+
+    /**
+     * The range a station wants filled; forced (W-13), any missing day at all, rest or no rest.
+     */
+    public Range wants(Station s, Instant now, boolean force) {
         Instant last = attempted.get(s.id());
-        if (last != null && Duration.between(last, now).compareTo(REST) < 0) {
+        if (!force && last != null && Duration.between(last, now).compareTo(REST) < 0) {
             return null;
         }
         LocalDate today = Record.dayOf(now, Record.zoneOf(s));
         LocalDate yesterday = today.minusDays(1);
         List<LocalDate> missing = record.missing(s.id(), today.minusDays(Record.SPIN_UP_DAYS), yesterday);
-        if (missing.size() <= TOLERANCE_DAYS) {
+        if (missing.isEmpty() || (!force && missing.size() <= TOLERANCE_DAYS)) {
             return null;
         }
         return new Range(missing.getFirst(), missing.getLast(), missing.size());

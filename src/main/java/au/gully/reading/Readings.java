@@ -2,6 +2,7 @@ package au.gully.reading;
 
 import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
+import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
 import au.gully.bureau.StationsFeed;
 import au.gully.fire.FireDanger;
@@ -16,6 +17,7 @@ import au.gully.reach.Reaches;
 import au.gully.reach.Terrain;
 import au.gully.reach.TerrainStore;
 import au.gully.reach.TerrainTiles;
+import au.gully.record.Backfill;
 import au.gully.record.Drought;
 import au.gully.record.Droughts;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,10 @@ import java.util.function.Function;
  * none reaches, or the ones that do carry no temperature - a point of our own answers ({@link Points}):
  * one already dropped whose reach contains the place, or a new one dropped here. A station lacking a
  * value stays out of that value's blend, and every value names the stations it came from.
+ * <p>
+ * A <em>forced</em> ask (W-13) goes to the upstreams first, whatever the timers say: the Bureau's
+ * file is read now, the days missing from each station in reach are filled, and a point of ours has
+ * its current fetched again however young it is. The reading then says what the ask brought.
  */
 @Slf4j
 @Service
@@ -55,6 +61,8 @@ public class Readings {
     private final TerrainTiles tiles;
     private final Droughts droughts;
     private final Points points;
+    private final StationReader reader;
+    private final Backfill backfill;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -65,11 +73,22 @@ public class Readings {
     }
 
     public Map<String, Object> at(double lat, double lon) {
-        return at(lat, lon, Instant.now());
+        return at(lat, lon, Instant.now(), false);
     }
 
     public Map<String, Object> at(double lat, double lon, Instant now) {
+        return at(lat, lon, now, false);
+    }
+
+    /**
+     * The reading at a point; forced, the upstreams are asked first, and {@code grabbed} says what came.
+     */
+    public Map<String, Object> at(double lat, double lon, Instant now, boolean force) {
         ReachRule.Rule r = rule.current();
+        Map<String, Object> grabbed = force ? new LinkedHashMap<>() : null;
+        if (force) {
+            grabbed.put("bureauDownloaded", reader.read());
+        }
         org.locationtech.jts.geom.Point here = geometry.createPoint(new Coordinate(lon, lat));
         Double height = height(lat, lon);
 
@@ -78,17 +97,41 @@ public class Readings {
         for (Station s : stations.bureau()) {
             member(s, lat, lon, height, r, here, now).ifPresent(members::add);
         }
+        if (force) {
+            // The days each station in reach is missing, filled now; then the members again, since a drought may have moved.
+            int days = 0;
+            for (Member m : members) {
+                Backfill.Range want = backfill.wants(m.station(), now, true);
+                if (want != null) {
+                    days += backfill.fill(m.station(), want, now);
+                }
+            }
+            grabbed.put("daysFilled", days);
+            if (days > 0) {
+                members.clear();
+                for (Station s : stations.bureau()) {
+                    member(s, lat, lon, height, r, here, now).ifPresent(members::add);
+                }
+            }
+        }
         String from = "stations";
         // None can say what the weather is: a point of ours, found or dropped.
         if (members.stream().noneMatch(m -> m.fresh() && m.latest().temperatureC() != null)) {
             Station found = points.within(lat, lon).orElse(null);
             if (found != null) {
-                points.use(found, now);
+                Points.Used used = points.use(found, now, force);
+                if (force) {
+                    grabbed.put("currentFetched", used.currentFetched());
+                    grabbed.put("daysFilled", (int) grabbed.get("daysFilled") + used.daysFilled());
+                }
                 from = "point";
             } else {
                 from = "new point";
             }
             Station p = found != null ? found : points.drop(lat, lon, now);
+            if (force && found == null) {
+                grabbed.put("currentFetched", points.currentLives(p, now));
+            }
             Optional<Member> m = member(p, lat, lon, height, r, here, now);
             members.add(m.isPresent() ? m.get() : bare(p, lat, lon, height, now));
         }
@@ -103,6 +146,9 @@ public class Readings {
         point.put("water", height != null && height <= 0);
         out.put("point", point);
         out.put("from", from);
+        if (force) {
+            out.put("grabbed", grabbed);
+        }
         out.put("rule", Reaches.rule(r));
         Map<String, Object> current = current(members, height, now);
         Map<String, Object> drought = drought(members);

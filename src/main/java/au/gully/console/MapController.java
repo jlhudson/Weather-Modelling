@@ -118,8 +118,8 @@ public class MapController {
      */
     @GetMapping(value = "/reading", produces = "application/json")
     @ResponseBody
-    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon) {
-        return readings.at(lat, lon);
+    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon, @RequestParam(defaultValue = "false") boolean force) {
+        return readings.at(lat, lon, Instant.now(), force);
     }
 
     @GetMapping(value = "/probe", produces = "application/json")

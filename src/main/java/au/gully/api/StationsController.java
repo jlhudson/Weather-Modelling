@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -62,14 +63,16 @@ public class StationsController {
      * The reading at a point (W-8): the weather now and the drought, blended from the stations whose
      * reach contains it - or from a point of our own where none can say - and the fire danger from
      * the blend. A place nobody's reach contains is dropped as a point on the first ask, which may
-     * take a few seconds; every later ask inside its reach is immediate.
+     * take a few seconds; every later ask inside its reach is immediate. With {@code force=true}
+     * (W-13) the upstreams are asked first - the Bureau's file now, the days the stations in reach
+     * are missing, a point of ours' current again - and {@code grabbed} says what came.
      */
     @GetMapping(value = "/reading", produces = "application/json")
-    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon) {
+    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon, @RequestParam(defaultValue = "false") boolean force) {
         if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
             throw new ErrorResponseException(HttpStatus.BAD_REQUEST, ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "lat and lon must be a place on earth"), null);
         }
-        return readings.at(lat, lon);
+        return readings.at(lat, lon, Instant.now(), force);
     }
 
     @GetMapping(value = "/stations/at", produces = "application/json")

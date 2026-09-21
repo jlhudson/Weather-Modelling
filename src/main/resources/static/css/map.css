@@ -209,3 +209,8 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
     filter: drop-shadow(0 0 1.5px var(--bs-body-bg)) drop-shadow(0 0 1.5px var(--bs-body-bg)); }
 .wind .now line, .wind .now polyline { stroke: var(--bs-body-color); stroke-width: 2.4; }
 .wind .mean line, .wind .mean polyline { stroke: #6b7280; stroke-width: 3; opacity: .6; }
+
+/* ---- the force grab (W-13): a pill in the reading's head, and the line saying what it brought */
+.drawer-head .pill { margin-left: auto; white-space: nowrap; }
+.drawer .grabbed { display: flex; align-items: center; gap: .35rem; font-size: .78rem; color: var(--p-reach, #22d3ee); margin: 0 0 .5rem; }
+.drawer .grabbed .ico { width: .9rem; height: .9rem; }
