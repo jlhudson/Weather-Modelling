@@ -307,7 +307,12 @@
             }
             html += '<p class="muted control-note mb-0">Nothing is blended here: these are the ingredients a reading at this point would be made from, under the rule ' + esc(ruleWords(o.rule)) + '.</p>';
             el.innerHTML = html;
+            el.classList.add('wide');
             el.classList.remove('hidden');
+            // The point, and the nearest station in reach, into the clear between the panel and the drawer.
+            var pad = {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [el.offsetWidth + 24, 24]};
+            map.panInside([lat, lon], pad);
+            if (o.inReach.length) map.panInside([o.inReach[0].lat, o.inReach[0].lon], pad);
             $('close').addEventListener('click', closeDetail);
             el.querySelectorAll('[data-station]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); detail(a.dataset.station); }); });
         }).catch(function (e) { note('probe failed: ' + e); });
@@ -362,6 +367,7 @@
                 html += '</tbody></table>';
             }
             el.innerHTML = html;
+            el.classList.remove('wide');
             el.classList.remove('hidden');
             $('close').addEventListener('click', closeDetail);
             if ($('sampleNow')) $('sampleNow').addEventListener('click', function () { sampleTerrain(id); });

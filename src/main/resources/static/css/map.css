@@ -110,6 +110,7 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .swatch b { font-family: var(--g-mono); font-weight: 500; color: var(--p-muted); }
 
 /* ---- the drawer */
+.drawer.wide { width: 42rem; }
 .drawer { top: .6rem; right: .6rem; width: 30rem; max-width: calc(100% - 1.2rem); max-height: calc(100% - 1.2rem); overflow: auto; padding: .55rem .75rem .7rem; }
 .drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; position: sticky; top: -.55rem; background: var(--p-bg); padding: .55rem 0 .4rem; margin: -.55rem 0 .2rem; border-bottom: 1px solid var(--p-line); z-index: 1; }
 .drawer h3 { font-size: .95rem; margin: 0; font-weight: 600; }
@@ -174,7 +175,8 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .probe-mark > i::before, .probe-mark > i::after { content: ""; position: absolute; background: var(--p-reach); }
 .probe-mark > i::before { left: 50%; top: -5px; bottom: -5px; width: 1.5px; margin-left: -.75px; }
 .probe-mark > i::after { top: 50%; left: -5px; right: -5px; height: 1.5px; margin-top: -.75px; }
-.drawer .probe td, .drawer .probe th { white-space: nowrap; }
+.drawer .probe { font-size: .76rem; }
+.drawer .probe td, .drawer .probe th { white-space: nowrap; padding: .12rem .3rem; }
 .drawer .probe a { color: var(--p-fg); text-decoration: none; border-bottom: 1px dotted var(--p-line-strong); }
 .drawer .probe a:hover { color: var(--p-reach); }
 .drawer .probe tr.stale td { color: var(--p-muted); }
