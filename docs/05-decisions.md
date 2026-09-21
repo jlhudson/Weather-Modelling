@@ -466,3 +466,24 @@ their own peak, the daily ones to the allowance, so a 3,912-unit day stood a thi
 calls were the Bureau's warning polls (491 in two days, at no cost) with the paid calls lost among
 them. "Can't it just be a line chart with a coloured line per API source?" — it can. — James,
 21 September 2026.
+
+### W-25 · The diurnal temperature range, per hexagon with a station, from the ledger
+
+**The decision.** Every hexagon with a station carries its station's diurnal temperature range on
+the reading (`station.diurnal`) and in the map's panel: the last complete day, today so far, and
+the mean over the complete days of the last week and the last month with how many days that is.
+A day's range is the Bureau's pairing — the highest reading from 9 am local against the lowest in
+the 24 hours to that 9 am — so it compares with the Bureau's published daily maximum and minimum.
+It is folded from the six-hourly ledger's windows (W-19) into Bureau days (W-21): a window that
+crosses 9 am rises through it, so its high goes to the day starting there and its low to the
+morning ending there; a row without a window stands for its spot reading and counts for nothing.
+A day is complete when its own 24 hours and the 24 before it each drew on three windows. Nothing
+is stored: the ranges are derived on demand and memoised ten minutes. A hexagon without a station
+has none — the range is the ground's, never the model's — and there is no map layer for it.
+
+**Why.** James asked for the daily, weekly and monthly diurnal range on the hexagons, for those
+with stations only. The Bureau's pairing over the same 9 am to 9 am window pairs an afternoon with
+the following night instead, which is a different swing; the mean of complete days, with the count,
+says what the figure rests on while the ledger's windows — kept only since 20 September — fill the
+month in; and the ranges of four spot readings a day would only understate, so the days before the
+windows are not guessed at. — James, 21 September 2026.

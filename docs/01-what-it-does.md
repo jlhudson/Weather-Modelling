@@ -146,8 +146,13 @@ restart knows where the stations are; the latest values live in memory. On every
 station's values ride beside the model's, with the distance and the time; where a station is inside
 the hexagon, it *is* the reading's "now", and where several are, their blend is (§1.2).
 
-A compact ledger — one row per station every six hours, holding the day's rain to 9 am and the running
-maximum — is kept in `station_sample` for the drought maths (§1.7). Stations never write history.
+A compact ledger — one row per station every six hours, holding the day's rain to 9 am, the running
+maximum, and the window's consolidation of the ten-minute readings (W-19) — is kept in `station_sample`
+for the drought maths (§1.7) and for the station's **diurnal temperature range** (W-25): a day's high
+from 9 am against the low in the 24 hours to that 9 am, the Bureau's pairing, folded from the windows
+(one across 9 am gives its high to the day starting there and its low to the morning ending there);
+the last complete day, today so far, and the mean over the complete days of the last week and month,
+derived on demand for the hexagon's station and carried on the reading. Stations never write history.
 
 **The last six readings** of every station — an hour of ten-minute files — are kept in memory and in
 `station_recent`, so a restart does not blind them, and from them a **wind change** is read (W-16):

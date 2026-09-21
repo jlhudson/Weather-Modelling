@@ -142,8 +142,14 @@ What each block is:
 - **`station`** — the nearest station's latest values, inside the hexagon or not, with the distance;
   `windShift`, the wind change it has just measured (docs/01 §1.5) — `grade` the higher of
   `swingGrade` and `speedGrade`, each `slight`, `marked`, `sharp` or null, the directions and speeds
-  it went between, `overMinutes`, and a `description` in words — or null; and `recent`, its last
-  readings newest first, up to six.
+  it went between, `overMinutes`, and a `description` in words — or null; `recent`, its last
+  readings newest first, up to six; and `diurnal` (W-25), the station's diurnal temperature range:
+  `day` the last complete Bureau day — `highC` from 9 am local against `lowC` in the 24 hours to that
+  9 am, the Bureau's pairing, `rangeC` the difference, `date` the day's, `complete` true — `today`
+  the current day so far (`complete` false, `highC` or `rangeC` null before the first afternoon row),
+  and `week` and `month` the `meanRangeC` over the complete days of the last 7 and 30 with `days`
+  how many of the `of`. Null where the ledger holds nothing for the station yet; a hexagon without a
+  station has no `station` block and so no range — it is the ground's, never the model's.
 - **`fire`** — the fire picture (docs/01 §1.8). `grass` is null where the district has no curing figure;
   `official` is null outside South Australia; `leads` is null without land use.
 - **`flood`**, **`drought`** — as before; `drought` is null until the area's state exists, and then so is

@@ -114,7 +114,7 @@
     },
     "station": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "name", "lat", "lon", "heightM", "distanceKm", "insideHexagon", "at", "temperatureC", "apparentTemperatureC", "dewPointC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windDirection", "windGustKmh", "pressureMslHpa", "rainSince9amMm", "rain24hMm", "maxTemperatureC", "minTemperatureC", "visibilityKm", "cloud", "windShift", "recent"],
+      "required": ["id", "name", "lat", "lon", "heightM", "distanceKm", "insideHexagon", "at", "temperatureC", "apparentTemperatureC", "dewPointC", "humidityPct", "windSpeedKmh", "windDirectionDeg", "windDirection", "windGustKmh", "pressureMslHpa", "rainSince9amMm", "rain24hMm", "maxTemperatureC", "minTemperatureC", "visibilityKm", "cloud", "windShift", "recent", "diurnal"],
       "properties": {
         "id": {"type": "string"}, "name": {"type": "string"}, "lat": {"type": "number"}, "lon": {"type": "number"},
         "heightM": {"$ref": "#/$defs/num"}, "distanceKm": {"$ref": "#/$defs/num"}, "insideHexagon": {"type": "boolean"},
@@ -125,8 +125,32 @@
         "maxTemperatureC": {"$ref": "#/$defs/num"}, "minTemperatureC": {"$ref": "#/$defs/num"}, "visibilityKm": {"$ref": "#/$defs/num"},
         "cloud": {"$ref": "#/$defs/str"},
         "windShift": {"oneOf": [{"$ref": "#/$defs/windShift"}, {"type": "null"}]},
-        "recent": {"type": "array", "items": {"$ref": "#/$defs/recentReading"}}
+        "recent": {"type": "array", "items": {"$ref": "#/$defs/recentReading"}},
+        "diurnal": {"oneOf": [{"$ref": "#/$defs/diurnal"}, {"type": "null"}]}
       }
+    },
+    "diurnal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["day", "today", "week", "month"],
+      "properties": {
+        "day": {"oneOf": [{"$ref": "#/$defs/diurnalDay"}, {"type": "null"}]},
+        "today": {"oneOf": [{"$ref": "#/$defs/diurnalDay"}, {"type": "null"}]},
+        "week": {"$ref": "#/$defs/diurnalPeriod"},
+        "month": {"$ref": "#/$defs/diurnalPeriod"}
+      }
+    },
+    "diurnalDay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["date", "highC", "lowC", "rangeC", "complete"],
+      "properties": {
+        "date": {"$ref": "#/$defs/date"}, "highC": {"$ref": "#/$defs/num"}, "lowC": {"$ref": "#/$defs/num"},
+        "rangeC": {"$ref": "#/$defs/num"}, "complete": {"type": "boolean"}
+      }
+    },
+    "diurnalPeriod": {
+      "type": "object", "additionalProperties": false,
+      "required": ["meanRangeC", "days", "of"],
+      "properties": {"meanRangeC": {"$ref": "#/$defs/num"}, "days": {"type": "integer"}, "of": {"type": "integer"}}
     },
     "windShift": {
       "type": "object", "additionalProperties": false,

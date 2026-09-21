@@ -210,6 +210,10 @@ class EndToEndTest {
     au.gully.drought.Drought drought;
     @Autowired
     au.gully.bureau.WindChangeThresholds windChange;
+    @Autowired
+    au.gully.bureau.DiurnalRanges diurnal;
+    @Autowired
+    au.gully.api.Readings readings;
 
     /**
      * Every piece of SQL, once, against the real database: the station register and its ledger, the
@@ -318,6 +322,17 @@ class EndToEndTest {
         assertThat(history.allAt(store.all(), now.plusSeconds(60))).containsKey(h.id());
         assertThat(history.then(h, now.plus(Duration.ofHours(4)))).as("nothing stands beyond three hours").isEmpty();
         assertThat(history.of(h, 5)).hasSize(1);
+        // The diurnal range (W-25) is the station's, from the same ledger: one row in, so today has a
+        // reading and no day is complete yet; a hexagon without a station has none.
+        au.gully.api.Reading withStation = readings.of(h, new au.gully.api.Reading.Point(h.cell().lat(), h.cell().lon()), false);
+        assertThat(withStation.station()).isNotNull();
+        assertThat(withStation.station().diurnal()).isNotNull();
+        assertThat(withStation.station().diurnal().day()).isNull();
+        assertThat(withStation.station().diurnal().today()).isNotNull();
+        assertThat(withStation.station().diurnal().week().of()).isEqualTo(7);
+        assertThat(withStation.station().diurnal().week().days()).isZero();
+        assertThat(withStation.station().diurnal().month().of()).isEqualTo(30);
+        assertThat(diurnal.of(stations.station("023000").get())).isPresent();
         assertThat(history.modelRows()).as("the model never stood in: no upstream is enabled").isZero();
         // The consolidation: the second file's reading went into the window after the row was written, so the
         // row counts the one reading it was made from.

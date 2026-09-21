@@ -892,6 +892,18 @@
         rows.forEach(function (r) { if (r[1] != null && r[1] !== '' && r[1] !== '—') s += '<tr><th>' + esc(r[0]) + '</th><td class="mono">' + esc(r[1]) + '</td></tr>'; });
         return s + '</tbody></table>';
     }
+    // The station's diurnal range (W-25): a day's high from 9 am against the low in the 24 hours to that 9 am.
+    function diurnal(d, id) {
+        if (!d) return '';
+        var day = function (x, soFar) {
+            if (!x) return null;
+            var hl = 'high / low ' + fmt(x.highC, 1) + ' / ' + fmt(x.lowC, 1);
+            return (x.rangeC != null ? fmt(x.rangeC, 1) + ' °C · ' : '') + hl + (soFar || !x.date ? '' : ' · ' + x.date.slice(8, 10) + '/' + x.date.slice(5, 7));
+        };
+        var period = function (p) { return !p ? null : p.meanRangeC != null ? fmt(p.meanRangeC, 1) + ' °C mean · ' + p.days + ' of ' + p.of + ' days' : 'no complete day of ' + p.of; };
+        return '<h2>Diurnal range <span class="muted">' + esc(id) + ' · the day\x27s high from 9 am against the low to 9 am</span></h2>'
+            + kv([['last full day', day(d.day, false)], ['today so far', day(d.today, true)], ['week', period(d.week)], ['month', period(d.month)]]);
+    }
     function cmp(name, a, b, d, unit) {
         var delta = a != null && b != null ? a - b : null;
         return '<tr><td class="name">' + esc(name) + '</td><td class="ground">' + esc(fmt(a, d)) + '</td><td class="fc">' + esc(fmt(b, d)) + '</td><td class="d">' + (delta == null ? '—' : (delta > 0 ? '+' : '') + esc(fmt(delta, d))) + '</td><td class="d muted">' + esc(unit || '') + '</td></tr>';
@@ -953,7 +965,7 @@
                 ['VPD', f.vapourPressureDeficitKpa != null ? f.vapourPressureDeficitKpa + ' kPa' : null], ['mixing height', f.boundaryLayerHeightM != null ? f.boundaryLayerHeightM + ' m' : null]]);
             if (r.warnings && r.warnings.length) { html += '<h2>Warnings</h2><ul class="small mb-1">'; r.warnings.forEach(function (x) { html += '<li>' + esc(x.title) + ' ' + esc(x.phenomena || '') + (x.headline ? ' — ' + esc(x.headline) : '') + ' <span class="muted">until ' + when(x.until) + '</span></li>'; }); html += '</ul>'; }
             if (d.kbdiMm != null) { html += '<h2>Drought</h2>' + kv([['KBDI', d.kbdiMm + ' mm ' + d.kbdiBand], ['drought factor', d.droughtFactor], ['mean annual rain', d.meanAnnualRainfallMm + ' mm'], ['computed for', d.computedFor], ['spun up from', d.spunUpFrom + ' (' + d.days + ' days)'], ['inputs', h.drought && h.drought.from]]); }
-            if (st.id) { html += '<h2>Station ' + esc(st.id) + ' <span class="muted">' + esc(st.name) + (st.insideHexagon ? '' : ' · ' + fmt(st.distanceKm, 1) + ' km away') + '</span></h2>'; html += kv([['at', when(st.at)], ['temperature', st.temperatureC != null ? st.temperatureC + ' °C' : null], ['humidity', st.humidityPct != null ? st.humidityPct + ' %' : null], ['wind', st.windSpeedKmh != null ? st.windSpeedKmh + ' km/h ' + (st.windDirection || '') + ' gust ' + fmt(st.windGustKmh) : null], ['rain since 9am', st.rainSince9amMm != null ? st.rainSince9amMm + ' mm' : null], ['rain to 9am', st.rain24hMm != null ? st.rain24hMm + ' mm' : null], ['max / min', (st.maxTemperatureC != null || st.minTemperatureC != null) ? fmt(st.maxTemperatureC) + ' / ' + fmt(st.minTemperatureC) : null]]); }
+            if (st.id) { html += '<h2>Station ' + esc(st.id) + ' <span class="muted">' + esc(st.name) + (st.insideHexagon ? '' : ' · ' + fmt(st.distanceKm, 1) + ' km away') + '</span></h2>'; html += kv([['at', when(st.at)], ['temperature', st.temperatureC != null ? st.temperatureC + ' °C' : null], ['humidity', st.humidityPct != null ? st.humidityPct + ' %' : null], ['wind', st.windSpeedKmh != null ? st.windSpeedKmh + ' km/h ' + (st.windDirection || '') + ' gust ' + fmt(st.windGustKmh) : null], ['rain since 9am', st.rainSince9amMm != null ? st.rainSince9amMm + ' mm' : null], ['rain to 9am', st.rain24hMm != null ? st.rain24hMm + ' mm' : null], ['max / min', (st.maxTemperatureC != null || st.minTemperatureC != null) ? fmt(st.maxTemperatureC) + ' / ' + fmt(st.minTemperatureC) : null]]); html += diurnal(st.diurnal, st.id); }
             if (st.recent && st.recent.length) {
                 html += '<h2>Last readings <span class="muted">' + esc(st.id) + ' · newest first</span></h2><table class="table table-sm recent"><thead><tr><th>at</th><th class="num">°C</th><th class="num">RH</th><th class="num">wind</th><th>from</th><th class="num">gust</th></tr></thead><tbody>';
                 st.recent.forEach(function (x) { html += '<tr><td class="mono">' + clock(x.at) + '</td><td class="num">' + fmt(x.temperatureC, 1) + '</td><td class="num">' + fmt(x.humidityPct) + '</td><td class="num">' + fmt(x.windSpeedKmh) + '</td><td class="dir">' + (x.windDirectionDeg != null ? '<span class="arrow" style="transform:rotate(' + ((x.windDirectionDeg + 180) % 360) + 'deg)">↑</span> ' + x.windDirectionDeg + '°' : '—') + '</td><td class="num">' + fmt(x.windGustKmh) + '</td></tr>'; });

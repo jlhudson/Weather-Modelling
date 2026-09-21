@@ -1,5 +1,6 @@
 package au.gully.api;
 
+import au.gully.bureau.DiurnalRanges;
 import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
 import au.gully.bureau.StationRegistry;
@@ -30,6 +31,7 @@ public class Readings {
     private final HexagonStore store;
     private final StationRegistry stations;
     private final FirePictures pictures;
+    private final DiurnalRanges diurnal;
 
     /**
      * The reading now: the ask, then the assembly.
@@ -160,7 +162,23 @@ public class Readings {
                 stations.windShift(id).map(w -> new Reading.WindShiftBlock(w.at(), w.grade(), w.swingGrade(), w.speedGrade(), w.fromDeg(), w.toDeg(),
                         w.swingDeg(), w.fromKmh(), w.toKmh(), w.deltaKmh(), w.overMinutes(), w.describe())).orElse(null),
                 stations.recent(id).stream().map(r -> new Reading.RecentReading(r.at(), r.temperatureC(), r.humidityPct(), r.windSpeedKmh(),
-                        r.windDirectionDeg(), r.windGustKmh(), r.rainSince9amMm())).toList());
+                        r.windDirectionDeg(), r.windGustKmh(), r.rainSince9amMm())).toList(),
+                diurnal.of(st).map(Readings::diurnal).orElse(null));
+    }
+
+    /**
+     * The station's diurnal range as the reading carries it (W-25).
+     */
+    static Reading.DiurnalBlock diurnal(DiurnalRanges.Diurnal d) {
+        return new Reading.DiurnalBlock(day(d.day()), day(d.today()), period(d.week()), period(d.month()));
+    }
+
+    private static Reading.DiurnalDay day(DiurnalRanges.Day d) {
+        return d == null ? null : new Reading.DiurnalDay(d.date(), d.highC(), d.lowC(), d.rangeC(), d.complete());
+    }
+
+    private static Reading.DiurnalPeriod period(DiurnalRanges.Period p) {
+        return p == null ? null : new Reading.DiurnalPeriod(p.meanRangeC(), p.days(), p.of());
     }
 
     static Reading.FireBlock fire(FirePicture p) {

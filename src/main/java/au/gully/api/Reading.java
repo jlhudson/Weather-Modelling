@@ -26,7 +26,7 @@ import java.util.Map;
  *                    quarter of its width of its edge - {@code stations} when several were blended,
  *                    {@code neighbours} when the stations around it were (W-13), {@code model} otherwise
  * @param station     the nearest Bureau station's latest values, inside the hexagon or not, with its distance,
- *                    the wind change it has just measured and its last readings
+ *                    the wind change it has just measured, its last readings and its diurnal range (W-25)
  * @param nearby      how the stations' values were blended and brought here, when they were (ring 0 is
  *                    the hexagon's own stations); null otherwise
  * @param drift       the station in the hexagon against the forecast it holds (W-12); null without both
@@ -108,7 +108,23 @@ public record Reading(
                                Double dewPointC, Integer humidityPct, Double windSpeedKmh, Integer windDirectionDeg,
                                String windDirection, Double windGustKmh, Double pressureMslHpa, Double rainSince9amMm,
                                Double rain24hMm, Double maxTemperatureC, Double minTemperatureC, Double visibilityKm,
-                               String cloud, WindShiftBlock windShift, List<RecentReading> recent) {
+                               String cloud, WindShiftBlock windShift, List<RecentReading> recent, DiurnalBlock diurnal) {
+    }
+
+    /**
+     * The station's diurnal temperature range (W-25): a day's range is its highest reading from 9 am
+     * local against the lowest in the 24 hours to that 9 am - the Bureau's pairing - from the ledger's
+     * ten-minute readings. {@code day} is the last complete day, {@code today} the current Bureau day
+     * so far (never complete), {@code week} and {@code month} the mean over the complete days of the
+     * last 7 and 30, saying how many. Null where the ledger holds nothing for the station yet.
+     */
+    public record DiurnalBlock(DiurnalDay day, DiurnalDay today, DiurnalPeriod week, DiurnalPeriod month) {
+    }
+
+    public record DiurnalDay(LocalDate date, Double highC, Double lowC, Double rangeC, boolean complete) {
+    }
+
+    public record DiurnalPeriod(Double meanRangeC, int days, int of) {
     }
 
     /**
