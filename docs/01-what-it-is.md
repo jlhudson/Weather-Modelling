@@ -43,9 +43,12 @@ ground. The polygon is the 48 ray ends joined. Nothing about it is stored: it is
 the terrain in memory, so the sliders on the map preview another rule on every station at once, and
 *set* makes it the rule (kept in `setting`, so a restart keeps it).
 
-**The ocean, a third number.** A ray ends at the water: the first sample at or below sea level
-(the tiles carry bathymetry, so the sea is negative and the shoreline zero) stops it half a step
-short, so the beach is inside and the sea is not. A station with water inside 10 km on any bearing
+**The ocean, a third number.** A ray ends at the water: the first sample of it (the tiles carry
+bathymetry, so the sea is negative and the shoreline zero) stops it half a step short, so the beach
+is inside and the sea is not. Water is water only when it is at least 3 km across along the ray —
+three samples in a row at or below sea level (W-4): a river is a line and never is, so the lower
+Murray, which the tiles read at sea level, is crossed like any dip in the ground; the sea and Lake
+Alexandrina are areas and always are. A station with water inside 10 km on any bearing
 is *coastal*, and every one of its rays is held to the rule's coastal limit, 25 km by default —
 about how far a sea breeze carries on a summer afternoon. Land below sea level reads as water too
 (Lake Eyre, at minus fifteen), which for a reach is right: a salt lake is not the station's ground.

@@ -12,10 +12,13 @@ import java.util.Map;
  * hill is another climate even where it is the station's own height again. A ray cut by height
  * still reaches {@link ReachRule#MIN_KM}, so every station has some ground.
  * <p>
- * A ray ends at the water (W-3): the first sample at or below sea level stops it half a step short,
- * so the shore is inside and the sea is not. A station with water inside {@link #COASTAL_WITHIN_KM}
- * on any bearing is <em>coastal</em>, and every one of its rays is held to the rule's coastal limit:
- * maritime air does not carry far inland, and the ground beyond the sea breeze is not the shore's.
+ * A ray ends at the water (W-3): the first sample of the water stops it half a step short, so the
+ * shore is inside and the sea is not. Water is water only when it is {@link #WATER_ACROSS_KM} across
+ * along the ray (W-4) — a river is a line and never is, the sea and the big lakes are areas and
+ * always are — so the lower Murray, which the tiles read at sea level, ends nothing. A station with
+ * water inside {@link #COASTAL_WITHIN_KM} on any bearing is <em>coastal</em>, and every one of its
+ * rays is held to the rule's coastal limit: maritime air does not carry far inland, and the ground
+ * beyond the sea breeze is not the shore's.
  *
  * @param km      how far the reach goes on each bearing, in bearing order
  * @param cut     why each ray stopped: {@code distance} at the reach itself, {@code height} at the
@@ -37,6 +40,33 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
     public static final double COASTAL_WITHIN_KM = 10;
 
     /**
+     * How wide water has to be along a ray to be water: three samples in a row at or below sea
+     * level. The Murray is a kilometre across at its widest; Lake Alexandrina and the gulfs are tens.
+     */
+    public static final int WATER_ACROSS_SAMPLES = 3;
+    public static final double WATER_ACROSS_KM = WATER_ACROSS_SAMPLES * Terrain.STEP_KM;
+
+    /**
+     * The step at which the water begins on a bearing — the first of {@link #WATER_ACROSS_SAMPLES}
+     * in a row at or below sea level — or 0 when the ray meets none.
+     */
+    static int waterAt(Terrain t, int b) {
+        int run = 0;
+        for (int s = 1; s <= Terrain.STEPS; s++) {
+            double e = t.at(b, s);
+            if (!Double.isNaN(e) && e <= 0) {
+                run++;
+                if (run == WATER_ACROSS_SAMPLES) {
+                    return s - WATER_ACROSS_SAMPLES + 1;
+                }
+            } else {
+                run = 0;
+            }
+        }
+        return 0;
+    }
+
+    /**
      * The reach of a station under a rule, from its terrain.
      */
     public static Reach of(Terrain t, ReachRule.Rule rule) {
@@ -47,6 +77,7 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
             double maxDiff = 0;
             double reached = 0;
             Cut why = Cut.DISTANCE;
+            int water = waterAt(t, b);
             for (int s = 1; s <= Terrain.STEPS; s++) {
                 double e = t.at(b, s);
                 if (Double.isNaN(e)) {
@@ -54,7 +85,7 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
                     break;
                 }
                 double d = s * Terrain.STEP_KM;
-                if (e <= 0) {
+                if (s == water) {
                     why = Cut.WATER;
                     reached = d - Terrain.STEP_KM / 2;
                     if (nearestWater == null || d < nearestWater) {

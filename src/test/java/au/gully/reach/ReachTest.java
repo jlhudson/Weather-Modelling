@@ -107,6 +107,36 @@ class ReachTest {
     }
 
     @Test
+    void aRiverIsNotWaterButALakeIs() {
+        // Bearing 0: a river a sample wide at 6 km, then land. Bearing 12: two samples of water at 6 and 7 km, then
+        // land. Bearing 24: a lake from 12 km on. Bearing 36: a river at 2 km and the sea from 20 km.
+        Terrain t = terrain(39, (b, s) -> switch (b) {
+            case 0 -> s == 6 ? -1 : 39;
+            case 12 -> (s == 6 || s == 7) ? 0 : 39;
+            case 24 -> s >= 12 ? 0 : 39;
+            case 36 -> s == 2 || s >= 20 ? -3 : 39;
+            default -> 39;
+        });
+        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10, 25));
+        // Crossed - and its bed, 40 m below the station, costs 4 km of reach like any dip would.
+        assertThat(r.km()[0]).as("a river a kilometre across is crossed").isEqualTo(36);
+        assertThat(r.cut()[0]).isEqualTo(Reach.Cut.HEIGHT);
+        assertThat(r.km()[12]).as("two kilometres of water is still not water").isEqualTo(36);
+        assertThat(r.km()[24]).as("the lake begins at 12 km: the edge at 11.5").isEqualTo(11.5);
+        assertThat(r.cut()[24]).isEqualTo(Reach.Cut.WATER);
+        assertThat(r.km()[36]).as("past the river, to the sea at 20 km").isEqualTo(19.5);
+        // The lake is 12 km away and the river beside the station is not water: coastal to nothing.
+        assertThat(r.coastal()).isFalse();
+        assertThat(r.waterKm()).isEqualTo(12);
+        // With the lake 6 km away the station is coastal to it, and held to the coastal limit elsewhere.
+        Reach lakeside = Reach.of(terrain(39, (b, s) -> b == 24 ? (s >= 6 ? 0 : 39) : (s == 2 ? -1 : 39)), ReachRule.Rule.of(40, 10, 25));
+        assertThat(lakeside.coastal()).isTrue();
+        assertThat(lakeside.waterKm()).isEqualTo(6);
+        assertThat(lakeside.km()[0]).isEqualTo(25);
+        assertThat(lakeside.cut()[0]).isEqualTo(Reach.Cut.COASTAL);
+    }
+
+    @Test
     void whereTheModelHasNothingTheRayStops() {
         double[] e = new double[Terrain.BEARINGS * Terrain.STEPS];
         Arrays.fill(e, 30);

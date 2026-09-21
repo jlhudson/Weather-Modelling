@@ -68,3 +68,19 @@ the coast as far as any, and inland only as far as its air does; twenty-five kil
 where a sea breeze gives out, and it is a slider because that is a guess to be looked at. Whether the
 inland side should shorten smoothly rather than at a wall is the next thing to see on the shapes. —
 James, 21 September 2026.
+
+### W-4 · Rivers are not water: water is what is three kilometres across
+
+**The decision.** A ray ends at water only where the water is at least 3 km across along the ray —
+three consecutive samples at or below sea level. A river is a line and never is: the lower Murray,
+which the tiles read at sea level below Lock 1, is crossed like any dip in the ground (its bed still
+costs what its depth costs). The sea and the big lakes are areas and always are, so Murray Bridge and
+Strathalbyn still end at Lake Alexandrina. *Coastal* is such water inside 10 km. One constant, no
+slider.
+
+**Why.** Pallamana was coastal to the Murray six kilometres away, every ray capped at 25 km, and
+James asked for rivers to be ignored: a river has little or no effect on the weather beside it, while
+the gulf plainly does. Width is the honest difference between the two, and three samples is the
+narrowest the 125 m tiles can be trusted to tell. Telling a lake from the sea by depth is the next
+refinement if a lake-side station ever reads as coastal wrongly; no South Australian station does
+today. — James, 21 September 2026.
