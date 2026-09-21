@@ -184,3 +184,17 @@ that matter most to the coast — a station in the sea reached nothing, and a he
 along its own spit. Overlap is allowed and the interpolation weighs by cost, so a reach that runs
 out over the gulf does little harm: the far shore is 1/cost² away, and its own stations outweigh it.
 The coastal limit does the work the border did, and it is a slider. — James, 22 September 2026.
+
+### W-11 · Pressure as a colour; the direction comes with the wind, not with a button
+
+**The decision.** *Pressure* (mean sea level, hPa, 990 to 1040) joins the colours a station can be
+coloured by, and the tooltip says it. The *Wind* toggle is gone: choosing *Wind* or *Gust* as the
+colour draws every reporting station's direction at every zoom - the latest as a solid arrow the
+way the wind blows, its length the speed coloured by - and from zoom 8 the mean of the last five
+behind it in grey, as before. Any other colour draws no arrows.
+
+**Why.** James asked for pressure as a selectable colour, and for the direction to come with the
+wind when it is chosen - "I don't need an additional wind button." A separate switch made the
+arrows a second thing to remember, and drew them over a map coloured by something else; the
+direction is part of what *wind* means, so it belongs to the chip. The mean arrow still waits for
+zoom 8 because two arrows a station at the whole-state zoom is a thicket. — James, 22 September 2026.

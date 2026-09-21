@@ -19,9 +19,10 @@
     var VARS = [
         {id: 'temperatureC', name: 'Temperature', unit: '°C', icon: 'temp', range: [0, 45], d: 1},
         {id: 'humidityPct', name: 'Humidity', unit: '%', icon: 'humidity', range: [0, 100], reverse: true},
-        {id: 'windSpeedKmh', name: 'Wind', unit: 'km/h', icon: 'wind', range: [0, 80]},
-        {id: 'windGustKmh', name: 'Gust', unit: 'km/h', icon: 'gust', range: [0, 110]},
+        {id: 'windSpeedKmh', name: 'Wind', hint: 'and its direction', unit: 'km/h', icon: 'wind', range: [0, 80], wind: true},
+        {id: 'windGustKmh', name: 'Gust', hint: 'and the wind\'s direction', unit: 'km/h', icon: 'gust', range: [0, 110], wind: true},
         {id: 'rainSince9amMm', name: 'Rain', hint: 'since 9 am', unit: 'mm', icon: 'rain', range: [0, 25], d: 1},
+        {id: 'pressureMslHpa', name: 'Pressure', hint: 'mean sea level', unit: 'hPa', icon: 'pressure', range: [990, 1040], d: 1},
         {id: 'kbdiMm', name: 'KBDI', hint: 'soil moisture deficit', unit: 'mm', icon: 'drought', range: [0, 203], always: true},
         {id: 'droughtFactor', name: 'Drought factor', hint: '0 to 10', icon: 'drought', range: [0, 10], always: true, d: 1},
         {id: 'heightM', name: 'Height', hint: 'of the station', unit: 'm', icon: 'elevation', range: [0, 800], always: true},
@@ -58,7 +59,7 @@
     var labelLayer = L.layerGroup().addTo(map);
     var probeLayer = L.layerGroup().addTo(map);
     var state = {id: 'temperatureC', selected: null, probe: null};
-    var togs = {labels: true, wind: true, reach: true, all: false};
+    var togs = {labels: true, reach: true, all: false};
     var lastStations = null, lastReach = null;
     var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
 
@@ -138,7 +139,7 @@
     function windWords(deg, kmh, gust) { return deg == null && kmh == null ? '—' : (deg != null ? dirWord(deg) + ' ' + deg + '°' : '—') + ' ' + (kmh != null ? Math.round(kmh) : '—') + ' km/h' + (gust != null ? ' <span class="muted">gust ' + Math.round(gust) + '</span>' : ''); }
     function tip(p) {
         return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours, from the model' : '') + (p.heightM != null ? ' · ' + Math.round(p.heightM) + ' m' : '') + '</span><br>'
-            + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + windTrend(p) + '<br><span class="muted">' + when(p.at) + '</span>'
+            + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.pressureMslHpa != null ? ' · ' + fmt(p.pressureMslHpa, 1) + ' hPa' : '') + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + windTrend(p) + '<br><span class="muted">' + when(p.at) + '</span>'
                 : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) : 'nothing reported yet') + '</span>');
     }
     function stations() {
@@ -167,9 +168,10 @@
             if (togs.labels && z >= 8 && x != null) {
                 L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, -r - 1]}), interactive: false, keyboard: false}).addTo(labelLayer);
             }
-            // The wind (W-9), from zoom 8: the latest as a solid arrow the way it blows, the mean of the last five behind it in grey.
-            if (togs.wind && z >= 8 && p.fresh && p.windSpeedKmh != null && p.windDirectionDeg != null) {
-                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: windGlyph(p), iconSize: [64, 64], iconAnchor: [32, 32]}), interactive: false, keyboard: false}).addTo(labelLayer);
+            // The wind (W-9, W-11): when the colour is the wind or the gust, every reporting station wears its direction - the
+            // latest as a solid arrow the way it blows, its length the speed coloured by; from zoom 8 the mean of the last five behind it in grey.
+            if (v.wind && p.fresh && x != null && p.windDirectionDeg != null) {
+                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: windGlyph(p, x, z >= 8), iconSize: [64, 64], iconAnchor: [32, 32]}), interactive: false, keyboard: false}).addTo(labelLayer);
             }
         });
     }
@@ -179,10 +181,10 @@
         var hx = x - Math.cos(a) * 5, hy = y - Math.sin(a) * 5, px = Math.cos(a + Math.PI / 2) * 3, py = Math.sin(a + Math.PI / 2) * 3;
         return '<g class="' + cls + '"><line x1="32" y1="32" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"/><polyline points="' + (hx + px).toFixed(1) + ',' + (hy + py).toFixed(1) + ' ' + x.toFixed(1) + ',' + y.toFixed(1) + ' ' + (hx - px).toFixed(1) + ',' + (hy - py).toFixed(1) + '"/></g>';
     }
-    function windGlyph(p) {
+    function windGlyph(p, kmh, withMean) {
         var s = '<svg class="wind" viewBox="0 0 64 64" width="64" height="64">';
-        if (p.windMeanDeg != null && p.windMeanKmh != null && p.windMeanOver > 1) s += arrow(p.windMeanDeg, p.windMeanKmh, 'mean');
-        s += arrow(p.windDirectionDeg, p.windSpeedKmh, 'now');
+        if (withMean && p.windMeanDeg != null && p.windMeanKmh != null && p.windMeanOver > 1) s += arrow(p.windMeanDeg, p.windMeanKmh, 'mean');
+        s += arrow(p.windDirectionDeg, kmh, 'now');
         return s + '</svg>';
     }
     function windTrend(p) {
@@ -505,7 +507,7 @@
 
     // ---- wiring
     document.querySelectorAll('.tog').forEach(function (b) {
-        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels' || k === 'wind') stations(); else drawReach(); });
+        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
     ['reachKm', 'kmPer100m', 'coastalKm'].forEach(function (id) {
