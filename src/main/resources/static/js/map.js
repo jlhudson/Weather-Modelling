@@ -58,7 +58,7 @@
     var labelLayer = L.layerGroup().addTo(map);
     var probeLayer = L.layerGroup().addTo(map);
     var state = {id: 'temperatureC', selected: null, probe: null};
-    var togs = {labels: true, reach: true, all: false};
+    var togs = {labels: true, wind: true, reach: true, all: false};
     var lastStations = null, lastReach = null;
     var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
 
@@ -138,7 +138,7 @@
     function windWords(deg, kmh, gust) { return deg == null && kmh == null ? '—' : (deg != null ? dirWord(deg) + ' ' + deg + '°' : '—') + ' ' + (kmh != null ? Math.round(kmh) : '—') + ' km/h' + (gust != null ? ' <span class="muted">gust ' + Math.round(gust) + '</span>' : ''); }
     function tip(p) {
         return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours, from the model' : '') + (p.heightM != null ? ' · ' + Math.round(p.heightM) + ' m' : '') + '</span><br>'
-            + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + '<br><span class="muted">' + when(p.at) + '</span>'
+            + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + windTrend(p) + '<br><span class="muted">' + when(p.at) + '</span>'
                 : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) : 'nothing reported yet') + '</span>');
     }
     function stations() {
@@ -167,7 +167,26 @@
             if (togs.labels && z >= 8 && x != null) {
                 L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, -r - 1]}), interactive: false, keyboard: false}).addTo(labelLayer);
             }
+            // The wind (W-9), from zoom 8: the latest as a solid arrow the way it blows, the mean of the last five behind it in grey.
+            if (togs.wind && z >= 8 && p.fresh && p.windSpeedKmh != null && p.windDirectionDeg != null) {
+                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: windGlyph(p), iconSize: [64, 64], iconAnchor: [32, 32]}), interactive: false, keyboard: false}).addTo(labelLayer);
+            }
         });
+    }
+    // An arrow from the centre, its length the speed (capped), pointing where the wind goes: the direction is where it comes from.
+    function arrow(deg, kmh, cls) {
+        var len = 8 + Math.min(22, kmh * .45), a = (deg + 180 - 90) * Math.PI / 180, x = 32 + Math.cos(a) * len, y = 32 + Math.sin(a) * len;
+        var hx = x - Math.cos(a) * 5, hy = y - Math.sin(a) * 5, px = Math.cos(a + Math.PI / 2) * 3, py = Math.sin(a + Math.PI / 2) * 3;
+        return '<g class="' + cls + '"><line x1="32" y1="32" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"/><polyline points="' + (hx + px).toFixed(1) + ',' + (hy + py).toFixed(1) + ' ' + x.toFixed(1) + ',' + y.toFixed(1) + ' ' + (hx - px).toFixed(1) + ',' + (hy - py).toFixed(1) + '"/></g>';
+    }
+    function windGlyph(p) {
+        var s = '<svg class="wind" viewBox="0 0 64 64" width="64" height="64">';
+        if (p.windMeanDeg != null && p.windMeanKmh != null && p.windMeanOver > 1) s += arrow(p.windMeanDeg, p.windMeanKmh, 'mean');
+        s += arrow(p.windDirectionDeg, p.windSpeedKmh, 'now');
+        return s + '</svg>';
+    }
+    function windTrend(p) {
+        return p.windMeanOver > 1 ? '<br><span class="muted">mean of the last ' + p.windMeanOver + ' (' + p.windMeanMinutes + ' min): ' + (p.windMeanDeg != null ? dirWord(p.windMeanDeg) + ' ' + p.windMeanDeg + '° ' : 'calm ') + Math.round(p.windMeanKmh) + ' km/h' + (p.windMeanGustKmh != null ? ' gust ' + Math.round(p.windMeanGustKmh) : '') + '</span>' : '';
     }
 
     // ---- the reach (W-2, W-3): every station's polygon under the rule on the sliders, the clicked one's lit
@@ -432,12 +451,15 @@
                     ['temperature', s.temperatureC != null ? fmt(s.temperatureC, 1) + ' °C' + (s.apparentTemperatureC != null ? ' <span class="muted">feels ' + fmt(s.apparentTemperatureC, 1) + '</span>' : '') : null],
                     ['dew point', s.dewPointC != null ? fmt(s.dewPointC, 1) + ' °C' : null],
                     ['humidity', s.humidityPct != null ? s.humidityPct + ' %' : null],
-                    ['wind', windWords(s.windDirectionDeg, s.windSpeedKmh, s.windGustKmh)],
+                    ['wind now', windWords(s.windDirectionDeg, s.windSpeedKmh, s.windGustKmh)],
+                    ['wind, mean of ' + (s.windMeanOver || 0), s.windMeanOver > 1 ? (s.windMeanDeg != null ? dirWord(s.windMeanDeg) + ' ' + s.windMeanDeg + '°' : 'calm') + ' ' + Math.round(s.windMeanKmh) + ' km/h' + (s.windMeanGustKmh != null ? ' <span class="muted">gust ' + Math.round(s.windMeanGustKmh) + '</span>' : '') + ' <span class="muted">over ' + s.windMeanMinutes + ' min</span>' : null],
                     ['pressure', s.pressureMslHpa != null ? fmt(s.pressureMslHpa, 1) + ' hPa' : null],
                     ['rain since 9 am', s.rainSince9amMm != null ? fmt(s.rainSince9amMm, 1) + ' mm' : null],
                     ['rain to 9 am', s.rain24hMm != null ? fmt(s.rain24hMm, 1) + ' mm' : null],
                     ['today', (s.minTemperatureC != null || s.maxTemperatureC != null) ? 'min ' + fmt(s.minTemperatureC, 1) + ' · max ' + fmt(s.maxTemperatureC, 1) + ' °C' : null],
-                    ['sky', esc(s.cloud)]
+                    ['sky', s.cloud != null ? esc(s.cloud) + (s.cloudOktas != null ? ' <span class="muted">' + s.cloudOktas + ' oktas</span>' : '') : null],
+                    ['visibility', s.visibilityKm != null ? fmt(s.visibilityKm, 0) + ' km' : null],
+                    ['delta-T', s.deltaTC != null ? fmt(s.deltaTC, 1) + ' °C <span class="muted">dry-bulb minus wet-bulb</span>' : null]
                 ]);
             } else {
                 html += '<p class="muted">Nothing reported since the start.</p>';
@@ -484,7 +506,7 @@
 
     // ---- wiring
     document.querySelectorAll('.tog').forEach(function (b) {
-        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
+        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels' || k === 'wind') stations(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
     ['reachKm', 'kmPer100m', 'coastalKm'].forEach(function (id) {

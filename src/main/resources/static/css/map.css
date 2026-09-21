@@ -202,3 +202,10 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .drawer .reading .tile.fire .v { color: #f97316; }
 .drawer .reading .tile .who { font-family: var(--g-mono); font-size: .66rem; color: var(--p-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: .1rem; }
 @media (max-width: 767.98px) { .drawer .reading { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---- the wind at a station (W-9): two arrows from one point - the latest solid, the mean of the last five grey */
+.wind { display: block; overflow: visible; }
+.wind line, .wind polyline { fill: none; stroke-linecap: round; stroke-linejoin: round;
+    filter: drop-shadow(0 0 1.5px var(--bs-body-bg)) drop-shadow(0 0 1.5px var(--bs-body-bg)); }
+.wind .now line, .wind .now polyline { stroke: var(--bs-body-color); stroke-width: 2.4; }
+.wind .mean line, .wind .mean polyline { stroke: #6b7280; stroke-width: 3; opacity: .6; }

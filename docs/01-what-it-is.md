@@ -15,7 +15,12 @@ rain since 9 am and to 9 am, the day's maximum and minimum, the sky — into mem
 readings per station are kept in memory too, for the console. Nothing about an observation is
 written to the database: it is ten minutes old at most and the next file replaces it.
 
-A station is *reporting* when its latest observation is under seventy minutes old.
+A station is *reporting* when its latest observation is under seventy minutes old. Beside what it
+last said, every station carries its wind as a trend (W-9): the mean speed, gust and direction (as
+a vector) of its newest five readings - about fifty minutes of the ten-minute file - so a swing shows
+against what the wind has mostly been. The map draws both from zoom 8, the latest as a solid arrow
+the way the wind blows and the mean behind it in grey; the drawer lists them with everything else
+the file carries for the station - pressure, dew point, visibility, cloud and oktas, delta-T.
 
 ## 2. The reach
 

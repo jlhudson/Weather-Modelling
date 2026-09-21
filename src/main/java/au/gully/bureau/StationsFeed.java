@@ -21,6 +21,11 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class StationsFeed {
 
+    /**
+     * How many of the last readings the wind's mean is taken over.
+     */
+    public static final int WIND_MEAN_OVER = 5;
+
     private final StationRegistry stations;
     private final List<java.util.function.BiConsumer<Station, Map<String, Object>>> decorators = new java.util.concurrent.CopyOnWriteArrayList<>();
 
@@ -90,6 +95,17 @@ public class StationsFeed {
         p.put("maxTemperatureC", o == null ? null : o.maxTemperatureC());
         p.put("minTemperatureC", o == null ? null : o.minTemperatureC());
         p.put("cloud", o == null ? null : o.cloud());
+        p.put("cloudOktas", o == null ? null : o.cloudOktas());
+        p.put("visibilityKm", o == null ? null : o.visibilityKm());
+        p.put("deltaTC", o == null ? null : o.deltaTC());
+        // The wind as a trend (W-9): the mean of the last readings, the latest included, speed as a mean and
+        // direction as a vector, so a swing shows against what it has mostly been.
+        WindMean w = WindMean.of(stations.recent(s.id()), WIND_MEAN_OVER);
+        p.put("windMeanKmh", w == null ? null : w.kmh());
+        p.put("windMeanDeg", w == null ? null : w.deg());
+        p.put("windMeanGustKmh", w == null ? null : w.gustKmh());
+        p.put("windMeanOver", w == null ? null : w.readings());
+        p.put("windMeanMinutes", w == null ? null : w.minutes());
         for (java.util.function.BiConsumer<Station, Map<String, Object>> d : decorators) {
             d.accept(s, p);
         }

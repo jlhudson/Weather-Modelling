@@ -153,3 +153,16 @@ drought use the same polygon as the current and that a station without the right
 rather than guessed for. Taking the cost along the ray, rather than the bare distance, is what keeps
 a station across a ridge from counting as much as one across the plain, and it costs nothing - the
 terrain is already there. — James, 22 September 2026.
+
+### W-9 · The wind as a trend at every station, and the whole of the file in the drawer
+
+**The decision.** Every station carries, beside its latest wind, the mean of its newest five
+readings — speed and gust as means, direction as a vector — with how many and over how long. The
+map draws both from zoom 8 (the latest solid, the mean grey), the tooltip says both, and the drawer
+lists them with the rest of what the file carries: pressure, dew point, apparent temperature,
+visibility, cloud and oktas, delta-T, the day's maximum and minimum.
+
+**Why.** James asked to see the wind now and a five-reading average at every station, and the
+pressure and the other Bureau fields when a station is clicked. Five readings is fifty minutes of a
+ten-minute file: long enough that a gust is not a change, short enough that a change is not lost.
+— James, 22 September 2026.
