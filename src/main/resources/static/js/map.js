@@ -176,10 +176,11 @@
         for (var i = 0; i < lastReach.features.length; i++) if (lastReach.features[i].properties.id === id) return lastReach.features[i];
         return null;
     }
-    // Subtle: a hairline of cyan and the faintest wash, the clicked one a little firmer.
+    // The clicked station's reach is shaded; every other reach, when All reaches is on, is a dotted
+    // hairline and no fill - the interior stays clickable, so a click inside any reach opens its station.
     function reachStyle(lit) {
-        return lit ? {color: REACH, weight: 1.5, opacity: .85, fillColor: REACH, fillOpacity: .06, lineJoin: 'round'}
-            : {color: REACH, weight: 1, opacity: .5, fillColor: REACH, fillOpacity: .03, lineJoin: 'round'};
+        return lit ? {color: REACH, weight: 1.5, opacity: .9, fillColor: REACH, fillOpacity: .2, lineJoin: 'round'}
+            : {color: REACH, weight: 1, opacity: .55, dashArray: '1 4', lineCap: 'round', fillColor: REACH, fillOpacity: 0, lineJoin: 'round'};
     }
     function reachTip(p) {
         return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.coastal ? ' · coastal' : '') + '</span><br>reach ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
