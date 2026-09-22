@@ -69,6 +69,9 @@ class EndToEndTest {
     @Autowired
     au.gully.record.Record record;
 
+    @Autowired
+    au.gully.record.Backfill backfill;
+
     @BeforeAll
     static void dockerOrSkip() {
         assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker is not available");
@@ -317,6 +320,9 @@ class EndToEndTest {
         // A restart reads it back as a point.
         stations.rehydrate();
         assertThat(stations.points()).extracting(au.gully.bureau.Station::id).contains(pointId);
+        // The backfill's tick never walks it (W-14): a point with a year missing is filled on an ask, not on the timer.
+        assertThat(backfill.wants(stations.points().stream().filter(p -> p.id().equals(pointId)).findFirst().orElseThrow(), java.time.Instant.now(), true)).isNotNull();
+        assertThat(backfill.pending()).extracting(au.gully.bureau.Station::id).doesNotContain(pointId);
     }
 
     @Test
@@ -378,9 +384,18 @@ class EndToEndTest {
             assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");
             if (page.equals("/console/map")) {
                 assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"legend\"").contains("id=\"detail\"").contains("/js/map.js").contains("id=\"reachKm\"").contains("id=\"kmPer100m\"");
+                // The page carries the console's own API key (W-14), and it opens the API's readings like any consumer's.
+                java.util.regex.Matcher key = java.util.regex.Pattern.compile("data-api-key=\"(weather_[A-Za-z0-9_-]+)\"").matcher(r.getBody());
+                assertThat(key.find()).as("the console key on the map page").isTrue();
+                ResponseEntity<String> asked = client().get().uri("/api/v1/reading?lat=-34.9257&lon=138.5832").header("X-Api-Key", key.group(1)).retrieve().toEntity(String.class);
+                assertThat(asked.getStatusCode()).isEqualTo(HttpStatus.OK);
+                ResponseEntity<String> keys = client().get().uri("/console/api-keys").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
+                assertThat(keys.getBody()).contains("console");
+                // Its scope is the readings: the diagnostics refuse it.
+                assertThat(client().get().uri("/api/diagnostics").header("X-Api-Key", key.group(1)).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             }
         }
-        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&coastalKm=15", "/console/map/probe?lat=-34.9&lon=138.6", "/console/map/reading?lat=-34.93&lon=138.6",
+        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&coastalKm=15",
                 "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);

@@ -341,6 +341,15 @@
     // stations whose reach contains the point, or from a point of ours where none can say; then the
     // stations that fed it with their shares, and the nearest outside with why (the probe, W-5).
     function clearProbe() { state.probe = null; probeLayer.clearLayers(); }
+    // A click is an ask from outside (W-14): it goes through the API's front door with the console's own key - scope,
+    // rate and access log like any consumer's - so what the map shows is what The Hub gets. A refusal is a problem
+    // detail, and its title and detail are the note.
+    var API_KEY = document.querySelector('.map-page').dataset.apiKey || '';
+    function api(url) {
+        return fetch(url, {headers: {'X-Api-Key': API_KEY, 'Accept': 'application/json'}}).then(function (r) {
+            return r.json().then(function (o) { if (!r.ok) throw new Error((o && o.title ? o.title + ': ' + o.detail : 'HTTP ' + r.status) + ' (' + url.split('?')[0] + ')'); return o; });
+        });
+    }
     // The reading at a point; forced (W-13), the upstreams are asked first - the Bureau's file now, the days the stations
     // in reach are missing, a point of ours' current again - and the drawer says what came.
     function probe(lat, lon, force) {
@@ -351,7 +360,7 @@
         probeLayer.addLayer(L.marker([lat, lon], {icon: L.divIcon({className: 'probe-mark', html: '<i></i>', iconSize: [18, 18], iconAnchor: [9, 9]}), interactive: false, keyboard: false}));
         note(force ? 'grabbing…' : 'asking…');
         var q = 'lat=' + lat.toFixed(5) + '&lon=' + lon.toFixed(5);
-        Promise.all([fetch('/console/map/reading?' + q + (force ? '&force=true' : '')).then(function (r) { return r.json(); }), fetch('/console/map/probe?' + q).then(function (r) { return r.json(); })]).then(function (both) {
+        Promise.all([api('/api/v1/reading?' + q + (force ? '&force=true' : '')), api('/api/v1/stations/at?' + q)]).then(function (both) {
             var o = both[0], pr = both[1];
             var ids = o.stations.map(function (s) { return s.id; });
             state.probe = {lat: lat, lon: lon, ids: ids};

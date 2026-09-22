@@ -4,11 +4,9 @@ import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
 import au.gully.bureau.StationsFeed;
 import au.gully.platform.Status;
-import au.gully.reach.Probe;
 import au.gully.reach.ReachRule;
 import au.gully.reach.Reaches;
 import au.gully.reach.TerrainSampler;
-import au.gully.reading.Readings;
 import au.gully.record.Droughts;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -43,9 +41,8 @@ public class MapController {
     private final Reaches reaches;
     private final ReachRule rule;
     private final TerrainSampler sampler;
-    private final Probe probe;
     private final Droughts droughts;
-    private final Readings readings;
+    private final ConsoleKey consoleKey;
 
     @GetMapping
     public String page(Model model) {
@@ -58,6 +55,8 @@ public class MapController {
         model.addAttribute("coastalKm", r.coastalKm());
         model.addAttribute("reachBy", rule.by());
         model.addAttribute("reachSince", rule.since() == null ? null : rule.since().toString());
+        // The map asks through the API with the console's own key (W-14), so a click is an ask from outside.
+        model.addAttribute("apiKey", consoleKey.current());
         return "map";
     }
 
@@ -110,23 +109,7 @@ public class MapController {
         return out;
     }
 
-    /**
-     * A point on the map: the stations whose reach contains it, and the nearest few whose does not (W-5).
-     */
-    /**
-     * The reading at a point (W-8): what a click asks for.
-     */
-    @GetMapping(value = "/reading", produces = "application/json")
-    @ResponseBody
-    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon, @RequestParam(defaultValue = "false") boolean force) {
-        return readings.at(lat, lon, Instant.now(), force);
-    }
-
-    @GetMapping(value = "/probe", produces = "application/json")
-    @ResponseBody
-    public Map<String, Object> probe(@RequestParam double lat, @RequestParam double lon) {
-        return probe.at(lat, lon);
-    }
+    // A click on the map asks /api/v1/reading and /api/v1/stations/at with the console's key (W-14): there is no console twin.
 
     /**
      * Sample one station's terrain now, ahead of the background job.

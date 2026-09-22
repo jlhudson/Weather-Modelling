@@ -97,21 +97,24 @@ public class Readings {
         for (Station s : stations.bureau()) {
             member(s, lat, lon, height, r, here, now).ifPresent(members::add);
         }
-        if (force) {
-            // The days each station in reach is missing, filled now; then the members again, since a drought may have moved.
-            int days = 0;
-            for (Member m : members) {
-                Backfill.Range want = backfill.wants(m.station(), now, true);
+        // A member with no drought to give has its missing days fetched now (W-14), rested six hours between tries;
+        // forced, every member has every missing day fetched. Then the members again, since a drought may have moved.
+        int days = 0;
+        for (Member m : members) {
+            if (force || m.drought().isEmpty()) {
+                Backfill.Range want = backfill.wants(m.station(), now, force);
                 if (want != null) {
                     days += backfill.fill(m.station(), want, now);
                 }
             }
+        }
+        if (force) {
             grabbed.put("daysFilled", days);
-            if (days > 0) {
-                members.clear();
-                for (Station s : stations.bureau()) {
-                    member(s, lat, lon, height, r, here, now).ifPresent(members::add);
-                }
+        }
+        if (days > 0) {
+            members.clear();
+            for (Station s : stations.bureau()) {
+                member(s, lat, lon, height, r, here, now).ifPresent(members::add);
             }
         }
         String from = "stations";

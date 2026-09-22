@@ -23,7 +23,8 @@ import java.util.Optional;
  * after a month costs a month, not a year.
  * <p>
  * One station a tick, so the day's allowance is touched lightly: a year is twenty-six units and a
- * week one, against ten thousand a day.
+ * week one, against ten thousand a day. The tick walks the Bureau's stations only (W-14): a point
+ * of ours is filled when an ask lands in its reach, and never on a timer.
  */
 @Slf4j
 @Component
@@ -55,7 +56,7 @@ public class Backfill {
     }
 
     /**
-     * The stations whose year has days missing beyond the tolerance, or beyond the archive's lag.
+     * The Bureau's stations whose year has days missing beyond the tolerance, or beyond the archive's lag.
      */
     public List<Station> pending() {
         return pending(Instant.now());
@@ -63,7 +64,7 @@ public class Backfill {
 
     List<Station> pending(Instant now) {
         List<Station> out = new ArrayList<>();
-        for (Station s : stations.all()) {
+        for (Station s : stations.bureau()) {
             if (wants(s, now) != null) {
                 out.add(s);
             }
@@ -101,11 +102,11 @@ public class Backfill {
     }
 
     /**
-     * One tick: the first station wanting days, filled.
+     * One tick: the first Bureau station wanting days, filled.
      */
     public boolean tick() {
         Instant now = Instant.now();
-        for (Station s : stations.all()) {
+        for (Station s : stations.bureau()) {
             Range r = wants(s, now);
             if (r != null) {
                 fill(s, r, now);

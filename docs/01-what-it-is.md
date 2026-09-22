@@ -110,7 +110,9 @@ kilometre; 2 for the dew point) before they are blended; humidity, wind, gust, p
 are blended as they are, the wind's direction as a vector. Each station's KBDI and drought factor
 are blended by the same weights - one polygon per station carries its current and its drought
 alike. A station lacking a value stays out of that value's blend, and the reading names the
-stations behind every value. The forest fire danger index (McArthur Mk 5, Noble, Bary and Gill 1980)
+stations behind every value. A member with no drought to give - its record too short to compute
+one - has its missing days fetched then and there (W-14), once per six hours per station, so the
+next ask has it. The forest fire danger index (McArthur Mk 5, Noble, Bary and Gill 1980)
 is computed from the blended temperature, humidity, wind and drought factor, and is null when any
 is missing rather than made from a guess.
 
@@ -123,7 +125,8 @@ block, with the rain since 9 am and the day's total summed from the 48 hours of 
 and a year of the archive for its record. The first ask at a new place takes a few seconds; every
 later ask inside its reach is immediate. A point no ask has used for 548 days is dropped again,
 record and all. A point never gets a six-hour ledger: its days come from the archive, not from
-folding its fetches. On the map a point is an amber diamond, filled with its value like a station.
+folding its fetches; and nothing of a point moves on a timer (W-14) - its current and its missing
+days are fetched when an ask lands in its reach, and only then. On the map a point is an amber diamond, filled with its value like a station.
 
 **A forced ask** - the *force grab* pill in the reading's drawer, or `&force=true` on the route (W-13) -
 goes to the upstreams first, whatever the timers say: the Bureau's file is read now, the days each
@@ -154,8 +157,12 @@ Open-Meteo's forecast costs three units. Nothing fetches a forecast yet.
 
 One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
 where it is, filled when it is reporting and hollow when it is not, coloured by what it last said;
-a click opens everything held for it. The Upstreams page is the allowance table, the spend chart, the
-breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
+a click opens everything held for it. A click anywhere else is an ask from outside, made the way
+The Hub makes one (W-14): through the API's front door with the console's own key - a key issued
+to the consumer `console` with the readings scope, carried on the map page, listed and revocable on
+the API keys page like any other, issued again on the next map page if revoked - so the flow the
+operator watches is the flow a consumer gets, rate, access log and all. The Upstreams page is the
+allowance table, the spend chart, the breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
 startup record. API keys issues and revokes keys with a scope.
 
 ## 8. The API

@@ -237,3 +237,23 @@ hour a point's current is kept, the backfill's six-hour rest and three-day toler
 force should do where stations reach, he chose the Bureau re-read over asking the model at the
 exact point: the blend is the reading there, and a point dropped inside a reach would be a second
 answer to argue with. — James, 22 September 2026.
+
+### W-14 · The ask, to the letter: points only on request, a droughtless member filled, the click through the API
+
+**The decision.** Three things, so the code does what the spec says. A point of ours is never
+touched by a timer: the backfill's tick walks the Bureau's stations only, and a point's current and
+missing days are fetched when an ask lands in its reach, and only then. An ordinary ask fills a
+member station whose record is too short for a drought, then and there (rested six hours between
+tries per station), so the next ask has it. And a click on the map is an ask from outside: it goes
+to `/api/v1/reading` and `/api/v1/stations/at` through the API's front door with the console's own
+key - issued to the consumer `console` with the readings scope, carried on the map page, listed on
+the API keys page like any other and issued again if revoked. The console's twin routes for the
+reading and the probe are gone. The console key is the one whose plaintext the service keeps, in
+the setting table, because the page has to carry it.
+
+**Why.** James set out the flow - inside a polygon, IDW over the stations, a station without
+drought grabbed; outside, a point of ours with its NOW and its drought, reused by later asks in
+its polygon, its NOW only ever fetched on request - and asked for it to be confirmed. Two things
+differed: a point's record was topped up by the timer, and a member without drought was left out
+rather than fetched. He chose both fixes, and added that the click is meant to represent an API
+call from outside, so it should be one, to keep the process flow honest. — James, 22 September 2026.

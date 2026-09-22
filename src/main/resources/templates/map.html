@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html th:replace="~{layout :: page('Map', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
 <body>
-<section class="map-page">
+<section class="map-page" th:attr="data-api-key=${apiKey}">
     <!-- The icons, once, as symbols. Strokes only, so they take the text colour. -->
     <svg style="display:none" xmlns="http://www.w3.org/2000/svg">
         <symbol id="i-temp" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 9v6"/></symbol>
