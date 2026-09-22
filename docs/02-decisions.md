@@ -281,4 +281,6 @@ it - and three tickers ran whether or not anything needed doing. Now the store i
 restart loses nothing, the history is rebuilt from what was stored rather than from what happened
 to be in memory, and the service idles at the cost of one small conditional GET every ten minutes.
 Three days of raw readings is enough to fold a day the housekeeping missed; the windows and the days
-are the history. — James, 22 September 2026.
+are the history. One tightening came with the fold: a day is the station's own only when every one
+of its four windows has a reading, because a maximum taken from part of a day - the service started
+at dusk - is not the day's, and the archive's is. — James, 22 September 2026.

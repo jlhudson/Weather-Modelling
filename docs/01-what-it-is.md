@@ -97,7 +97,8 @@ humidity's extremes, the wind's mean and maximum, the strongest gust, and the Bu
 figures as they stood at the window's last reading), and the day into `station_day`: dated by the
 9 am it began at, its rain the total to 9 am that the first reading at or after 9 am publishes, its
 maximum the highest of the day's windows and the running maximum published just before 9 am. A day
-without a total or without a reading is left absent for the archive to fill. The fold is
+without a total, or without a reading in each of its four windows - a restart at dusk, a station
+silent till evening - is left absent for the archive to fill, whose maximum is the whole day's. The fold is
 idempotent and looks back three days, so a run that was missed is caught up by the next. Both
 tables are kept 548 days.
 

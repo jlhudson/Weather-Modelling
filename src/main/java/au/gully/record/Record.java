@@ -32,9 +32,10 @@ import java.util.concurrent.ConcurrentSkipListMap;
  * {@code station_hour6}, and the day itself, written to {@code station_day}. The day's rain is the
  * total to 9 am that the first reading at or after 9 am publishes; its maximum the highest of the
  * day's windows and of the running maximum the Bureau published just before 9 am. A day is written
- * only when it has a rain figure and a window; one with neither is left absent for the archive to
- * fill. The fold is idempotent, and the housekeeping folds the last three days lacking their own
- * row, so a run that was missed is caught up by the next.
+ * only when it has a rain figure and a reading in each of its four windows; one without is left
+ * absent for the archive to fill, whose maximum is the whole day's where a part-day's is not. The
+ * fold is idempotent, and the housekeeping folds the last three days lacking their own row, so a
+ * run that was missed is caught up by the next.
  * <p>
  * The days are held in memory for every station, the last {@link #KEEP}: it is what the drought
  * integrates over, on demand, and it is small - eighty stations at five hundred days.
@@ -60,6 +61,7 @@ public class Record {
      * The windows end on these local hours; the day turns on the second.
      */
     static final int[] BOUNDARY_HOURS = {3, 9, 15, 21};
+    static final int WINDOWS_PER_DAY = BOUNDARY_HOURS.length;
     public static final LocalTime DAY_TURNS_AT = LocalTime.of(9, 0);
 
     public static final String SOURCE_BUREAU = "bureau";
@@ -182,7 +184,9 @@ public class Record {
             }
         }
         Double rain = closing == null ? null : closing.rain24hMm();
-        Optional<Day> d = rain == null || max == null ? Optional.empty() : Optional.of(new Day(day, rain, max, SOURCE_BUREAU));
+        // A day is the station's own only when every one of its four windows has a reading: a maximum taken from part
+        // of a day - a restart at dusk, a station silent till evening - is not the day's maximum, and the archive's is.
+        Optional<Day> d = rain == null || max == null || out.size() < WINDOWS_PER_DAY ? Optional.empty() : Optional.of(new Day(day, rain, max, SOURCE_BUREAU));
         return new Folded(out, d);
     }
 

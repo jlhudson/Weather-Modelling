@@ -94,6 +94,11 @@ class RecordTest {
         assertThat(f.day()).isEmpty();
         // A total but no reading inside the day: nothing to take a maximum from, so the archive has the day.
         assertThat(Record.fold(LocalDate.of(2026, 9, 20), ADELAIDE, List.of(ob("2026-09-21T09:00", 12, 0.0, 3.6, null))).day()).isEmpty();
+        // A total and three windows of four - the service started at dusk - is not the day's maximum either.
+        Record.Folded dusk = Record.fold(LocalDate.of(2026, 9, 20), ADELAIDE, List.of(ob("2026-09-20T18:00", 20, 0.0, null, null), ob("2026-09-21T00:00", 14, 0.0, null, null),
+                ob("2026-09-21T06:00", 10, 0.0, null, null), ob("2026-09-21T09:00", 12, 0.0, 3.6, 12.0)));
+        assertThat(dusk.windows()).hasSize(3);
+        assertThat(dusk.day()).isEmpty();
         InMemory r = new InMemory();
         assertThat(r.days("023000")).isEmpty();
         assertThat(r.missing("023000", LocalDate.of(2026, 9, 18), LocalDate.of(2026, 9, 20))).hasSize(3);
