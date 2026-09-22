@@ -412,10 +412,13 @@ class EndToEndTest {
         assertThat(login.getHeaders().getLocation().toString()).endsWith("/console/map");
         String session = login.getHeaders().containsHeader(HttpHeaders.SET_COOKIE) ? firstCookie(login.getHeaders()) : cookie;
 
-        for (String page : new String[]{"/console/map", "/console/upstreams", "/console/upstreams?calls=all", "/console/diagnostics", "/console/api-keys"}) {
+        for (String page : new String[]{"/console/map", "/console/upstreams", "/console/upstreams?calls=all", "/console/diagnostics", "/console/api-keys", "/console/admin"}) {
             ResponseEntity<String> r = client().get().uri(page).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(page).isEqualTo(HttpStatus.OK);
             assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");
+            if (page.equals("/console/admin")) {
+                assertThat(r.getBody()).contains("/console/admin/reset").contains("station_reading");
+            }
             if (page.equals("/console/map")) {
                 assertThat(r.getBody()).contains("/css/map.css").contains("id=\"side\"").contains("id=\"legend\"").contains("id=\"detail\"").contains("/js/map.js").contains("id=\"reachKm\"").contains("id=\"kmPer100m\"");
                 // The page carries the console's own API key (W-14), and it opens the API's readings like any consumer's.
@@ -440,6 +443,27 @@ class EndToEndTest {
         ResponseEntity<Void> anonymous = client().get().uri("/console/map").retrieve().toEntity(Void.class);
         assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(anonymous.getHeaders().getLocation().toString()).endsWith("/login");
+    }
+
+    /**
+     * The reset (W-18): every station, reading, window, day and terrain gone, from the tables and from memory;
+     * the keys and the rule kept; and the next file taken in as on a fresh deployment.
+     */
+    @Test
+    @org.junit.jupiter.api.Order(9)
+    void theResetDeletesTheWeatherAndKeepsTheRest(@Autowired au.gully.platform.Reset reset) throws Exception {
+        issueHubKey();
+        assertThat(reset.rows().get("station")).isPositive();
+        Map<String, Object> out = reset.run("test");
+        assertThat(out).containsKey("deleted");
+        assertThat(reset.rows().values()).allMatch(n -> n == 0L);
+        assertThat(stations.all()).isEmpty();
+        assertThat(stations.latest("023000")).isEmpty();
+        assertThat(record.days("023000")).isEmpty();
+        assertThat(db.sql("select count(*) from api_key where consumer = 'hub'").query(Long.class).single()).isEqualTo(1L);
+        takeInTheFixture();
+        assertThat(stations.bureau()).hasSize(3);
+        assertThat(stations.latest("023000")).isPresent();
     }
 
     private static String firstCookie(HttpHeaders headers) {

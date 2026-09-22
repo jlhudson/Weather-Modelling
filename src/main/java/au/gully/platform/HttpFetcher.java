@@ -92,6 +92,13 @@ public class HttpFetcher {
         return fetched;
     }
 
+    /**
+     * The validators for a URL forgotten, so the next {@link #getIfChanged} downloads it whole.
+     */
+    public void forget(URI uri) {
+        validators.remove(uri.toString());
+    }
+
     public Fetched get(URI uri, String etag, String lastModified) throws UpstreamException {
         return get(client, uri, etag, lastModified);
     }

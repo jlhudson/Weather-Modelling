@@ -202,7 +202,8 @@ to the consumer `console` with the readings scope, carried on the map page, list
 the API keys page like any other, issued again on the next map page if revoked - so the flow the
 operator watches is the flow a consumer gets, rate, access log and all. The Upstreams page is the
 allowance table, the spend chart, the breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
-startup record. API keys issues and revokes keys with a scope.
+startup record. API keys issues and revokes keys with a scope. Admin (W-18, for testing) deletes every station,
+reading, window, day and terrain and starts again from the Bureau's file.
 
 ## 8. The API
 

@@ -54,6 +54,15 @@ public class TerrainTiles {
         }
     };
 
+    /**
+     * The tiles held, dropped: the next sampling fetches every tile it needs again.
+     */
+    public void clearCache() {
+        synchronized (cache) {
+            cache.clear();
+        }
+    }
+
     @Autowired
     public TerrainTiles(HttpFetcher http, Ledger ledger, au.gully.platform.GullyProperties properties) {
         this(http::get, ledger, properties.enabled());

@@ -57,6 +57,7 @@ public class StationRegistry {
      */
     public void rehydrate() {
         stations.clear();
+        lastAsked.clear();
         for (Station s : db.sql("select id, wmo_id, name, lat, lon, height_m, zone, district, state, kind from station")
                 .query(StationRegistry::station).list()) {
             stations.put(s.id(), s);

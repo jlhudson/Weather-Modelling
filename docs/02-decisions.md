@@ -324,3 +324,22 @@ in view. I would like this back please. It also allowed me to hover over the bar
 highlighted on the mapping screen." The histogram and its switch went with the start-over (W-1);
 before it a hexagon lit its bar but a bar lit nothing, so the map-from-the-bar direction is new.
 — James, 23 September 2026.
+
+### W-18 · An admin page that deletes all the data and starts again, for testing
+
+**The decision.** A console page, Admin, with the row counts of the weather's tables and one button.
+It empties `station_reading`, `station_hour6`, `station_day`, `terrain` and `station` - the Bureau's
+stations and the points of ours alike, the rain, the history, the drought's year - reads the memory
+back from the empty tables, forgets the Bureau file's validators and the terrain tile cache, reads
+the Bureau's file whole at once, and starts the housekeeping in the background, which samples every
+station's terrain and fills the year of record as far as the day's allowance goes. The Bureau's
+timer and the housekeeping are held off while the tables are emptied. Kept: the console login, the
+API keys, the reach rule, the upstream ledger - so the allowances still know what today has spent -
+the diagnostics and the access log.
+
+**Why.** James: "I need a admin page that will allow me to DELETE ALL THE CURRENT DATA! For testing
+purpose only ... it should delete all data, regrab the BOM files and commence operation. Yes, we loose
+all rain, those extra locations and more. This is intentional, as we should have all data regrabbing
+setup. I also expect history to be removed." The ledger is kept deliberately: wiping it would let a
+reset spend Open-Meteo's daily allowance twice.
+— James, 23 September 2026.

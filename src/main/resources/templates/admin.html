@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html th:replace="~{layout :: page('Admin', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section>
+    <h1>Admin · for testing</h1>
+
+    <!-- W-18: the start-again button. Everything the weather is, deleted; the service set going as if newly deployed. -->
+    <h2>Delete all the data</h2>
+    <p>Deletes every station, reading, six-hour window, day of record and terrain: the Bureau's stations and the points
+        of ours alike, the rain, the history, the drought's year. Then the Bureau's file is read again at once, and the
+        housekeeping runs in the background: it samples every station's terrain and fills the year of record, as far
+        as today's allowance goes. The map is back within seconds; the reaches over a few minutes; the droughts as the year fills.</p>
+    <p class="muted">Kept: the console login, the API keys, the reach rule, the upstream ledger (so the allowances still
+        know what today has spent), the diagnostics and the access log.</p>
+
+    <table class="table w-auto">
+        <thead><tr><th>table</th><th class="num">rows now</th></tr></thead>
+        <tbody>
+        <tr th:each="e : ${rows}"><td class="mono" th:text="${e.key}"></td><td class="num" th:text="${e.value}"></td></tr>
+        </tbody>
+    </table>
+
+    <form method="post" th:action="@{/console/admin/reset}"
+          onsubmit="return confirm('Delete ALL the data - every station, reading, day of history and terrain - and start again from the Bureau\'s file?');">
+        <button class="btn btn-danger">Delete all data and start again</button>
+    </form>
+
+    <th:block th:if="${lastReset != null}">
+        <h2>The last reset</h2>
+        <table class="table kv w-auto">
+            <tbody>
+            <tr th:each="e : ${lastReset}"><th th:text="${e.key}"></th><td class="mono" th:text="${e.value}"></td></tr>
+            </tbody>
+        </table>
+    </th:block>
+
+    <h2>The last housekeeping</h2>
+    <p class="muted" th:if="${lastHousekeeping == null}">None since the start: it runs a minute after the start, after a reset, and daily at 9:30.</p>
+    <table class="table kv w-auto" th:if="${lastHousekeeping != null}">
+        <tbody>
+        <tr th:each="e : ${lastHousekeeping}"><th th:text="${e.key}"></th><td class="mono" th:text="${e.value}"></td></tr>
+        </tbody>
+    </table>
+    <p class="muted">Reload the page for the counts as the terrain and the year come back.</p>
+</section>
+</body>
+</html>
