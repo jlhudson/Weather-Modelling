@@ -62,12 +62,46 @@ class ReachTest {
         // Mount Lofty: 700 m, the ground falling 100 m a kilometre on every bearing to the plain at 50 m.
         Terrain t = terrain(700, (b, s) -> Math.max(50, 700 - 100 * s));
         Reach r = Reach.of(t, ReachRule.Rule.of(40, 10));
-        // At 1 km the difference is 100 m: 1 + 10 = 11 fine; at 3 km 300 m: 3 + 30 = 33 fine; at 4 km 400 m: 44 > 40.
-        assertThat(r.km()).containsOnly(3.0);
+        // Descending costs half (W-16): at 7 km the sustained drop is 650 m, costing 32.5, and 7 + 32.5 fits; 8 does not.
+        assertThat(r.km()).containsOnly(7.0);
         assertThat(r.cuts()).containsEntry(Reach.Cut.HEIGHT, Terrain.BEARINGS);
+        // The same fall above the station - a station in a hole - costs twice as much, so the reach is half.
+        Reach hole = Reach.of(terrain(50, (b, s) -> Math.min(700, 50 + 100 * s)), ReachRule.Rule.of(40, 10));
+        assertThat(hole.km()).containsOnly(3.0);
+        // Share zero: a descent is nothing, and the hill station reaches the rule.
+        assertThat(Reach.of(t, ReachRule.Rule.of(40, 10, 25, 0)).km()).containsOnly(40.0);
+        // Share one: climbing and descending cost alike, as they did before W-16.
+        assertThat(Reach.of(t, ReachRule.Rule.of(40, 10, 25, 1)).km()).containsOnly(3.0);
         // A steeper hill still gets the floor.
-        Reach steep = Reach.of(terrain(700, (b, s) -> 50), ReachRule.Rule.of(40, 10));
+        Reach steep = Reach.of(terrain(700, (b, s) -> 50), ReachRule.Rule.of(40, 10, 25, 1));
         assertThat(steep.km()).containsOnly(ReachRule.MIN_KM);
+    }
+
+    @Test
+    void aGullyIsCrossedAndAWallThatHoldsIsABarrier() {
+        // Bearing 0: a 400 m gorge one kilometre across at 6 km. Bearing 12: the same, two kilometres across.
+        // Bearing 24: three kilometres across, and it holds. Bearing 36: a 400 m ridge three kilometres across.
+        Terrain t = terrain(430, (b, s) -> switch (b) {
+            case 0 -> s == 6 ? 30 : 430;
+            case 12 -> (s == 6 || s == 7) ? 30 : 430;
+            case 24 -> (s >= 6 && s <= 8) ? 30 : 430;
+            case 36 -> (s >= 6 && s <= 8) ? 830 : 430;
+            default -> 430;
+        });
+        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10));
+        // One and two samples are not a barrier: the ray goes the whole way.
+        assertThat(r.km()[0]).isEqualTo(40);
+        assertThat(r.km()[12]).isEqualTo(40);
+        // Three samples hold, so the 400 m drop is a barrier - but descending costs half, 20 km of the 40, so the ray
+        // crosses the gorge and runs to 20 km on what is left.
+        assertThat(r.km()[24]).isEqualTo(20);
+        assertThat(r.cut()[24]).isEqualTo(Reach.Cut.HEIGHT);
+        // The same barrier above the station costs the whole 40 km, and the ray ends at the foot of it: 5 km, the step
+        // before its first sample. A wall is a wall; a drop is a discount.
+        assertThat(r.km()[36]).isEqualTo(5);
+        assertThat(r.cut()[36]).isEqualTo(Reach.Cut.HEIGHT);
+        // The barrier costs from where it begins, not from where its third sample is: the ray does not walk into it.
+        assertThat(Reach.of(t, ReachRule.Rule.of(40, 10, 25, 1)).km()[24]).as("the step before the first sample of the gorge").isEqualTo(5);
     }
 
     @Test
@@ -107,10 +141,14 @@ class ReachTest {
         assertThat(far.km()[6]).isEqualTo(40);
         assertThat(far.cut()[6]).isEqualTo(Reach.Cut.DISTANCE);
         assertThat(far.waterRays()).isZero();
-        // A ridge crossed before the water: the ray stops at the ridge, and the water beyond is not seen.
-        Reach ridge = Reach.of(terrain(10, (b, s) -> b == 0 ? (s == 5 ? 600 : s >= 8 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10, 25));
+        // A ridge crossed before the water: three samples of it, so it holds; the ray stops at it and the water beyond is not seen.
+        Reach ridge = Reach.of(terrain(10, (b, s) -> b == 0 ? ((s >= 4 && s <= 6) ? 600 : s >= 9 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10, 25));
         assertThat(ridge.cut()[0]).isEqualTo(Reach.Cut.HEIGHT);
         assertThat(ridge.coastal()).isFalse();
+        // One sample of ridge is no barrier (W-16): the ray crosses it and ends at the water, which makes the station coastal.
+        Reach nick = Reach.of(terrain(10, (b, s) -> b == 0 ? (s == 5 ? 600 : s >= 9 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10, 25));
+        assertThat(nick.cut()[0]).isEqualTo(Reach.Cut.WATER);
+        assertThat(nick.coastal()).isTrue();
     }
 
     @Test
@@ -153,10 +191,10 @@ class ReachTest {
             default -> 39;
         });
         Reach r = Reach.of(t, ReachRule.Rule.of(40, 10, 25));
-        // The river and the two-sample strip are crossed; a bed 39 m below the station costs 3.9 km of reach like any dip would.
-        assertThat(r.km()[0]).isEqualTo(36);
-        assertThat(r.km()[12]).isEqualTo(36);
-        assertThat(r.cut()[0]).isEqualTo(Reach.Cut.HEIGHT);
+        // The river and the two-sample strip are crossed, and since W-16 a bed that narrow costs nothing at all.
+        assertThat(r.km()[0]).isEqualTo(40);
+        assertThat(r.km()[12]).isEqualTo(40);
+        assertThat(r.cut()[0]).isEqualTo(Reach.Cut.DISTANCE);
         // The lake, 12 km away and three samples across, is water: the ray ends at its edge.
         assertThat(r.km()[24]).isEqualTo(11.5);
         assertThat(r.cut()[24]).isEqualTo(Reach.Cut.WATER);
@@ -186,8 +224,12 @@ class ReachTest {
         assertThat(ReachRule.Rule.of(1, 10).reachKm()).isEqualTo(ReachRule.MIN_KM);
         assertThat(ReachRule.Rule.of(40, -5).kmPer100m()).isEqualTo(0);
         assertThat(ReachRule.Rule.of(40, 99).kmPer100m()).isEqualTo(ReachRule.MAX_KM_PER_100M);
-        assertThat(ReachRule.Rule.of(40.3, 10.1, 25)).as("to the quarter").isEqualTo(new ReachRule.Rule(40.25, 10, 25));
+        assertThat(ReachRule.Rule.of(40.3, 10.1, 25)).as("to the quarter").isEqualTo(new ReachRule.Rule(40.25, 10, 25, ReachRule.DEFAULT_DESCENT_SHARE));
         assertThat(ReachRule.Rule.of(40, 10, 99).coastalKm()).isEqualTo(Terrain.MAX_KM);
+        // The descent share is a share, to the twentieth.
+        assertThat(ReachRule.Rule.of(40, 10, 25, 1.4).descentShare()).isEqualTo(1);
+        assertThat(ReachRule.Rule.of(40, 10, 25, -1).descentShare()).isZero();
+        assertThat(ReachRule.Rule.of(40, 10, 25, 0.37).descentShare()).isEqualTo(0.35);
     }
 
     @Test

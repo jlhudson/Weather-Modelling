@@ -53,6 +53,8 @@ public class MapController {
         model.addAttribute("kmPer100m", r.kmPer100m());
         model.addAttribute("kmPer100mMax", ReachRule.MAX_KM_PER_100M);
         model.addAttribute("coastalKm", r.coastalKm());
+        model.addAttribute("descentShare", r.descentShare());
+        model.addAttribute("descentPct", (int) Math.round(r.descentShare() * 100));
         model.addAttribute("reachBy", rule.by());
         model.addAttribute("reachSince", rule.since() == null ? null : rule.since().toString());
         // The map asks through the API with the console's own key (W-14), so a click is an ask from outside.
@@ -83,14 +85,16 @@ public class MapController {
     @GetMapping(value = "/reach.geojson", produces = "application/geo+json")
     @ResponseBody
     public Map<String, Object> reach(@RequestParam(required = false) Double km, @RequestParam(required = false) Double kmPer100m,
-                                     @RequestParam(required = false) Double coastalKm) {
-        return reaches.geojson(asked(km, kmPer100m, coastalKm));
+                                     @RequestParam(required = false) Double coastalKm,
+                                     @RequestParam(required = false) Double descentShare) {
+        return reaches.geojson(asked(km, kmPer100m, coastalKm, descentShare));
     }
 
-    private ReachRule.Rule asked(Double km, Double kmPer100m, Double coastalKm) {
+    private ReachRule.Rule asked(Double km, Double kmPer100m, Double coastalKm, Double descentShare) {
         ReachRule.Rule r = rule.current();
-        return km == null && kmPer100m == null && coastalKm == null ? r
-                : ReachRule.Rule.of(km == null ? r.reachKm() : km, kmPer100m == null ? r.kmPer100m() : kmPer100m, coastalKm == null ? r.coastalKm() : coastalKm);
+        return km == null && kmPer100m == null && coastalKm == null && descentShare == null ? r
+                : ReachRule.Rule.of(km == null ? r.reachKm() : km, kmPer100m == null ? r.kmPer100m() : kmPer100m,
+                coastalKm == null ? r.coastalKm() : coastalKm, descentShare == null ? r.descentShare() : descentShare);
     }
 
     /**
@@ -98,12 +102,14 @@ public class MapController {
      */
     @PostMapping(value = "/reach/rule", produces = "application/json")
     @ResponseBody
-    public Map<String, Object> setRule(@RequestParam double km, @RequestParam double kmPer100m, @RequestParam double coastalKm) {
-        ReachRule.Rule r = rule.set(km, kmPer100m, coastalKm, ConsoleModel.operatorName(), Instant.now());
+    public Map<String, Object> setRule(@RequestParam double km, @RequestParam double kmPer100m, @RequestParam double coastalKm,
+                                       @RequestParam(defaultValue = "-1") double descentShare) {
+        ReachRule.Rule r = rule.set(km, kmPer100m, coastalKm, descentShare < 0 ? rule.current().descentShare() : descentShare, ConsoleModel.operatorName(), Instant.now());
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("reachKm", r.reachKm());
         out.put("kmPer100m", r.kmPer100m());
         out.put("coastalKm", r.coastalKm());
+        out.put("descentShare", r.descentShare());
         out.put("by", rule.by());
         out.put("since", rule.since() == null ? null : rule.since().toString());
         return out;

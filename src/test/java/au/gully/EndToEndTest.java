@@ -193,17 +193,17 @@ class EndToEndTest {
         assertThat(bad.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
         // The rule set from the console is what the API draws by, and a restart reads it back.
-        reachRule.set(20, 5, 15, "test", Instant.now());
+        reachRule.set(20, 5, 15, 0.25, "test", Instant.now());
         ResponseEntity<Map> narrower = client().get().uri("/api/v1/reach.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
-        assertThat((Map<String, Object>) narrower.getBody().get("rule")).containsEntry("reachKm", 20.0).containsEntry("kmPer100m", 5.0);
+        assertThat((Map<String, Object>) narrower.getBody().get("rule")).containsEntry("reachKm", 20.0).containsEntry("kmPer100m", 5.0).containsEntry("descentShare", 0.25);
         reachRule.rehydrate();
-        assertThat(reachRule.current()).isEqualTo(new ReachRule.Rule(20, 5, 15));
+        assertThat(reachRule.current()).isEqualTo(new ReachRule.Rule(20, 5, 15, 0.25));
         assertThat(reachRule.by()).isEqualTo("test");
         // The terrain too.
         terrain.rehydrate();
         assertThat(terrain.get("023000")).isPresent();
         assertThat(terrain.get("023000").get().at(3, 3)).isEqualTo(29);
-        reachRule.set(ReachRule.DEFAULT_KM, ReachRule.DEFAULT_KM_PER_100M, ReachRule.DEFAULT_COASTAL_KM, "test", Instant.now());
+        reachRule.set(ReachRule.DEFAULT_KM, ReachRule.DEFAULT_KM_PER_100M, ReachRule.DEFAULT_COASTAL_KM, ReachRule.DEFAULT_DESCENT_SHARE, "test", Instant.now());
     }
 
     /**

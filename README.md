@@ -9,7 +9,8 @@ branching; a missing value is missing, never zero; every answer carries its sour
 **How it works, in one paragraph.** The Bureau's South Australian station file is read every ten
 minutes and every reading in it is stored: where each station is, how high it is, and what it said.
 Each station carries a *reach* — a polygon drawn once from the terrain around it, out to a distance,
-shortened where the ground rises or falls away from the station's own height, ended at the sea —
+shortened where the ground rises or falls away from the station's own height (climbing costs more
+than descending, and a barrier has to hold for 3 km), ended at the sea —
 which is the ground the station speaks for; reaches overlap, and a point inside several is answered
 from all of them. The terrain a reach is drawn from is the open Terrain Tiles on AWS, sampled once;
 Open-Meteo and Google Weather stand behind the stations for the forecast, Open-Meteo first and

@@ -57,7 +57,23 @@ class BlendTest {
         ReachRule.Rule r = ReachRule.Rule.of(40, 10, 25);
         assertThat(Readings.cost(t, 12, 12.3, r)).isEqualTo(12.3);
         assertThat(Readings.cost(t, 0, 3, r)).as("before the rise").isEqualTo(3.0);
-        assertThat(Readings.cost(t, 0, 8, r)).as("past the rise: 8 + 30").isEqualTo(38.0);
+        assertThat(Readings.cost(t, 0, 8, r)).as("a one-kilometre rise is no barrier (W-16): the distance alone").isEqualTo(8.0);
+        // A rise that holds for three kilometres is a barrier, and costs its climb.
+        double[] wall = new double[Terrain.BEARINGS * Terrain.STEPS];
+        java.util.Arrays.fill(wall, 30);
+        for (int s = 5; s <= 7; s++) {
+            wall[s - 1] = 330;
+        }
+        Terrain w = new Terrain("x", -34.9, 138.6, 30, wall, Instant.now(), 1);
+        assertThat(Readings.cost(w, 0, 4, r)).as("before the wall").isEqualTo(4.0);
+        assertThat(Readings.cost(w, 0, 8, r)).as("past the wall: 8 + 30").isEqualTo(38.0);
+        // The same wall below the station costs half, the descent share.
+        double[] pit = new double[Terrain.BEARINGS * Terrain.STEPS];
+        java.util.Arrays.fill(pit, 330);
+        for (int s = 5; s <= 7; s++) {
+            pit[s - 1] = 30;
+        }
+        assertThat(Readings.cost(new Terrain("x", -34.9, 138.6, 330, pit, Instant.now(), 1), 0, 8, r)).as("8 + 15").isEqualTo(23.0);
     }
 
     @Test

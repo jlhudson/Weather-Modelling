@@ -206,19 +206,12 @@ public class Readings {
     }
 
     /**
-     * The cost from a station to a point along the ray towards it: the distance plus what the
-     * greatest height difference crossed on the way costs, the reach's own arithmetic.
+     * The cost from a station to a point along the ray towards it: the reach's own arithmetic
+     * (W-16), the distance plus the sustained climb and descent crossed on the way.
      */
     static double cost(Terrain t, int bearing, double km, ReachRule.Rule r) {
-        double maxDiff = 0;
         int steps = (int) Math.min(Terrain.STEPS, Math.round(km / Terrain.STEP_KM));
-        for (int s = 1; s <= steps; s++) {
-            double e = t.at(bearing, s);
-            if (!Double.isNaN(e)) {
-                maxDiff = Math.max(maxDiff, Math.abs(e - t.elevationM()));
-            }
-        }
-        return Math.round((km + r.kmPer100m() * maxDiff / 100.0) * 100) / 100.0;
+        return Math.round(Reach.costKm(km, Reach.crossed(t, bearing, steps), r) * 100) / 100.0;
     }
 
     // ---------------------------------------------------------------- the blends

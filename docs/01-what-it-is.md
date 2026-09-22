@@ -48,17 +48,34 @@ station in the file is picked up on its own; the console can sample one station 
 endpoint was tried first and counts every point as a call: 2,401 a station against 10,000 a day.) The samples are kept in `terrain` (eight-byte doubles, the station's own first) with the
 position they were taken at, so a station that moves is sampled again.
 
-**The rule, two numbers.** *Reach* — how far a station reaches over flat ground, 40 km by default —
-and *what a hundred metres of height costs* of that reach, 10 km by default. Along each bearing a
-ray walks out a kilometre at a time and stops when `distance + kmPer100m × (greatest height
-difference crossed so far ÷ 100)` exceeds the reach. The *greatest* difference, not the height at
-the point: a ridge is a barrier, and the far side of it is another climate even where it is the
-station's own height again. A ray cut by height still reaches 3 km, so every station has some
-ground. The polygon is the 48 ray ends joined. Nothing about it is stored: it is arithmetic over
-the terrain in memory, so the sliders on the map preview another rule on every station at once, and
-*set* makes it the rule (kept in `setting`, so a restart keeps it).
+**The rule, and what the ground costs.** *Reach* — how far a station reaches over flat ground,
+40 km by default — and *what a hundred metres of climb costs* of that reach, 10 km by default.
+Along each bearing a ray walks out a kilometre at a time and stops when
+`distance + kmPer100m × (climb + descentShare × descent) ÷ 100` exceeds the reach, where *climb* and
+*descent* are the greatest sustained rise above and fall below the station crossed so far. Two
+things make that sentence what it is (W-16):
 
-**The sea, a third number.** A ray ends at the water: the first sample of it (the tiles carry
+*A barrier has to hold.* Ground counts only where it keeps its height for 3 km — three samples in a
+row, the same rule the water has. A gully one or two kilometres across is crossed for nothing, so a
+ray along the dissected Mount Lofty ridge keeps going instead of dying in the first valley; the
+scarp, four hundred metres up and staying up, is a wall as it was. A barrier costs from the step it
+begins at, not from the step the ray has seen three of, so a ray stops at the foot of the wall.
+
+*Climbing costs more than descending.* The slider is the price of climbing; descending costs a share
+of it, half by default, on a fourth slider. The plain's air does not climb the scarp, but the hills'
+air drains to the foothills — the gully wind this service is named for. The two are counted apart
+and added, so a ray that climbs a range and drops beyond it pays for both. Before this, one number
+had to be both, and there was no setting at which Adelaide stopped at the scarp and Mount Lofty
+still spoke for the ridge.
+
+A ray cut by height still reaches 3 km, so every station has some ground. The polygon is the 48 ray ends joined. Nothing about it is stored: it is arithmetic over
+the terrain in memory, so the four sliders on the map preview another rule on every station at once,
+and *set* makes it the rule (kept in `setting`, so a restart keeps it). What this does around
+Adelaide at 35 km, 5 km per 100 m and half: West Terrace reaches 13 km east - the foothill scarp -
+and 30 km north along the plain; Mount Lofty (692 m) 17 to 27 km along the ranges; Mount Barker
+(354 m) 22 to 31 km.
+
+**The sea, a fourth number.** A ray ends at the water: the first sample of it (the tiles carry
 bathymetry, so the sea is negative and the shoreline zero) stops it half a step short, so the beach
 is inside and the sea is not. Water is water only when it is at least 3 km across along the ray —
 three samples in a row at or below sea level (W-4): a river is a line and never is, so the lower

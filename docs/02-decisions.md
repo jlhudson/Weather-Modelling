@@ -284,3 +284,27 @@ Three days of raw readings is enough to fold a day the housekeeping missed; the 
 are the history. One tightening came with the fold: a day is the station's own only when every one
 of its four windows has a reading, because a maximum taken from part of a day - the service started
 at dusk - is not the day's, and the archive's is. — James, 22 September 2026.
+
+### W-16 · A barrier has to hold, and climbing costs more than descending
+
+**The decision.** Two changes to what the ground costs a ray. First, ground is a barrier only where
+it keeps its height for three samples - 3 km, the same rule the water has (W-4): a gully one or two
+kilometres across is crossed for nothing, and a barrier costs from the step it begins at, so a ray
+stops at the foot of a wall rather than two kilometres into it. Second, climbing and descending are
+counted apart and added: the slider is the price of a hundred metres of climb, and a hundred metres
+of descent costs a share of it - half by default, on a fourth slider, 0 to 100 %. The reach's
+arithmetic now lives in one place, `Reach.costKm`, which the interpolation's weights use too, so the
+polygon and the blend cannot disagree.
+
+**Why.** James: "If I set the height factor and the distance for polygons, I either end up with
+Adelaide spreading way out into the hills, or I end up with the hills representing practically no
+land. There is no in-between." He was right, and the cause was two different things sharing one
+number. A plains station has one steep direction, so the factor that stops Adelaide at the scarp is
+the factor that kills a hill station, whose ground falls away on every bearing; and the Mount Lofty
+ridge is dissected, so a ray along the ridge top fell into a one-kilometre valley, locked in the
+greatest difference, and died although the ground came back up to the station's own height. The
+persistence rule fixes the ridge, the asymmetry fixes the hill station, and the two sliders are now
+independent: raise the climb cost to hold Adelaide back and the hills keep their ground. Of the five
+options put to him James chose these two together. At 35 km, 5 km per 100 m and half, West Terrace
+reaches 13 km east and 30 km north, Mount Lofty 17 to 27 km, Mount Barker 22 to 31 km.
+— James, 22 September 2026.

@@ -192,9 +192,9 @@
     }
 
     // ---- the reach (W-2, W-3): every station's polygon under the rule on the sliders, the clicked one's lit
-    function ruleOnSliders() { return {km: Number($('reachKm').value), per: Number($('kmPer100m').value), coastal: Number($('coastalKm').value)}; }
-    function ruleQuery(r) { return 'km=' + r.km + '&kmPer100m=' + r.per + '&coastalKm=' + r.coastal; }
-    function ruleWords(r) { return r.reachKm + ' km · 100 m costs ' + r.kmPer100m + ' km · coastal at most ' + r.coastalKm + ' km'; }
+    function ruleOnSliders() { return {km: Number($('reachKm').value), per: Number($('kmPer100m').value), coastal: Number($('coastalKm').value), descent: Number($('descentShare').value)}; }
+    function ruleQuery(r) { return 'km=' + r.km + '&kmPer100m=' + r.per + '&coastalKm=' + r.coastal + '&descentShare=' + (r.descent / 100); }
+    function ruleWords(r) { return r.reachKm + ' km · 100 m of climb costs ' + r.kmPer100m + ' km · descending ' + Math.round((r.descentShare == null ? .5 : r.descentShare) * 100) + ' % of that · coastal at most ' + r.coastalKm + ' km'; }
     var reachTimer = null, reachLoading = false, reachAgain = false;
     function loadReach(immediate) {
         clearTimeout(reachTimer);
@@ -264,11 +264,12 @@
         $('reachKmValue').textContent = r.km;
         $('kmPer100mValue').textContent = r.per;
         $('coastalKmValue').textContent = r.coastal;
+        $('descentShareValue').textContent = r.descent;
     }
-    function reachSaved(km, per, coastal, by, since) {
+    function reachSaved(km, per, coastal, descentPct, by, since) {
         var s = $('reachSaved');
-        s.dataset.km = km; s.dataset.per = per; s.dataset.coastal = coastal;
-        s.textContent = 'set to ' + km + ' km · ' + per + ' km/100 m · ' + coastal + ' km coastal' + (by ? ' by ' + by + ', ' + ago(since) : ' (default)');
+        s.dataset.km = km; s.dataset.per = per; s.dataset.coastal = coastal; s.dataset.descent = descentPct;
+        s.textContent = 'set to ' + km + ' km · ' + per + ' km/100 m climb · ' + descentPct + ' % down · ' + coastal + ' km coastal' + (by ? ' by ' + by + ', ' + ago(since) : ' (default)');
         s.title = since ? when(since) : '';
     }
     function setReach() {
@@ -276,7 +277,7 @@
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
         $('reachSet').disabled = true;
         fetch('/console/map/reach/rule', {method: 'POST', headers: headers, body: ruleQuery(r)}).then(function (x) { return x.json(); }).then(function (o) {
-            reachSaved(o.reachKm, o.kmPer100m, o.coastalKm, o.by, o.since);
+            reachSaved(o.reachKm, o.kmPer100m, o.coastalKm, Math.round(o.descentShare * 100), o.by, o.since);
             note('reach set: ' + ruleWords(o));
             loadReach(true);
             if (state.selected) detail(state.selected);
@@ -533,12 +534,12 @@
         b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
-    ['reachKm', 'kmPer100m', 'coastalKm'].forEach(function (id) {
+    ['reachKm', 'kmPer100m', 'coastalKm', 'descentShare'].forEach(function (id) {
         $(id).addEventListener('input', function () { reachHint(); loadReach(false); });
         $(id).addEventListener('change', function () { loadReach(true); });
     });
     $('reachSet').addEventListener('click', setReach);
-    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.coastal, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
+    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.coastal, $('reachSaved').dataset.descent, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeDetail();
     });

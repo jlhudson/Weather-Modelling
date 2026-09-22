@@ -60,6 +60,7 @@ public class Reaches {
         m.put("reachKm", r.reachKm());
         m.put("kmPer100m", r.kmPer100m());
         m.put("coastalKm", r.coastalKm());
+        m.put("descentShare", r.descentShare());
         return m;
     }
 
