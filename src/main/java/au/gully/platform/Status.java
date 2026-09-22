@@ -38,6 +38,7 @@ public class Status {
     private final TerrainSampler sampler;
     private final Record record;
     private final Backfill backfill;
+    private final Housekeeping housekeeping;
 
     public Map<String, Object> status() {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -102,11 +103,13 @@ public class Status {
         m.put("terrainPending", sampler.pending().size());
         m.put("terrainFailure", sampler.lastFailure());
         m.put("terrainFailedAt", sampler.lastFailedAt());
+        m.put("readings", stations.readingRows());
         m.put("recordDays", record.dayRows());
         m.put("recordWindows", record.windowRows());
         m.put("backfillPending", backfill.pending().size());
         m.put("backfillFailure", backfill.lastFailure());
         m.put("backfillFailedAt", backfill.lastFailedAt());
+        m.put("housekeeping", housekeeping.last());
         return m;
     }
 

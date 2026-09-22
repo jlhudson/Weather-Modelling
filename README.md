@@ -7,14 +7,17 @@ name is the Adelaide Hills gully wind. The values are the values: no confidence 
 branching; a missing value is missing, never zero; every answer carries its source and its time.
 
 **How it works, in one paragraph.** The Bureau's South Australian station file is read every ten
-minutes and every station in it is held: where it is, how high it is, and what it last said. Each
-station will carry a *reach* — a polygon drawn once from the terrain around it, out to a distance,
+minutes and every reading in it is stored: where each station is, how high it is, and what it said.
+Each station carries a *reach* — a polygon drawn once from the terrain around it, out to a distance,
 shortened where the ground rises or falls away from the station's own height, ended at the sea —
 which is the ground the station speaks for; reaches overlap, and a point inside several is answered
 from all of them. The terrain a reach is drawn from is the open Terrain Tiles on AWS, sampled once;
 Open-Meteo and Google Weather stand behind the stations for the forecast, Open-Meteo first and
-Google when Open-Meteo is out of allowance. One in-memory register holds all of it, rebuilt from Postgres at
-start; the database is not touched to answer a request.
+Google when Open-Meteo is out of allowance. Two timers and nothing else on a clock: the file every
+ten minutes, and a daily housekeeping at 9:30 that folds the stored readings into the six-hourly
+history and the Bureau days, prunes, samples the terrain of any station lacking it and fills the
+year of any station missing days. Everything else - a reading at a point, a point of ours, a
+drought - is on demand, so the service idles until it is asked.
 
 Java 25, Spring Boot 4.1.1, PostgreSQL 18, one Maven module, plain SQL (no entity manager), Flyway.
 Port **8082** inside the container; `WEATHER_PORT` is the host side of the compose mapping.

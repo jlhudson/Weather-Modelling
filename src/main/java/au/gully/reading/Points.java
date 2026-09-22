@@ -13,7 +13,6 @@ import au.gully.reach.TerrainSampler;
 import au.gully.reach.TerrainStore;
 import au.gully.reach.TerrainTiles;
 import au.gully.record.Backfill;
-import au.gully.record.Droughts;
 import au.gully.record.Record;
 import au.gully.upstreams.Forecast;
 import au.gully.upstreams.Upstreams;
@@ -60,7 +59,6 @@ public class Points {
     private final Upstreams upstreams;
     private final Backfill backfill;
     private final Record record;
-    private final Droughts droughts;
     private final GullyProperties properties;
     private final GeometryFactory geometry = new GeometryFactory();
 
@@ -97,7 +95,7 @@ public class Points {
     /**
      * A point dropped here, now: in the register, its terrain sampled, its current fetched and its
      * record filled - each as far as the upstreams allow; what did not come is tried again on the
-     * next ask or the next tick.
+     * next ask.
      */
     public Station drop(double lat, double lon, Instant now) {
         String id = idOf(lat, lon);
@@ -185,7 +183,7 @@ public class Points {
 
     /**
      * The points no ask has used for {@link #KEEP_UNASKED}, dropped: the register, the terrain, the
-     * record, the memo.
+     * record.
      */
     public int expire(Instant now) {
         int n = 0;
@@ -195,7 +193,6 @@ public class Points {
                 stations.remove(p.id());
                 terrain.remove(p.id());
                 record.forget(p.id());
-                droughts.forget(p.id());
                 n++;
                 log.info("point {} ({}) expired: last asked {}", p.id(), p.name(), last);
             }

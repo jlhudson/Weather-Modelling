@@ -103,7 +103,7 @@ class EndToEndTest {
     @Test
     @org.junit.jupiter.api.Order(1)
     void theMigrationBuiltTheTablesAndTheStationsAreKept() throws Exception {
-        for (String table : new String[]{"api_key", "console_user", "api_access_log", "log_event", "setting", "upstream_call", "station", "terrain", "station_hour6", "station_day"}) {
+        for (String table : new String[]{"api_key", "console_user", "api_access_log", "log_event", "setting", "upstream_call", "station", "terrain", "station_hour6", "station_day", "station_reading"}) {
             assertThat(db.sql("select to_regclass('public." + table + "')").query(String.class).single()).as(table).isEqualTo(table);
         }
         takeInTheFixture();
@@ -248,7 +248,41 @@ class EndToEndTest {
         assertThat(db.sql("select source from station_day where station_id = '023000' and day = :d").param("d", today.minusDays(1)).query(String.class).single()).isEqualTo("bureau");
         // The diagnostics say how the record stands.
         Map<String, Object> held = (Map<String, Object>) ((Map<String, Object>) client().get().uri("/api/diagnostics?window=PT1H").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class).get("gully")).get("held");
-        assertThat(held).containsKeys("recordDays", "recordWindows", "backfillPending");
+        assertThat(held).containsKeys("readings", "recordDays", "recordWindows", "backfillPending", "housekeeping");
+
+        // The readings are stored as they come (W-15): the fixture's are in the table, and a restart reads the latest back.
+        assertThat(db.sql("select count(*) from station_reading where station_id = '023000'").query(Long.class).single()).isEqualTo(1L);
+        au.gully.bureau.Observation kept = stations.latest("023000").orElseThrow();
+        stations.rehydrate();
+        assertThat(stations.latest("023000").orElseThrow()).isEqualTo(kept);
+        assertThat(stations.recent("023000")).hasSize(1);
+        // A day of readings two days ago, and the housekeeping folds it: four windows and the day, the station's own.
+        java.time.ZoneId zone = java.time.ZoneId.of("Australia/Adelaide");
+        java.time.LocalDate folded = today.minusDays(2);
+        List<StationFile.StationReading> day = new java.util.ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            Instant at = folded.atTime(9, 0).atZone(zone).toInstant().plus(java.time.Duration.ofHours(h));
+            day.add(new StationFile.StationReading(stations.station("023000").orElseThrow(), new au.gully.bureau.Observation("023000", at, 10.0 + h % 12, null, null, 50, 10.0, 180, "S", 15.0, 1015.0, 0.2 * h, 1.0, 21.0, null, null, null, null, null)));
+        }
+        Instant nineAm = folded.plusDays(1).atTime(9, 0).atZone(zone).toInstant();
+        day.add(new StationFile.StationReading(stations.station("023000").orElseThrow(), new au.gully.bureau.Observation("023000", nineAm, 12.0, null, null, 50, 10.0, 180, "S", 15.0, 1015.0, 0.0, 4.6, 12.0, null, null, null, null, null)));
+        // Older than the latest, so the register would skip them: written straight to the table, as an earlier read would have.
+        stations.rehydrate();
+        db.sql("delete from station_reading where station_id = '023000'").update();
+        stations.accept(day, Instant.now());
+        assertThat(db.sql("select count(*) from station_reading where station_id = '023000'").query(Long.class).single()).isEqualTo(25L);
+        assertThat(record.fold(Instant.now())).isEqualTo(1);
+        assertThat(db.sql("select count(*) from station_hour6 where station_id = '023000'").query(Long.class).single()).isEqualTo(4L);
+        assertThat(db.sql("select source from station_day where station_id = '023000' and day = :d").param("d", folded).query(String.class).single()).isEqualTo("bureau");
+        assertThat(record.days("023000").get(folded)).isEqualTo(new au.gully.record.Record.Day(folded, 4.6, 21.0, "bureau"));
+        // Folded again, nothing more to write; pruned, the readings older than three days are gone and these stay.
+        assertThat(record.fold(Instant.now())).isZero();
+        stations.pruneReadings(Instant.now());
+        assertThat(db.sql("select count(*) from station_reading where station_id = '023000'").query(Long.class).single()).isEqualTo(25L);
+        stations.pruneReadings(Instant.now().plus(java.time.Duration.ofDays(6)));
+        assertThat(db.sql("select count(*) from station_reading where station_id = '023000'").query(Long.class).single()).isZero();
+        stations.rehydrate();
+        takeInTheFixture();
     }
 
     /**

@@ -22,15 +22,15 @@ import java.util.Optional;
  * station that fell silent. Only the days missing are asked for, so a station asked about again
  * after a month costs a month, not a year.
  * <p>
- * One station a tick, so the day's allowance is touched lightly: a year is twenty-six units and a
- * week one, against ten thousand a day. The tick walks the Bureau's stations only (W-14): a point
- * of ours is filled when an ask lands in its reach, and never on a timer.
+ * The housekeeping fills every Bureau station wanting days, once a day (W-15), one station after
+ * another and only as far as the day's allowance allows: a year is twenty-six units and a week one,
+ * against ten thousand a day. A point of ours is filled when an ask lands in its reach, and never on
+ * a timer (W-14); a Bureau station in reach of an ask that has no drought to give is filled then too.
  */
 @Slf4j
 @Component
 public class Backfill {
 
-    public static final Duration EVERY = Duration.ofSeconds(15);
     /**
      * Fewer missing days than this in the year behind today is a station in good order: a gap of a
      * day or two is not worth a call, and the archive cannot fill the last few days anyway.
@@ -102,18 +102,19 @@ public class Backfill {
     }
 
     /**
-     * One tick: the first Bureau station wanting days, filled.
+     * The housekeeping's fill: every Bureau station wanting days, one after another.
+     *
+     * @return how many days were new, over every station
      */
-    public boolean tick() {
-        Instant now = Instant.now();
+    public int fillPending(Instant now) {
+        int added = 0;
         for (Station s : stations.bureau()) {
             Range r = wants(s, now);
             if (r != null) {
-                fill(s, r, now);
-                return true;
+                added += fill(s, r, now);
             }
         }
-        return false;
+        return added;
     }
 
     /**

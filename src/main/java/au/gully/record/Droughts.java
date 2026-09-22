@@ -7,17 +7,16 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Every station's drought, on demand from its record and memoised until the record or the day
- * changes: the map asks for eighty at once, several times a minute.
+ * Every station's drought, on demand from its record, computed when asked (W-15): a year of days
+ * integrates in a millisecond, so nothing is memoised - the map asks for eighty at once and gets
+ * eighty fresh.
  */
 @Service
 public class Droughts {
 
     private final Record record;
-    private final Map<String, Memo> memos = new ConcurrentHashMap<>();
 
     public Droughts(Record record, au.gully.bureau.StationsFeed feed) {
         this.record = record;
@@ -46,7 +45,7 @@ public class Droughts {
         dm.put("to", days.isEmpty() ? null : days.lastKey().toString());
         dm.put("bureauDays", days.values().stream().filter(x -> Record.SOURCE_BUREAU.equals(x.source())).count());
         dm.put("archiveDays", days.values().stream().filter(x -> Record.SOURCE_ARCHIVE.equals(x.source())).count());
-        dm.put("rainSoFarMm", record.rainSoFar(s.id()));
+        dm.put("rainSoFarMm", record.rainSoFar(s, Instant.now()));
         d.ifPresent(x -> {
             dm.put("kbdiMm", x.kbdiMm());
             dm.put("band", x.band());
@@ -74,27 +73,12 @@ public class Droughts {
         return out;
     }
 
-    private record Memo(LocalDate day, long version, Double rainSoFar, Optional<Drought> drought) {
-    }
-
     public Optional<Drought> of(Station s) {
         return of(s, Instant.now());
     }
 
     public Optional<Drought> of(Station s, Instant now) {
         LocalDate today = Record.dayOf(now, Record.zoneOf(s));
-        long version = record.version(s.id());
-        Double rainSoFar = record.rainSoFar(s.id());
-        Memo m = memos.get(s.id());
-        if (m != null && m.day().equals(today) && m.version() == version && java.util.Objects.equals(m.rainSoFar(), rainSoFar)) {
-            return m.drought();
-        }
-        Optional<Drought> d = Drought.of(record.days(s.id()), today, rainSoFar);
-        memos.put(s.id(), new Memo(today, version, rainSoFar, d));
-        return d;
-    }
-
-    public void forget(String stationId) {
-        memos.remove(stationId);
+        return Drought.of(record.days(s.id()), today, record.rainSoFar(s, now));
     }
 }

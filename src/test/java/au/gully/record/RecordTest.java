@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.NavigableMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -22,7 +21,7 @@ class RecordTest {
     static final Station ADELAIDE_STATION = new Station("023000", "94648", "ADELAIDE", -34.9257, 138.5832, 29.32, "Australia/Adelaide", "SA_PW001", "sa");
 
     /**
-     * A record that keeps its rows in memory and remembers what it would have written.
+     * A record that keeps its days in memory and remembers what it would have written.
      */
     static final class InMemory extends Record {
         final List<String> writes = new ArrayList<>();
@@ -35,12 +34,6 @@ class RecordTest {
         public void put(String stationId, Day day, boolean replace) {
             writes.add("day " + day.day() + " " + day.rainMm() + " " + day.maxTempC() + " " + day.source() + (replace ? "" : " (keep)"));
             super.putInMemory(stationId, day, replace);
-        }
-
-        @Override
-        void closeWindow(Station s, Window w) {
-            writes.add("window " + w.end.atZone(ADELAIDE).toLocalDateTime() + " readings " + w.readings + " tmax " + w.tMax + " pmax " + w.publishedMax);
-            super.keepWindow(s, w);
         }
     }
 
@@ -62,34 +55,46 @@ class RecordTest {
     }
 
     @Test
-    void readingsFoldIntoWindowsAndTheNineAmReadingClosesTheDay() {
-        InMemory r = new InMemory();
-        // A day of readings on the 20th from 9 am, every three hours, warmest at 3 pm; then the 21st's 9 am reading.
+    void aDayFoldsIntoFourWindowsAndTheNineAmReadingClosesIt() {
+        // A day of readings on the 20th from 9 am, every three hours, warmest at 3 pm; then the 21st's 9 am and 9:10 readings.
         double[] temps = {14, 20, 26, 22, 17, 13, 11, 10};
         String[] times = {"2026-09-20T09:00", "2026-09-20T12:00", "2026-09-20T15:00", "2026-09-20T18:00", "2026-09-20T21:00", "2026-09-21T00:00", "2026-09-21T03:00", "2026-09-21T06:00"};
+        List<Observation> readings = new ArrayList<>();
         for (int i = 0; i < temps.length; i++) {
-            r.accept(ADELAIDE_STATION, ob(times[i], temps[i], 0.4 * i, 1.2, 26.0));
+            readings.add(ob(times[i], temps[i], 0.4 * i, 1.2, 26.0));
         }
-        assertThat(r.writes).as("three windows closed so far; the fourth is open").hasSize(3);
-        assertThat(r.writes.getFirst()).startsWith("window 2026-09-20T15:00 readings 2 tmax 20.0");
-        // The 9 am reading on the 21st: the total to 9 am is the 20th's rain; the day's maximum is the windows' 26.
-        r.accept(ADELAIDE_STATION, ob("2026-09-21T09:00", 12, 0.0, 3.6, 12.0));
-        assertThat(r.writes).hasSize(5);
-        assertThat(r.writes.get(3)).startsWith("window 2026-09-21T09:00 readings 2 tmax 11.0 pmax 26.0");
-        assertThat(r.writes.get(4)).isEqualTo("day 2026-09-20 3.6 26.0 bureau");
-        NavigableMap<LocalDate, Record.Day> days = r.days("023000");
-        assertThat(days).containsOnlyKeys(LocalDate.of(2026, 9, 20));
-        assertThat(r.rainSoFar("023000")).as("the new window's rain so far").isEqualTo(0.0);
-        // The 9:10 reading closes nothing again.
-        r.accept(ADELAIDE_STATION, ob("2026-09-21T09:10", 13, 0.0, 3.6, 13.0));
-        assertThat(r.writes).hasSize(5);
+        // The 9 am reading on the 21st: the total to 9 am is the 20th's rain, and it opens the next day, not this one.
+        readings.add(ob("2026-09-21T09:00", 12, 0.0, 3.6, 12.0));
+        readings.add(ob("2026-09-21T09:10", 13, 0.0, 3.6, 13.0));
+        Record.Folded f = Record.fold(LocalDate.of(2026, 9, 20), ADELAIDE, readings);
+        assertThat(f.windows()).hasSize(4);
+        assertThat(f.windows().getFirst().at()).isEqualTo(at("2026-09-20T15:00"));
+        assertThat(f.windows().getFirst().readings()).isEqualTo(2);
+        assertThat(f.windows().getFirst().tMax()).isEqualTo(20.0);
+        assertThat(f.windows().get(1).tMax()).as("3 pm to 9 pm: 26 and 22").isEqualTo(26.0);
+        Record.Hour6 last = f.windows().getLast();
+        assertThat(last.at()).isEqualTo(at("2026-09-21T09:00"));
+        assertThat(last.readings()).as("3 am and 6 am; the 9 am reading is the next day's").isEqualTo(2);
+        assertThat(last.tMax()).isEqualTo(11.0);
+        assertThat(last.publishedMax()).isEqualTo(26.0);
+        // The day: the 9 am reading's total, the windows' maximum.
+        assertThat(f.day()).isPresent();
+        assertThat(f.day().get()).isEqualTo(new Record.Day(LocalDate.of(2026, 9, 20), 3.6, 26.0, Record.SOURCE_BUREAU));
+        // Folded again from the same readings, the same answer: the fold is idempotent.
+        assertThat(Record.fold(LocalDate.of(2026, 9, 20), ADELAIDE, readings)).isEqualTo(f);
+        // Readings of another day are not this day's.
+        assertThat(Record.fold(LocalDate.of(2026, 9, 19), ADELAIDE, readings).windows()).isEmpty();
     }
 
     @Test
     void aNineAmReadingWithoutATotalLeavesTheDayForTheArchiveWhichNeverReplacesTheStationsOwn() {
+        // No total at 9 am: the windows are written, the day is not.
+        Record.Folded f = Record.fold(LocalDate.of(2026, 9, 20), ADELAIDE, List.of(ob("2026-09-20T15:00", 20, 0.0, null, null), ob("2026-09-21T09:00", 12, 0.0, null, null)));
+        assertThat(f.windows()).hasSize(1);
+        assertThat(f.day()).isEmpty();
+        // A total but no reading inside the day: nothing to take a maximum from, so the archive has the day.
+        assertThat(Record.fold(LocalDate.of(2026, 9, 20), ADELAIDE, List.of(ob("2026-09-21T09:00", 12, 0.0, 3.6, null))).day()).isEmpty();
         InMemory r = new InMemory();
-        r.accept(ADELAIDE_STATION, ob("2026-09-20T15:00", 20, 0.0, null, null));
-        r.accept(ADELAIDE_STATION, ob("2026-09-21T09:00", 12, 0.0, null, null));
         assertThat(r.days("023000")).isEmpty();
         assertThat(r.missing("023000", LocalDate.of(2026, 9, 18), LocalDate.of(2026, 9, 20))).hasSize(3);
         // The archive fills the 18th to the 20th; the station's own 19th, arriving later, is not replaced by a later fill.

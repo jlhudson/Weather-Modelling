@@ -119,7 +119,7 @@
             {v: pts.length, k: 'points of ours', cls: 'model', t: "Places nobody's reach contained when asked, dropped as stations of our own: the model's current, a year of the archive, the same reach"},
             {v: lastStations && lastStations.updatedAt ? ago(lastStations.updatedAt) : '—', k: 'file read'},
             {v: fresh.length ? fmt(fresh.reduce(function (a, p) { return a + (p.temperatureC || 0); }, 0) / fresh.filter(function (p) { return p.temperatureC != null; }).length, 1) + ' °C' : '—', k: 'mean temperature'},
-            {v: lastReach ? reaches.length + (reaches.length < all.length ? ' of ' + all.length : '') : '—', k: 'reaches drawn', cls: 'reach', t: 'Stations whose terrain has been sampled; the rest follow, one every fifteen seconds'},
+            {v: lastReach ? reaches.length + (reaches.length < all.length ? ' of ' + all.length : '') : '—', k: 'reaches drawn', cls: 'reach', t: 'Stations whose terrain has been sampled; the daily housekeeping samples the rest'},
             {v: reaches.length ? fmt(reaches.reduce(function (a, p) { return a + p.areaKm2; }, 0) / reaches.length, 0) + ' km²' : '—', k: 'mean reach area', cls: 'reach'}
         ];
         $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '"><div class="v">' + esc(x.v) + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
@@ -311,7 +311,7 @@
     function reachSection(s) {
         var t = s.terrain, r = s.reach, html = '<h2>Reach <span class="muted">the ground it speaks for</span></h2>';
         if (!t || !t.sampled) {
-            return html + '<p class="muted mb-1">Its terrain has not been sampled yet: ' + (t ? t.points : '') + ' points of the elevation tiles, some fifteen tiles, once. The background job takes one station every fifteen seconds; or</p>'
+            return html + '<p class="muted mb-1">Its terrain has not been sampled yet: ' + (t ? t.points : '') + ' points of the elevation tiles, some fifteen tiles, once. The daily housekeeping samples every station lacking it; or</p>'
                 + '<button class="pill" id="sampleNow" type="button">' + icon('reach') + ' sample it now</button>';
         }
         html += kv([
@@ -428,7 +428,7 @@
         var d = s.drought, html = '<h2>Drought <span class="muted">from its own record</span></h2>';
         if (!d) return html;
         if (!d.held) {
-            return html + '<p class="muted mb-1">Its record holds ' + d.days + ' day' + (d.days === 1 ? '' : 's') + (d.days ? ' (' + d.bureauDays + ' from the file, ' + d.archiveDays + ' from the archive)' : '') + ': too few for a drought to speak of. The archive fills a year, one station every fifteen seconds.</p>';
+            return html + '<p class="muted mb-1">Its record holds ' + d.days + ' day' + (d.days === 1 ? '' : 's') + (d.days ? ' (' + d.bureauDays + ' from the file, ' + d.archiveDays + ' from the archive)' : '') + ': too few for a drought to speak of. The daily housekeeping fills a year from the archive; an ask for a reading here fills it now.</p>';
         }
         html += kv([
             ['KBDI', fmt(d.kbdiMm, 0) + ' mm <span class="muted">' + esc(String(d.band).toLowerCase()) + ' · 0 saturated, 203 dry</span>'],

@@ -5,17 +5,14 @@ import au.gully.bureau.StationRegistry;
 import au.gully.platform.access.ConsoleUsers;
 import au.gully.platform.diagnostics.StartupHistory;
 import au.gully.reach.ReachRule;
-import au.gully.reading.Points;
-import au.gully.record.Backfill;
 import au.gully.record.Record;
-import au.gully.reach.TerrainSampler;
 import au.gully.reach.TerrainStore;
-import au.gully.upstreams.Ledger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -27,8 +24,9 @@ import java.time.Instant;
  * <ol>
  *   <li>the console user;</li>
  *   <li>the registers back into memory from the database;</li>
- *   <li>the timers: the Bureau's file every ten minutes, the terrain sampler until every station has
- *       its terrain, the backfill until every station has its year, and the hourly sweep.</li>
+ *   <li>the two timers (W-15): the Bureau's file every ten minutes, and the housekeeping once a day
+ *       at half past nine local - and once a minute after the start, so a fresh deployment is not
+ *       waiting for tomorrow. Nothing else runs on a clock.</li>
  * </ol>
  * Nothing touches the network before the service is ready.
  */
@@ -41,12 +39,9 @@ public class Startup implements ApplicationRunner {
     private final StationRegistry stations;
     private final StationReader stationReader;
     private final TerrainStore terrain;
-    private final TerrainSampler sampler;
     private final ReachRule reachRule;
     private final Record record;
-    private final Backfill backfill;
-    private final Points points;
-    private final Ledger ledger;
+    private final Housekeeping housekeeping;
     private final GullyProperties properties;
     private final StartupHistory history;
     private final TaskScheduler scheduler;
@@ -70,14 +65,12 @@ public class Startup implements ApplicationRunner {
         Instant soon = Instant.now().plusSeconds(2);
         if (properties.enabled()) {
             scheduler.scheduleWithFixedDelay(guarded("bureau", stationReader::read), soon, StationReader.EVERY);
-            // The terrain, one station a tick until every station has it: a few hundred elevation calls, once.
-            scheduler.scheduleWithFixedDelay(guarded("terrain", sampler::tick), soon.plusSeconds(10), TerrainSampler.EVERY);
-            // The record, one station a tick until every station has its year: the archive, once.
-            scheduler.scheduleWithFixedDelay(guarded("backfill", backfill::tick), soon.plusSeconds(20), Backfill.EVERY);
+            // The housekeeping: once a day after the Bureau's day has closed, and once soon after the start.
+            scheduler.schedule(guarded("housekeeping", () -> housekeeping.run(Instant.now())), new CronTrigger(String.format("0 %d %d * * *", Housekeeping.AT.getMinute(), Housekeeping.AT.getHour()), properties.zoneId()));
+            scheduler.schedule(guarded("housekeeping", () -> housekeeping.run(Instant.now())), Instant.now().plus(Housekeeping.AFTER_START));
         } else {
-            log.info("gully.enabled is false: the Bureau's file is not read and no terrain is sampled");
+            log.info("gully.enabled is false: the Bureau's file is not read, and the housekeeping does not run");
         }
-        scheduler.scheduleWithFixedDelay(guarded("sweep", () -> { ledger.prune(); record.prune(Instant.now()); points.expire(Instant.now()); }), soon.plusSeconds(60), Duration.ofHours(1));
     }
 
     /**

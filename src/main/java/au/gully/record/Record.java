@@ -2,6 +2,7 @@ package au.gully.record;
 
 import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
+import au.gully.bureau.StationRegistry;
 import au.gully.storage.Db;
 import au.gully.upstreams.OpenMeteo;
 import lombok.extern.slf4j.Slf4j;
@@ -15,24 +16,25 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
- * What a station's readings are kept as once the file has moved on (W-6). Every observation goes
- * into the open six-hour {@link Window} for its station; when a reading arrives past the window's
- * end the window is written to {@code station_hour6} and a new one opens. The first reading at or
- * after 9 am closes the Bureau's day that ended there: its rain is the total to 9 am that reading
- * publishes, its maximum the highest of the day's windows and of the running maximum the Bureau
- * published just before 9 am. A day is written only when it has a rain figure; one with none is
- * left absent for the archive to fill.
+ * What a station's readings are kept as once the file has moved on (W-6, W-15). Once a day the
+ * housekeeping folds each Bureau station's stored readings into the Bureau day that ended at the
+ * last 9 am: four six-hour {@link Window}s ending 3 pm, 9 pm, 3 am and 9 am local, written to
+ * {@code station_hour6}, and the day itself, written to {@code station_day}. The day's rain is the
+ * total to 9 am that the first reading at or after 9 am publishes; its maximum the highest of the
+ * day's windows and of the running maximum the Bureau published just before 9 am. A day is written
+ * only when it has a rain figure and a window; one with neither is left absent for the archive to
+ * fill. The fold is idempotent, and the housekeeping folds the last three days lacking their own
+ * row, so a run that was missed is caught up by the next.
  * <p>
  * The days are held in memory for every station, the last {@link #KEEP}: it is what the drought
  * integrates over, on demand, and it is small - eighty stations at five hundred days.
@@ -51,6 +53,10 @@ public class Record {
      */
     public static final int SPIN_UP_DAYS = 365;
     /**
+     * How many days back the housekeeping folds: the readings are kept as long.
+     */
+    public static final int FOLD_DAYS = 3;
+    /**
      * The windows end on these local hours; the day turns on the second.
      */
     static final int[] BOUNDARY_HOURS = {3, 9, 15, 21};
@@ -60,17 +66,13 @@ public class Record {
     public static final String SOURCE_ARCHIVE = "archive";
 
     private final JdbcClient db;
-    private final Map<String, Window> open = new ConcurrentHashMap<>();
-    private final Map<String, Deque<Hour6>> lastWindows = new ConcurrentHashMap<>();
+    private final StationRegistry stations;
     private final Map<String, NavigableMap<LocalDate, Day>> days = new ConcurrentHashMap<>();
-    private final Map<String, LocalDate> lastDayClosed = new ConcurrentHashMap<>();
     private final Map<String, Long> versions = new ConcurrentHashMap<>();
 
-    public Record(JdbcClient db, au.gully.bureau.StationRegistry stations) {
+    public Record(JdbcClient db, StationRegistry stations) {
         this.db = db;
-        if (stations != null) {
-            stations.onObservation(this::accept);
-        }
+        this.stations = stations;
     }
 
     /**
@@ -86,30 +88,23 @@ public class Record {
                         Double wMean, Double wMax, Double gMax, Double rainSince9am, Double rain24h, Double publishedMax) {
     }
 
+    /**
+     * What a fold of one day made: its windows, and the day if it could be written.
+     */
+    public record Folded(List<Hour6> windows, Optional<Day> day) {
+    }
+
     // ---------------------------------------------------------------- the start
 
     public void rehydrate() {
         days.clear();
-        lastWindows.clear();
         Instant since = Instant.now().minus(KEEP);
         db.sql("select station_id, day, rain_mm, max_temp_c, source from station_day where day >= :since order by day")
                 .param("since", LocalDate.ofInstant(since, ZoneId.of("UTC"))).query().listOfRows().forEach(row ->
                         daysOf((String) row.get("station_id")).put(Db.date(row.get("day")),
                                 new Day(Db.date(row.get("day")), Db.dbl(row.get("rain_mm")), Db.dbl(row.get("max_temp_c")), (String) row.get("source"))));
-        db.sql("""
-                select * from (select station_id, at, readings, temp_min_c, temp_max_c, temp_mean_c, rh_min_pct, rh_max_pct, wind_mean_kmh, wind_max_kmh,
-                  gust_max_kmh, rain_since_9am_mm, rain_24h_mm, published_max_c, row_number() over (partition by station_id order by at desc) as n
-                  from station_hour6) w where n <= 4 order by station_id, at""").query().listOfRows().forEach(row ->
-                lastWindows.computeIfAbsent((String) row.get("station_id"), k -> new ArrayDeque<>()).addLast(hour6(row)));
         long rows = days.values().stream().mapToLong(Map::size).sum();
-        log.info("record rehydrated: {} days over {} stations, the last windows of {}", rows, days.size(), lastWindows.size());
-    }
-
-    private static Hour6 hour6(Map<String, Object> row) {
-        return new Hour6(Db.instant(row.get("at")), Db.integer(row.get("readings")), Db.dbl(row.get("temp_min_c")), Db.dbl(row.get("temp_max_c")),
-                Db.dbl(row.get("temp_mean_c")), Db.integer(row.get("rh_min_pct")), Db.integer(row.get("rh_max_pct")), Db.dbl(row.get("wind_mean_kmh")),
-                Db.dbl(row.get("wind_max_kmh")), Db.dbl(row.get("gust_max_kmh")), Db.dbl(row.get("rain_since_9am_mm")), Db.dbl(row.get("rain_24h_mm")),
-                Db.dbl(row.get("published_max_c")));
+        log.info("record rehydrated: {} days over {} stations", rows, days.size());
     }
 
     private NavigableMap<LocalDate, Day> daysOf(String stationId) {
@@ -119,34 +114,76 @@ public class Record {
     // ---------------------------------------------------------------- the fold
 
     /**
-     * One reading, newer than the station's last: into its window, and the window and the day
-     * closed when it is past them.
+     * The housekeeping's fold: every Bureau station's last {@link #FOLD_DAYS} days that lack a row of
+     * the station's own, folded from its stored readings.
+     *
+     * @return how many days were written
      */
-    public void accept(Station s, Observation o) {
-        if (o.at() == null) {
-            return;
-        }
-        ZoneId zone = zoneOf(s);
-        Instant end = boundaryAfter(o.at(), zone);
-        Window w = open.get(s.id());
-        if (w != null && !w.end.equals(end)) {
-            closeWindow(s, w);
-            w = null;
-        }
-        ZonedDateTime local = o.at().atZone(zone);
-        if (!local.toLocalTime().isBefore(DAY_TURNS_AT)) {
-            LocalDate ended = local.toLocalDate().minusDays(1);
-            LocalDate last = lastDayClosed.get(s.id());
-            if ((last == null || ended.isAfter(last)) && !daysOf(s.id()).containsKey(ended)) {
-                closeDay(s, ended, o, zone);
+    public int fold(Instant now) {
+        int written = 0;
+        for (Station s : stations.bureau()) {
+            ZoneId zone = zoneOf(s);
+            LocalDate today = dayOf(now, zone);
+            for (int back = FOLD_DAYS; back >= 1; back--) {
+                LocalDate day = today.minusDays(back);
+                Day held = daysOf(s.id()).get(day);
+                if (held != null && SOURCE_BUREAU.equals(held.source())) {
+                    continue;
+                }
+                Instant from = day.atTime(DAY_TURNS_AT).atZone(zone).toInstant();
+                Instant to = day.plusDays(1).atTime(DAY_TURNS_AT).atZone(zone).toInstant();
+                // The day's readings, and the first hour of the next day's: the 9 am reading carries the total.
+                List<Observation> readings = stations.readings(s.id(), from, to.plus(Duration.ofHours(1)));
+                if (readings.isEmpty()) {
+                    continue;
+                }
+                Folded f = fold(day, zone, readings);
+                for (Hour6 h : f.windows()) {
+                    writeWindow(s.id(), h);
+                }
+                if (f.day().isPresent()) {
+                    put(s.id(), f.day().get(), true);
+                    written++;
+                }
             }
-            lastDayClosed.put(s.id(), ended);
         }
-        if (w == null) {
-            w = new Window(end);
-            open.put(s.id(), w);
+        return written;
+    }
+
+    /**
+     * One Bureau day of one station, folded from its readings: the four windows from the readings
+     * inside the day, and the day from the windows and the reading at or after 9 am that closes it.
+     */
+    public static Folded fold(LocalDate day, ZoneId zone, List<Observation> readings) {
+        Instant from = day.atTime(DAY_TURNS_AT).atZone(zone).toInstant();
+        Instant to = day.plusDays(1).atTime(DAY_TURNS_AT).atZone(zone).toInstant();
+        Map<Instant, Window> windows = new TreeMap<>();
+        Observation closing = null;
+        for (Observation o : readings) {
+            if (o.at() == null || o.at().isBefore(from)) {
+                continue;
+            }
+            if (!o.at().isBefore(to)) {
+                if (closing == null) {
+                    closing = o;
+                }
+                continue;
+            }
+            windows.computeIfAbsent(boundaryAfter(o.at(), zone), Window::new).add(o);
         }
-        w.add(o);
+        List<Hour6> out = new ArrayList<>();
+        Double max = null;
+        for (Window w : windows.values()) {
+            Hour6 h = hour6(w);
+            out.add(h);
+            max = maxOf(max, h.tMax());
+            if (h.at().equals(to)) {
+                max = maxOf(max, h.publishedMax());
+            }
+        }
+        Double rain = closing == null ? null : closing.rain24hMm();
+        Optional<Day> d = rain == null || max == null ? Optional.empty() : Optional.of(new Day(day, rain, max, SOURCE_BUREAU));
+        return new Folded(out, d);
     }
 
     /**
@@ -168,73 +205,25 @@ public class Record {
         return new Hour6(w.end, w.readings, w.tMin, w.tMax, w.tMean(), w.rhMin, w.rhMax, w.wMean(), w.wMax, w.gMax, w.rainSince9am, w.rain24h, w.publishedMax);
     }
 
+    private static Double maxOf(Double a, Double b) {
+        return a == null ? b : b == null ? a : Double.valueOf(Math.max(a, b));
+    }
+
     /**
-     * A window past its end: written, and kept among the station's last four for the day's close.
+     * A window, written; folded again, it is the same row.
      */
-    void closeWindow(Station s, Window w) {
-        Hour6 h = hour6(w);
+    void writeWindow(String stationId, Hour6 h) {
         db.sql("""
                 insert into station_hour6 (station_id, at, readings, temp_min_c, temp_max_c, temp_mean_c, rh_min_pct, rh_max_pct,
                   wind_mean_kmh, wind_max_kmh, gust_max_kmh, rain_since_9am_mm, rain_24h_mm, published_max_c)
                 values (:id, :at, :n, :tmin, :tmax, :tmean, :rhmin, :rhmax, :wmean, :wmax, :gmax, :rain, :rain24, :pmax)
-                on conflict (station_id, at) do update set readings = station_hour6.readings + excluded.readings,
-                  temp_min_c = least(station_hour6.temp_min_c, excluded.temp_min_c), temp_max_c = greatest(station_hour6.temp_max_c, excluded.temp_max_c),
-                  temp_mean_c = coalesce(excluded.temp_mean_c, station_hour6.temp_mean_c),
-                  rh_min_pct = least(station_hour6.rh_min_pct, excluded.rh_min_pct), rh_max_pct = greatest(station_hour6.rh_max_pct, excluded.rh_max_pct),
-                  wind_mean_kmh = coalesce(excluded.wind_mean_kmh, station_hour6.wind_mean_kmh), wind_max_kmh = greatest(station_hour6.wind_max_kmh, excluded.wind_max_kmh),
-                  gust_max_kmh = greatest(station_hour6.gust_max_kmh, excluded.gust_max_kmh), rain_since_9am_mm = coalesce(excluded.rain_since_9am_mm, station_hour6.rain_since_9am_mm),
-                  rain_24h_mm = coalesce(excluded.rain_24h_mm, station_hour6.rain_24h_mm), published_max_c = greatest(station_hour6.published_max_c, excluded.published_max_c)""")
-                .param("id", s.id()).param("at", Db.ts(h.at())).param("n", h.readings()).param("tmin", h.tMin()).param("tmax", h.tMax())
+                on conflict (station_id, at) do update set readings = excluded.readings, temp_min_c = excluded.temp_min_c,
+                  temp_max_c = excluded.temp_max_c, temp_mean_c = excluded.temp_mean_c, rh_min_pct = excluded.rh_min_pct, rh_max_pct = excluded.rh_max_pct,
+                  wind_mean_kmh = excluded.wind_mean_kmh, wind_max_kmh = excluded.wind_max_kmh, gust_max_kmh = excluded.gust_max_kmh,
+                  rain_since_9am_mm = excluded.rain_since_9am_mm, rain_24h_mm = excluded.rain_24h_mm, published_max_c = excluded.published_max_c""")
+                .param("id", stationId).param("at", Db.ts(h.at())).param("n", h.readings()).param("tmin", h.tMin()).param("tmax", h.tMax())
                 .param("tmean", h.tMean()).param("rhmin", h.rhMin()).param("rhmax", h.rhMax()).param("wmean", h.wMean()).param("wmax", h.wMax())
                 .param("gmax", h.gMax()).param("rain", h.rainSince9am()).param("rain24", h.rain24h()).param("pmax", h.publishedMax()).update();
-        keepWindow(s, w);
-    }
-
-    void keepWindow(Station s, Window w) {
-        Hour6 h = hour6(w);
-        Deque<Hour6> d = lastWindows.computeIfAbsent(s.id(), k -> new ArrayDeque<>());
-        synchronized (d) {
-            d.addLast(h);
-            while (d.size() > 4) {
-                d.removeFirst();
-            }
-        }
-    }
-
-    /**
-     * The day that ended at 9 am, from the reading at or after 9 am that publishes its total, and
-     * the windows that fell inside it. No total, no row.
-     */
-    private void closeDay(Station s, LocalDate day, Observation first, ZoneId zone) {
-        Double rain = first.rain24hMm();
-        if (rain == null) {
-            return;
-        }
-        Instant from = day.atTime(DAY_TURNS_AT).atZone(zone).toInstant();
-        Instant to = day.plusDays(1).atTime(DAY_TURNS_AT).atZone(zone).toInstant();
-        Double max = null;
-        Deque<Hour6> d = lastWindows.get(s.id());
-        if (d != null) {
-            synchronized (d) {
-                for (Hour6 h : d) {
-                    if (h.at().isAfter(from) && !h.at().isAfter(to)) {
-                        max = maxOf(max, h.tMax());
-                        if (h.at().equals(to)) {
-                            max = maxOf(max, h.publishedMax());
-                        }
-                    }
-                }
-            }
-        }
-        if (max == null) {
-            // No window of the day was seen - the service was not running - so the archive will have the day.
-            return;
-        }
-        put(s.id(), new Day(day, rain, max, SOURCE_BUREAU), true);
-    }
-
-    private static Double maxOf(Double a, Double b) {
-        return a == null ? b : b == null ? a : Double.valueOf(Math.max(a, b));
     }
 
     /**
@@ -299,18 +288,23 @@ public class Record {
     }
 
     /**
-     * Changes when the station's days do: what a memo of the drought is keyed by.
+     * Changes when the station's days do.
      */
     public long version(String stationId) {
         return versions.getOrDefault(stationId, 0L);
     }
 
     /**
-     * The open window's rain so far, for the drought factor's last day.
+     * Today's rain so far, for the drought factor's last day: what the station's latest reading
+     * says since 9 am, if that reading is today's.
      */
-    public Double rainSoFar(String stationId) {
-        Window w = open.get(stationId);
-        return w == null ? null : w.rainSince9am;
+    public Double rainSoFar(Station s, Instant now) {
+        Observation o = stations == null ? null : stations.latest(s.id()).orElse(null);
+        if (o == null || o.at() == null) {
+            return null;
+        }
+        ZoneId zone = zoneOf(s);
+        return dayOf(o.at(), zone).equals(dayOf(now, zone)) ? o.rainSince9amMm() : null;
     }
 
     /**
@@ -349,9 +343,6 @@ public class Record {
         db.sql("delete from station_hour6 where station_id = :id").param("id", stationId).update();
         db.sql("delete from station_day where station_id = :id").param("id", stationId).update();
         days.remove(stationId);
-        open.remove(stationId);
-        lastWindows.remove(stationId);
-        lastDayClosed.remove(stationId);
         versions.merge(stationId, 1L, Long::sum);
     }
 

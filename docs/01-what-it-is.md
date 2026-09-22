@@ -11,9 +11,19 @@ with a conditional GET, so a file the Bureau has not changed costs a round trip 
 takes the whole file in: every station's id, WMO number, name, position, height, zone and district
 go into the `station` table (an upsert, so a station that moves or is renamed follows the file), and
 its latest values — temperature, apparent temperature, dew point, humidity, wind and gust, pressure,
-rain since 9 am and to 9 am, the day's maximum and minimum, the sky — into memory. The last six
-readings per station are kept in memory too, for the console. Nothing about an observation is
-written to the database: it is ten minutes old at most and the next file replaces it.
+rain since 9 am and to 9 am, the day's maximum and minimum, the sky — into `station_reading`, one
+row per station per observation time (W-15). The latest and the newest six per station are held in
+memory as well, for the feed and the wind's trend, and read back from the table at the start.
+
+**Two timers, and nothing else on a clock** (W-15). The Bureau's file is read every ten minutes,
+and once a day at 9:30 local - and once, a minute after the start - the housekeeping runs: the
+fold of the stored readings into the six-hour history and the Bureau days, the pruning (readings
+older than three days, windows and days older than 548, the upstream ledger, points of ours no
+ask has used for 548 days), the terrain of any station lacking it, and the year of any Bureau
+station missing days. Everything else - a reading at a point, a point of ours, its current and its
+record, a station's drought - happens when it is asked for, so the service idles at the cost of
+one small file every ten minutes, and Open-Meteo and Google are touched only by an ask or by the
+morning's backfill.
 
 A station is *reporting* when its latest observation is under seventy minutes old. Beside what it
 last said, every station carries its wind as a trend (W-9): the mean speed, gust and direction (as
@@ -33,11 +43,10 @@ Terrain Tiles on AWS's open data registry (Mapzen's, from SRTM, GMTED2010 and ot
 bathymetry over the sea): public, no key, no published limit, 256-pixel PNG tiles at zoom 10 —
 about 125 m a pixel here — decoded with the JDK. A station's fifty-kilometre disc is some fifteen
 tiles (a megabyte), neighbouring stations share them through a cache, and every tile fetched is a
-row in the ledger. A background job takes one station every fifteen seconds until every station
-has its terrain; the console can sample one station now from its drawer. (Open-Meteo's elevation
+row in the ledger. The daily housekeeping (W-15) samples every station lacking terrain, so a new
+station in the file is picked up on its own; the console can sample one station now from its drawer. (Open-Meteo's elevation
 endpoint was tried first and counts every point as a call: 2,401 a station against 10,000 a day.) The samples are kept in `terrain` (eight-byte doubles, the station's own first) with the
-position they were taken at, so a station that moves is sampled again. A new station in the file is
-picked up by the job on its own.
+position they were taken at, so a station that moves is sampled again.
 
 **The rule, two numbers.** *Reach* — how far a station reaches over flat ground, 40 km by default —
 and *what a hundred metres of height costs* of that reach, 10 km by default. Along each bearing a
@@ -75,28 +84,37 @@ west. Two reaches may overlap — a point inside several is for the interpolatio
 
 ## 3. The record and the drought
 
-**The record.** Every observation a real station makes goes into an open six-hour window; when a
-reading arrives past the window's end - 3 am, 9 am, 3 pm, 9 pm local - the window is written to
-`station_hour6` (readings, the temperature's extremes and mean, the humidity's extremes, the wind's
-mean and maximum, the strongest gust, and the Bureau's running figures as they stood). The first
-reading at or after 9 am closes the Bureau's day that ended there, into `station_day`: the day is
-dated by the 9 am it began at, its rain is the total to 9 am the reading publishes, its maximum the
-highest of the day's windows and the running maximum published just before 9 am. A day the service
-was not running for is left absent and the archive fills it. Both tables are kept 548 days.
+**The readings, stored.** Every observation the Bureau's file brings is written to
+`station_reading` as published (W-15): the database is the store, and what lives in memory is the
+one cache the service keeps - each station's latest and its newest few, for the feed and the wind's
+trend, read back from the table at the start. A reading is kept three days; the history below is
+what it becomes.
 
-**The backfill.** A background job takes one station every fifteen seconds and asks Open-Meteo for
+**The record, folded once a day.** The daily housekeeping folds each Bureau station's stored
+readings into the Bureau day that ended at the last 9 am: four six-hour windows ending 3 pm, 9 pm,
+3 am and 9 am local, written to `station_hour6` (readings, the temperature's extremes and mean, the
+humidity's extremes, the wind's mean and maximum, the strongest gust, and the Bureau's running
+figures as they stood at the window's last reading), and the day into `station_day`: dated by the
+9 am it began at, its rain the total to 9 am that the first reading at or after 9 am publishes, its
+maximum the highest of the day's windows and the running maximum published just before 9 am. A day
+without a total or without a reading is left absent for the archive to fill. The fold is
+idempotent and looks back three days, so a run that was missed is caught up by the next. Both
+tables are kept 548 days.
+
+**The backfill.** The daily housekeeping asks Open-Meteo, one Bureau station after another, for
 the days its year lacks: the reanalysis archive (hourly rain and temperature, folded into 9 am days;
 about 26 units for a year, one per fortnight) for the days older than the archive's six-day lag, the
 forecast endpoint's past days (one unit) for the rest. Only the missing days are asked for, a gap
 of three or fewer is not worth a call, and a station is left six hours between attempts. The
-archive's day never replaces a day the station made itself.
+archive's day never replaces a day the station made itself. Between runs, an ask fills what it
+needs (W-14): a member station with no drought to give, a point of ours' missing days.
 
 **The drought.** Each station's KBDI is integrated from its own record: from field capacity at the
 start of the year behind today, day by day, with the mean annual rainfall the run needs taken from
 that same year; the drought factor from the deficit and the last twenty days of rain, today's so
 far last. Twenty days is the least a record can speak from; a year less a fortnight is complete.
-Nothing is stored - it is arithmetic over the record, memoised until the record or the day changes -
-and it travels on the stations feed (`kbdiMm`, `droughtFactor`) and the station's detail, with the
+Nothing is stored and nothing is memoised - it is arithmetic over the record, a millisecond a
+station, done when asked - and it travels on the stations feed (`kbdiMm`, `droughtFactor`) and the station's detail, with the
 last thirty days and eight windows of the record behind it.
 
 ## 4. The reading, and the points of our own
@@ -151,7 +169,8 @@ Open-Meteo is the primary and Google Weather the overflow, each behind a budget 
 allowance, retired at 90 % of it), a breaker (open after three failures, or at once when the refusal
 names the window that ran out) and a pacer (the real per-minute limit). Every call is a row in
 `upstream_call`, written before it is counted, which is what the Upstreams page and the budget read.
-Open-Meteo's forecast costs three units. Nothing fetches a forecast yet.
+Open-Meteo's forecast costs three units; a point of ours fetches one when asked, and the archive
+and the recent days when its record is missing them.
 
 ## 7. The console
 

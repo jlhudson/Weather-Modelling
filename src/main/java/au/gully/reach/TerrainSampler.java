@@ -6,7 +6,6 @@ import au.gully.platform.UpstreamException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,21 +14,16 @@ import java.util.Optional;
 
 /**
  * Samples the terrain around a station from the elevation tiles ({@link TerrainTiles}):
- * {@link Terrain#POINTS} points read off some fifteen tiles. Done once per station, in the
- * background, one station a tick, so a new station in the file is picked up on its own; and on
- * request from the console for one station now.
+ * {@link Terrain#POINTS} points read off some fifteen tiles. Done once per station: by the daily
+ * housekeeping for every station lacking it (W-15), so a new station in the file is picked up on its
+ * own; when a point of ours is dropped; and on request from the console for one station now.
  * <p>
  * A station is sampled whole or not at all: a tile that cannot be fetched abandons the station for
- * this tick, and it is tried again on a later one.
+ * this run, and it is tried again on the next.
  */
 @Slf4j
 @Component
 public class TerrainSampler {
-
-    /**
-     * How often the background job looks for a station without terrain.
-     */
-    public static final Duration EVERY = Duration.ofSeconds(15);
 
     private final StationRegistry stations;
     private final TerrainStore store;
@@ -57,16 +51,18 @@ public class TerrainSampler {
     }
 
     /**
-     * One tick of the background job: the first pending station, sampled.
+     * The housekeeping's run: every pending station, sampled.
      *
-     * @return whether a station was sampled
+     * @return how many were sampled
      */
-    public boolean tick() {
-        List<Station> pending = pending();
-        if (pending.isEmpty()) {
-            return false;
+    public int sampleMissing() {
+        int n = 0;
+        for (Station s : pending()) {
+            if (sample(s).isPresent()) {
+                n++;
+            }
         }
-        return sample(pending.getFirst()).isPresent();
+        return n;
     }
 
     /**

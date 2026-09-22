@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Collection;
@@ -20,25 +21,30 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Every Bureau station the state file has ever named, and its latest values. The station list
  * comes from the file itself, never from a hand-typed table, and is kept in {@code station} so a
- * restart knows where the stations are before the first read answers. The values live in memory
- * only: they are ten minutes old at most and the next file replaces them, and the last few are kept
- * for the console.
+ * restart knows where the stations are before the first read answers. Every reading the file brings
+ * is written to {@code station_reading} as published (W-15): the database is the store, and the
+ * history is folded from it once a day. What lives in memory is the one cache the service keeps -
+ * each station's latest and its newest few, for the feed and the wind's trend - read back from the
+ * table at the start.
  */
 @Slf4j
 @Service
 public class StationRegistry {
 
     /**
-     * How many readings are kept per station: an hour of the Bureau's ten-minute files.
+     * How many readings are kept per station in memory: an hour of the Bureau's ten-minute files.
      */
     public static final int RECENT = 6;
+    /**
+     * How long a reading is kept in the table: long enough to fold a day the housekeeping missed.
+     */
+    public static final Duration KEEP_READINGS = Duration.ofDays(3);
 
     private final JdbcClient db;
     private final Map<String, Station> stations = new ConcurrentHashMap<>();
     private final Map<String, Observation> latest = new ConcurrentHashMap<>();
     private final Map<String, ArrayDeque<Observation>> recent = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastAsked = new ConcurrentHashMap<>();
-    private final List<java.util.function.BiConsumer<Station, Observation>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile Instant lastUpdateAt;
 
     public StationRegistry(JdbcClient db) {
@@ -46,14 +52,8 @@ public class StationRegistry {
     }
 
     /**
-     * Who wants every reading newer than the station's last, as it arrives: the record.
-     */
-    public void onObservation(java.util.function.BiConsumer<Station, Observation> listener) {
-        listeners.add(listener);
-    }
-
-    /**
-     * The station list from the database, so the map has the stations before the first read.
+     * The station list from the database, so the map has the stations before the first read; and
+     * each station's newest readings, so a restart knows what every station last said.
      */
     public void rehydrate() {
         stations.clear();
@@ -63,7 +63,20 @@ public class StationRegistry {
         }
         db.sql("select id, last_asked_at from station where kind = :kind").param("kind", Station.POINT).query().listOfRows()
                 .forEach(row -> { Instant at = Db.instant(row.get("last_asked_at")); if (at != null) lastAsked.put((String) row.get("id"), at); });
-        log.info("stations rehydrated: {} ({} points of our own)", stations.size(), points().size());
+        latest.clear();
+        recent.clear();
+        List<Observation> newest = db.sql("""
+                        select * from (select *, row_number() over (partition by station_id order by at desc) as n from station_reading) r
+                        where n <= :n order by station_id, at desc""")
+                .param("n", RECENT).query(StationRegistry::observation).list();
+        for (Observation o : newest) {
+            if (!stations.containsKey(o.stationId())) {
+                continue;
+            }
+            latest.putIfAbsent(o.stationId(), o);
+            recent.computeIfAbsent(o.stationId(), k -> new ArrayDeque<>()).addLast(o);
+        }
+        log.info("stations rehydrated: {} ({} points of our own), the latest readings of {}", stations.size(), points().size(), latest.size());
     }
 
     private static Station station(ResultSet rs, int i) throws SQLException {
@@ -72,8 +85,18 @@ public class StationRegistry {
                 rs.getString("zone"), rs.getString("district"), rs.getString("state"), rs.getString("kind"));
     }
 
+    static Observation observation(ResultSet rs, int i) throws SQLException {
+        return new Observation(rs.getString("station_id"), rs.getTimestamp("at").toInstant(),
+                (Double) rs.getObject("temp_c"), (Double) rs.getObject("apparent_c"), (Double) rs.getObject("dew_point_c"),
+                (Integer) rs.getObject("humidity_pct"), (Double) rs.getObject("wind_kmh"), (Integer) rs.getObject("wind_deg"), rs.getString("wind_dir"),
+                (Double) rs.getObject("gust_kmh"), (Double) rs.getObject("pressure_hpa"), (Double) rs.getObject("rain_since_9am_mm"),
+                (Double) rs.getObject("rain_24h_mm"), (Double) rs.getObject("max_temp_c"), (Double) rs.getObject("min_temp_c"),
+                (Double) rs.getObject("visibility_km"), rs.getString("cloud"), (Integer) rs.getObject("cloud_oktas"), (Double) rs.getObject("delta_t_c"));
+    }
+
     /**
-     * The file, freshly read: the stations upserted and the latest values replaced.
+     * The file, freshly read: the stations upserted, every reading newer than the station's last
+     * written to the table and made the latest.
      *
      * @return how many stations were new to the register
      */
@@ -106,24 +129,58 @@ public class StationRegistry {
             if (previous != null && !o.at().isAfter(previous.at())) {
                 continue;
             }
-            latest.put(s.id(), o);
-            ArrayDeque<Observation> d = recent.computeIfAbsent(s.id(), k -> new ArrayDeque<>());
-            synchronized (d) {
-                d.addFirst(o);
-                while (d.size() > RECENT) {
-                    d.removeLast();
-                }
-            }
-            for (java.util.function.BiConsumer<Station, Observation> l : listeners) {
-                try {
-                    l.accept(s, o);
-                } catch (RuntimeException e) {
-                    log.warn("a listener failed on {} at {}: {}", s.id(), o.at(), e.toString());
-                }
-            }
+            write(o);
+            keep(s.id(), o);
         }
         lastUpdateAt = now;
         return added;
+    }
+
+    /**
+     * One reading into the table, as published; the same observation time again is the same row.
+     */
+    private void write(Observation o) {
+        db.sql("""
+                insert into station_reading (station_id, at, temp_c, apparent_c, dew_point_c, humidity_pct, wind_kmh, wind_deg, wind_dir, gust_kmh,
+                  pressure_hpa, rain_since_9am_mm, rain_24h_mm, max_temp_c, min_temp_c, visibility_km, cloud, cloud_oktas, delta_t_c)
+                values (:id, :at, :t, :app, :dew, :rh, :w, :deg, :dir, :g, :p, :rain9, :rain24, :max, :min, :vis, :cloud, :oktas, :dt)
+                on conflict (station_id, at) do nothing""")
+                .param("id", o.stationId()).param("at", Db.ts(o.at())).param("t", o.temperatureC()).param("app", o.apparentTemperatureC())
+                .param("dew", o.dewPointC()).param("rh", o.humidityPct()).param("w", o.windSpeedKmh()).param("deg", o.windDirectionDeg())
+                .param("dir", o.windDirection()).param("g", o.windGustKmh()).param("p", o.pressureMslHpa()).param("rain9", o.rainSince9amMm())
+                .param("rain24", o.rain24hMm()).param("max", o.maxTemperatureC()).param("min", o.minTemperatureC()).param("vis", o.visibilityKm())
+                .param("cloud", o.cloud()).param("oktas", o.cloudOktas()).param("dt", o.deltaTC()).update();
+    }
+
+    private void keep(String stationId, Observation o) {
+        latest.put(stationId, o);
+        ArrayDeque<Observation> d = recent.computeIfAbsent(stationId, k -> new ArrayDeque<>());
+        synchronized (d) {
+            d.addFirst(o);
+            while (d.size() > RECENT) {
+                d.removeLast();
+            }
+        }
+    }
+
+    /**
+     * A station's readings in a span, oldest first, from the table: what the day is folded from.
+     */
+    public List<Observation> readings(String stationId, Instant from, Instant to) {
+        return db.sql("select * from station_reading where station_id = :id and at >= :from and at < :to order by at")
+                .param("id", stationId).param("from", Db.ts(from)).param("to", Db.ts(to)).query(StationRegistry::observation).list();
+    }
+
+    /**
+     * Readings older than {@link #KEEP_READINGS}, gone: the windows and the days are the history.
+     */
+    public int pruneReadings(Instant now) {
+        return db.sql("delete from station_reading where at < :before").param("before", Db.ts(now.minus(KEEP_READINGS))).update();
+    }
+
+    public long readingRows() {
+        Long n = db.sql("select count(*) from station_reading").query(Long.class).single();
+        return n == null ? 0 : n;
     }
 
     // ---------------------------------------------------------------- reads
@@ -152,7 +209,7 @@ public class StationRegistry {
     }
 
     /**
-     * A station's last readings, newest first: up to {@link #RECENT}, as many as have arrived since the start.
+     * A station's last readings, newest first: up to {@link #RECENT}.
      */
     public List<Observation> recent(String stationId) {
         ArrayDeque<Observation> d = recent.get(stationId);
@@ -200,7 +257,7 @@ public class StationRegistry {
      */
     public void touch(String pointId, Instant now) {
         Instant last = lastAsked.get(pointId);
-        if (last != null && java.time.Duration.between(last, now).toMinutes() < 10) {
+        if (last != null && Duration.between(last, now).toMinutes() < 10) {
             return;
         }
         lastAsked.put(pointId, now);
@@ -212,24 +269,21 @@ public class StationRegistry {
     }
 
     /**
-     * The model's current at a point, as the point's latest: kept like a reading, but the record's
-     * listeners are not told - a point's days come from the archive, not from folding its fetches.
+     * The model's current at a point, as the point's latest: written and kept like a reading. A
+     * point's days come from the archive, never from folding its fetches.
      */
     public void acceptModel(Station p, Observation o) {
-        latest.put(p.id(), o);
-        ArrayDeque<Observation> d = recent.computeIfAbsent(p.id(), k -> new ArrayDeque<>());
-        synchronized (d) {
-            d.addFirst(o);
-            while (d.size() > RECENT) {
-                d.removeLast();
-            }
+        if (o.at() != null) {
+            write(o);
         }
+        keep(p.id(), o);
     }
 
     /**
-     * A point gone: its row and what the register held of it. Its terrain and record are the callers' to forget.
+     * A point gone: its rows and what the register held of it. Its terrain and record are the callers' to forget.
      */
     public void remove(String pointId) {
+        db.sql("delete from station_reading where station_id = :id").param("id", pointId).update();
         db.sql("delete from station where id = :id and kind = :kind").param("id", pointId).param("kind", Station.POINT).update();
         stations.remove(pointId);
         latest.remove(pointId);

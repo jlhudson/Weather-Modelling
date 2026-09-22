@@ -257,3 +257,28 @@ its polygon, its NOW only ever fetched on request - and asked for it to be confi
 differed: a point's record was topped up by the timer, and a member without drought was left out
 rather than fetched. He chose both fixes, and added that the click is meant to represent an API
 call from outside, so it should be one, to keep the process flow honest. — James, 22 September 2026.
+
+### W-15 · Two timers and the database as the store: the readings kept, the history folded once a day, nothing else on a clock
+
+**The decision.** The service runs two timers and no more. Every ten minutes it reads the Bureau's
+file and writes every new reading to `station_reading`, as published; what stays in memory is the
+one cache kept - each station's latest and newest six, read back from the table at the start. Once
+a day at 9:30 local (and once, a minute after the start) the housekeeping runs: it folds each
+Bureau station's stored readings of the last three days lacking a row of the station's own into the
+four six-hour windows and the Bureau day; prunes readings older than three days, windows and days
+older than 548, the upstream ledger and the points of ours unasked for 548 days; samples the terrain
+of any station lacking it; and fills the year of any Bureau station missing days, one after
+another, as far as the day's allowance allows. The fifteen-second terrain and backfill ticks and the
+hourly sweep are gone, and so is the drought memo: a station's drought is a millisecond of
+arithmetic over its days, done when asked. Everything else is on demand.
+
+**Why.** James: "The Weather application only needs to grab the 10 minute data, and the cleanup /
+history (perhaps daily?) - those are the only two automated tasks, the rest is on demand ... The
+application should be storing data into the database, and cleaning up / creating 6 hourly history
+once a day ... no cache or a basic cache for just the recent calls." Before this the readings were
+never stored - each was folded into an open window in memory and a restart lost up to six hours of
+it - and three tickers ran whether or not anything needed doing. Now the store is the database, a
+restart loses nothing, the history is rebuilt from what was stored rather than from what happened
+to be in memory, and the service idles at the cost of one small conditional GET every ten minutes.
+Three days of raw readings is enough to fold a day the housekeeping missed; the windows and the days
+are the history. — James, 22 September 2026.
