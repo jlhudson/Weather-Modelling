@@ -194,7 +194,9 @@ and the recent days when its record is missing them.
 
 One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
 where it is, filled when it is reporting and hollow when it is not, coloured by what it last said;
-a click opens everything held for it. A click anywhere else is an ask from outside, made the way
+a click opens everything held for it. The legend under the side panel is the colour's scale with
+the stations' distribution on it as bars, over the stations in view or every one held (W-17); hover
+a bar and its stations are lit on the map, hover a station and its bar is lit. A click anywhere else is an ask from outside, made the way
 The Hub makes one (W-14): through the API's front door with the console's own key - a key issued
 to the consumer `console` with the readings scope, carried on the map page, listed and revocable on
 the API keys page like any other, issued again on the next map page if revoked - so the flow the

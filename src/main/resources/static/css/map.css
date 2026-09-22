@@ -102,6 +102,17 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 /* ---- the legend */
 .legend-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .3rem; gap: .5rem; }
 .legend-title { color: var(--p-fg); }
+.legend-head .legend-title { white-space: nowrap; }
+.legend-scope { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; min-width: 0; }
+.legend-scope > .muted { overflow: hidden; text-overflow: ellipsis; font-size: .74rem; }
+.legend-scope .tog { padding: .12rem .5rem .12rem .4rem; font-size: .72rem; }
+/* The distribution (W-17): a bar per bin in its colour on the ramp; one lit, the others fall back. */
+.hist { display: block; width: 100%; height: 34px; cursor: crosshair; }
+.hist .hit { fill: transparent; }
+.hist .bar { opacity: .8; transition: opacity .1s; }
+.hist.lit .bar { opacity: .3; }
+.hist g.hot .hit { fill: color-mix(in srgb, var(--p-reach) 16%, transparent); }
+.hist g.hot .bar { opacity: 1; stroke: var(--p-fg); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .legend-body { display: flex; flex-direction: column; gap: .25rem; }
 .ramp { height: 8px; border-radius: 4px; border: 1px solid var(--p-line); }
 .ramp-labels { display: flex; justify-content: space-between; font-family: var(--g-mono); font-size: .72rem; color: var(--p-muted); }

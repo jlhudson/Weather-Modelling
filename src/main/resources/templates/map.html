@@ -18,6 +18,7 @@
         <symbol id="i-reach" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3c5 0 9 4 9 9 0 3-2 5-3 7-2 2-4 2-6 2s-4 0-6-2C4 17 3 15 3 12c0-5 4-9 9-9Z"/></symbol>
         <symbol id="i-reaches" viewBox="0 0 24 24"><circle cx="9" cy="10" r="6"/><circle cx="15" cy="14" r="6"/></symbol>
         <symbol id="i-drought" viewBox="0 0 24 24"><path d="M3 18h18"/><path d="M6 18c0-5 2-8 6-11 4 3 6 6 6 11"/><path d="M12 7v11"/></symbol>
+        <symbol id="i-view" viewBox="0 0 24 24"><path d="M4 9V4h5"/><path d="M15 4h5v5"/><path d="M20 15v5h-5"/><path d="M9 20H4v-5"/></symbol>
         <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></symbol>
     </svg>
 
@@ -66,10 +67,15 @@
                     <div class="tiles" id="tiles"></div>
                 </details>
             </div>
+            <!-- The legend (W-17): the scale, with the stations' distribution on it as bars - those in view, or every one
+                 held. Hover a bar and its stations are lit on the map; hover a station and its bar is lit. -->
             <div class="side-legend" id="legend">
                 <div class="legend-head">
                     <span class="legend-title" id="legendTitle"></span>
-                    <span class="muted" id="legendCount"></span>
+                    <span class="legend-scope">
+                        <span class="muted" id="legendCount"></span>
+                        <button aria-checked="true" class="tog on" id="inView" role="switch" title="Count only the stations inside the map view; off, every station held" type="button"><svg class="ico"><use href="#i-view"/></svg><span>in view</span></button>
+                    </span>
                 </div>
                 <div class="legend-body" id="legendBody"></div>
             </div>

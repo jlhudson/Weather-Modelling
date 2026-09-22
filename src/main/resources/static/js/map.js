@@ -58,7 +58,7 @@
     var stationLayer = L.layerGroup().addTo(map);
     var labelLayer = L.layerGroup().addTo(map);
     var probeLayer = L.layerGroup().addTo(map);
-    var state = {id: 'temperatureC', selected: null, probe: null};
+    var state = {id: 'temperatureC', selected: null, probe: null, bin: null};
     var togs = {labels: true, reach: true, all: false};
     var lastStations = null, lastReach = null;
     var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
@@ -91,22 +91,76 @@
             b.className = 'chip' + (x.id === state.id ? ' on' : '');
             b.innerHTML = icon(x.icon) + '<span>' + esc(x.name) + (x.hint ? '<small>' + esc(x.hint) + '</small>' : '') + '</span>';
             b.title = x.name + (x.unit ? ' in ' + x.unit : '');
-            b.addEventListener('click', function () { state.id = x.id; buildSide(); stations(); legend(); if (togs.all) drawReach(); });
+            b.addEventListener('click', function () { state.id = x.id; state.bin = null; buildSide(); stations(); legend(); if (togs.all) drawReach(); });
             chips.appendChild(b);
         });
         Object.keys(togs).forEach(function (k) { var b = document.querySelector('.tog[data-tog=' + k + ']'); if (b) b.classList.toggle('on', togs[k]); });
     }
+    // ---- the legend (W-17): the scale, with the distribution of the stations on it as bars - those in view, or every
+    // one held. Hover a bar and the stations in it are lit on the map, the rest dimmed; hover a station and its bar is lit.
+    var BINS = 24, inView = true;
+    function binOf(x, v) {
+        v = v || current();
+        return Math.max(0, Math.min(BINS - 1, Math.floor((x - v.range[0]) / (v.range[1] - v.range[0]) * BINS)));
+    }
+    function binRange(i, v) {
+        var w = (v.range[1] - v.range[0]) / BINS, d = Number.isInteger(w) ? 0 : 1;
+        return fmt(v.range[0] + i * w, d) + '–' + fmt(v.range[0] + (i + 1) * w, d) + (v.unit ? ' ' + v.unit : '');
+    }
+    // A station lit by the hovered bar: none is while no bar is hovered; with one, only a station whose value falls in it.
+    function inBin(p, v) {
+        if (state.bin == null) return true;
+        var x = valueOf(p, v);
+        return x != null && binOf(x, v) === state.bin;
+    }
+    function legendProps() {
+        var all = lastStations ? lastStations.features : [], b = inView ? map.getBounds() : null;
+        return all.filter(function (f) { return !b || b.contains([f.geometry.coordinates[1], f.geometry.coordinates[0]]); }).map(function (f) { return f.properties; });
+    }
     function legend() {
-        var v = current(), props = lastStations ? lastStations.features.map(function (f) { return f.properties; }) : [];
+        var v = current(), props = legendProps();
         var vals = props.map(function (p) { return valueOf(p, v); }).filter(function (x) { return x != null; });
         $('legendTitle').textContent = v.name + (v.unit ? ' · ' + v.unit : '');
-        $('legendCount').textContent = vals.length + ' of ' + props.length + ' stations';
+        $('legendCount').textContent = vals.length + ' of ' + props.length + (inView ? ' in view' : ' stations');
         var lo = v.range[0], hi = v.range[1];
         var mean = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
         var min = vals.length ? Math.min.apply(null, vals) : null, max = vals.length ? Math.max.apply(null, vals) : null;
-        $('legendBody').innerHTML = '<div class="ramp" style="background:linear-gradient(to right,' + [0, .25, .5, .75, 1].map(function (t) { return ramp(v.reverse ? 1 - t : t); }).join(',') + ')"></div>'
+        var hist = new Array(BINS).fill(0);
+        vals.forEach(function (x) { hist[binOf(x, v)]++; });
+        var top = Math.max.apply(null, hist.concat([1]));
+        // Each bin a bar in its colour on the ramp, under a full-height strip that takes the hover, so an empty bin can be pointed at too.
+        var svg = '<svg class="hist" viewBox="0 0 ' + BINS * 10 + ' 34" preserveAspectRatio="none">';
+        hist.forEach(function (n, i) {
+            var h = n ? Math.max(2, n / top * 32) : 0, t = (i + .5) / BINS;
+            svg += '<g data-bin="' + i + '"' + (i === state.bin ? ' class="hot"' : '') + '><rect class="hit" x="' + i * 10 + '" y="0" width="10" height="34"/>'
+                + '<rect class="bar" x="' + (i * 10 + 1) + '" y="' + (34 - h) + '" width="8" height="' + h + '" style="fill:' + ramp(v.reverse ? 1 - t : t) + '"/>'
+                + '<title>' + esc(binRange(i, v)) + ': ' + n + ' station' + (n === 1 ? '' : 's') + '</title></g>';
+        });
+        svg += '</svg>';
+        $('legendBody').innerHTML = svg + '<div class="ramp" style="background:linear-gradient(to right,' + [0, .25, .5, .75, 1].map(function (t) { return ramp(v.reverse ? 1 - t : t); }).join(',') + ')"></div>'
             + '<div class="ramp-labels"><span>' + lo + '</span><span>' + ((lo + hi) / 2) + '</span><span>' + hi + '</span></div>'
             + '<div class="ramp-labels"><span>min ' + fmt(min, v.d || 0) + '</span><span>mean ' + fmt(mean, v.d || 1) + '</span><span>max ' + fmt(max, v.d || 0) + '</span></div>';
+        var el = $('legendBody').querySelector('.hist');
+        el.addEventListener('mouseover', function (e) { var g = e.target.closest('[data-bin]'); if (g) lightBin(Number(g.dataset.bin)); });
+        el.addEventListener('mouseleave', function () { lightBin(null); });
+    }
+    // A bar hovered: its stations lit on the map (and their reaches, when every reach is drawn), the count said.
+    function lightBin(i) {
+        if (i === state.bin) return;
+        state.bin = i;
+        markBar(i);
+        stations();
+        if (togs.all) drawReach();
+        var v = current();
+        if (i == null) { legend(); return; }
+        var n = legendProps().filter(function (p) { var x = valueOf(p, v); return x != null && binOf(x, v) === i; }).length;
+        $('legendCount').textContent = n + ' at ' + binRange(i, v);
+    }
+    // A station hovered: its bar lit, nothing redrawn.
+    function markBar(i) {
+        document.querySelectorAll('#legendBody .hist [data-bin]').forEach(function (g) { g.classList.toggle('hot', Number(g.dataset.bin) === i); });
+        var h = document.querySelector('#legendBody .hist');
+        if (h) h.classList.toggle('lit', i != null);
     }
     function tiles() {
         var all = lastStations ? lastStations.features.map(function (f) { return f.properties; }) : [];
@@ -149,7 +203,14 @@
         var v = current(), z = map.getZoom(), r = Math.max(2.5, Math.min(5, z * .6));
         lastStations.features.forEach(function (f) {
             var p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]], c = colourOf(p, v);
-            var on = state.selected === p.id, rf = reachFeature(p.id);
+            var on = state.selected === p.id, rf = reachFeature(p.id), x = valueOf(p, v);
+            // A bar hovered in the legend (W-17): a station outside it is a ghost, one inside it wears a ring.
+            var lit = state.bin != null && inBin(p, v), ghost = state.bin != null && !lit;
+            if (ghost) {
+                L.circleMarker(ll, {renderer: canvas, radius: r * .8, color: c, weight: .8, opacity: .4, fillColor: c, fillOpacity: p.fresh ? .25 : 0, interactive: false}).addTo(stationLayer);
+                return;
+            }
+            if (lit) L.circleMarker(ll, {renderer: canvas, radius: r * 2.4, color: REACH, weight: 2, opacity: .95, fill: false, interactive: false}).addTo(stationLayer);
             if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
             // A coastal station (W-3) wears a thin ring in the sea's blue; an island (W-12), the ring dashed.
             if (rf && rf.properties.coastal) L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: SEA, weight: 1, opacity: .8, fill: false, interactive: false, dashArray: rf.properties.island ? '2 2' : null}).addTo(stationLayer);
@@ -163,8 +224,9 @@
             }
             mark.bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
+                .on('mouseover', function () { if (state.bin == null) markBar(x == null ? null : binOf(x, v)); })
+                .on('mouseout', function () { if (state.bin == null) markBar(null); })
                 .addTo(stationLayer);
-            var x = valueOf(p, v);
             if (togs.labels && z >= 8 && x != null) {
                 L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, -r - 1]}), interactive: false, keyboard: false}).addTo(labelLayer);
             }
@@ -227,6 +289,7 @@
     // value and the ground it speaks for read together; grey where the station has no value.
     function reachStyleBy(id) {
         var p = stationProps(id), c = p ? colourOf(p) : NONE;
+        if (state.bin != null) return p && inBin(p) ? {color: c, weight: 1.6, opacity: .95, fillColor: c, fillOpacity: .3, lineJoin: 'round'} : {color: c, weight: .5, opacity: .15, fillColor: c, fillOpacity: .02, lineJoin: 'round'};
         return {color: c, weight: 1, opacity: .75, fillColor: c, fillOpacity: .16, lineJoin: 'round'};
     }
     function stationProps(id) {
@@ -251,7 +314,9 @@
                 L.geoJSON(f, {style: reachStyle(false), interactive: false}).addTo(reachLayer);
             } else if (togs.all) {
                 L.geoJSON(f, {style: reachStyleBy(p.id)}).bindTooltip(function () { return reachTip(p); }, {sticky: true, className: 'hx-tip'})
-                    .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); }).addTo(allLayer);
+                    .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
+                    .on('mouseover', function () { var sp = stationProps(p.id), x = sp ? valueOf(sp) : null; if (state.bin == null) markBar(x == null ? null : binOf(x)); })
+                    .on('mouseout', function () { if (state.bin == null) markBar(null); }).addTo(allLayer);
             }
         });
     }
@@ -530,7 +595,7 @@
     }
 
     // ---- wiring
-    document.querySelectorAll('.tog').forEach(function (b) {
+    document.querySelectorAll('.tog[data-tog]').forEach(function (b) {
         b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
@@ -543,7 +608,9 @@
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeDetail();
     });
+    $('inView').addEventListener('click', function () { inView = !inView; $('inView').classList.toggle('on', inView); $('inView').setAttribute('aria-checked', inView); legend(); });
     map.on('zoomend', stations);
+    map.on('moveend', function () { if (inView) legend(); });
     map.on('click', function (e) { probe(e.latlng.lat, e.latlng.lng); });
     document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; stations(); drawReach(); });
     document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); loadReach(true); } });

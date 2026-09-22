@@ -308,3 +308,19 @@ independent: raise the climb cost to hold Adelaide back and the hills keep their
 options put to him James chose these two together. At 35 km, 5 km per 100 m and half, West Terrace
 reaches 13 km east and 30 km north, Mount Lofty 17 to 27 km, Mount Barker 22 to 31 km.
 — James, 22 September 2026.
+
+### W-17 · The legend's distribution back, and a bar lights its stations
+
+**The decision.** The legend at the foot of the side panel carries the stations' distribution again:
+twenty-four bars over the colour's range, each in its colour on the ramp, above the ramp and the
+min, mean and max. A switch beside the count - *in view* by default - counts only the stations
+inside the map view, recounted on every pan and zoom; off, every station held. Hovering a bar lights
+the stations whose value falls in it - a cyan ring each, the rest faded to ghosts, and with All
+reaches on their reaches firm and the others faint - and the count says how many and the bin's
+range. Hovering a station, or its reach, lights its bar.
+
+**Why.** James: "Previously we had a histogram in the bottom left, allowing me to see all or only all
+in view. I would like this back please. It also allowed me to hover over the bars and have them
+highlighted on the mapping screen." The histogram and its switch went with the start-over (W-1);
+before it a hexagon lit its bar but a bar lit nothing, so the map-from-the-bar direction is new.
+— James, 23 September 2026.
