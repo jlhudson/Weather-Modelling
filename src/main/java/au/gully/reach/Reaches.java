@@ -59,7 +59,7 @@ public class Reaches {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("reachKm", r.reachKm());
         m.put("kmPer100m", r.kmPer100m());
-        m.put("coastalKm", r.coastalKm());
+        m.put("inlandPct", r.inlandPct());
         m.put("descentShare", r.descentShare());
         return m;
     }
@@ -88,7 +88,8 @@ public class Reaches {
         p.put("minKm", r.minKm());
         p.put("meanKm", r.meanKm());
         p.put("maxKm", r.maxKm());
-        p.put("coastal", r.coastal());
+        p.put("reachKm", r.reachKm());
+        p.put("inlandKm", r.inlandKm());
         p.put("waterKm", r.waterKm());
         p.put("island", r.island());
         p.put("waterRays", r.waterRays());
@@ -109,6 +110,7 @@ public class Reaches {
         tm.put("sampledAt", t == null ? null : t.sampledAt().toString());
         tm.put("elevationM", t == null ? null : t.elevationM());
         tm.put("tiles", t == null ? null : t.calls());
+        tm.put("inlandKm", t == null ? null : t.inlandKm());
         tm.put("points", Terrain.POINTS);
         tm.put("source", TerrainTiles.ATTRIBUTION);
         out.put("terrain", tm);

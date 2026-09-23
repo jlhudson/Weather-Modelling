@@ -54,7 +54,7 @@ class BlendTest {
         java.util.Arrays.fill(e, 30);
         e[4] = 330; // bearing 0, step 5
         Terrain t = new Terrain("x", -34.9, 138.6, 30, e, Instant.now(), 1);
-        ReachRule.Rule r = ReachRule.Rule.of(40, 10, 25);
+        ReachRule.Rule r = ReachRule.Rule.of(40, 10);
         assertThat(Readings.cost(t, 12, 12.3, r)).isEqualTo(12.3);
         assertThat(Readings.cost(t, 0, 3, r)).as("before the rise").isEqualTo(3.0);
         assertThat(Readings.cost(t, 0, 8, r)).as("a one-kilometre rise is no barrier (W-16): the distance alone").isEqualTo(8.0);

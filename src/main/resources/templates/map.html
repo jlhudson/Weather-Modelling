@@ -40,19 +40,19 @@
                      station with terrain; set makes it the rule, and a restart keeps it. -->
                 <div class="control" id="reach">
                     <div class="group-title">Reach <span class="muted" id="reachHint"></span></div>
-                    <label for="reachKm">A station reaches <b id="reachKmValue" th:text="${reachKm}">40</b> km <span class="muted">over flat ground</span></label>
+                    <label for="reachKm">A station on the coast reaches <b id="reachKmValue" th:text="${reachKm}">40</b> km <span class="muted">over flat ground</span></label>
                     <input aria-label="Reach in kilometres" id="reachKm" max="50" min="3" step="1" type="range" th:max="${reachMaxKm}" th:min="${reachMinKm}" th:value="${reachKm}">
+                    <label for="inlandPct">and <b id="inlandPctValue" th:text="${inlandPct}">20</b> % more <span class="muted">for every 100 km from the sea</span></label>
+                    <input aria-label="How much the reach grows for every 100 km from the sea, in per cent" id="inlandPct" max="50" min="0" step="1" type="range" th:max="${inlandPctMax}" th:value="${inlandPct}">
                     <label for="kmPer100m">100 m of climb costs <b id="kmPer100mValue" th:text="${kmPer100m}">10</b> km <span class="muted">of it</span></label>
                     <input aria-label="Kilometres per 100 metres of climb" id="kmPer100m" max="30" min="0" step="0.5" type="range" th:max="${kmPer100mMax}" th:value="${kmPer100m}">
                     <label for="descentShare">Descending costs <b id="descentShareValue" th:text="${descentPct}">50</b> % <span class="muted">of that</span></label>
                     <input aria-label="What descending costs against climbing" id="descentShare" max="100" min="0" step="5" type="range" th:value="${descentPct}">
-                    <label for="coastalKm">A coastal station reaches at most <b id="coastalKmValue" th:text="${coastalKm}">25</b> km <span class="muted">inland</span></label>
-                    <input aria-label="A coastal station's limit in kilometres" id="coastalKm" max="50" min="3" step="1" type="range" th:max="${reachMaxKm}" th:min="${reachMinKm}" th:value="${coastalKm}">
                     <div class="control-row">
-                        <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-per=${kmPer100m},data-coastal=${coastalKm},data-descent=${descentPct},data-by=${reachBy},data-since=${reachSince}">set</span>
+                        <span class="muted" id="reachSaved" th:attr="data-km=${reachKm},data-per=${kmPer100m},data-inland=${inlandPct},data-descent=${descentPct},data-by=${reachBy},data-since=${reachSince}">set</span>
                         <button class="pill" id="reachSet" title="Make this the rule: every reach is drawn by it, and the values survive a restart" type="button">set</button>
                     </div>
-                    <div class="muted control-note">A ray stops where its distance plus the cost of the ground it has crossed exceeds the reach. Ground is a barrier only where it holds its height for 3 km (W-16), so a gully is crossed for nothing and the scarp is a wall; climbing costs what the slider says and descending its share of that, counted apart and added. A ray ends at the water - the sea or a lake at least 3 km across; a river is crossed - and a station with such water inside 10 km is coastal, held to the coastal limit on every bearing. A station the water would take three quarters of its rays from is an island: the water ends none of them, and it reaches across to the shore beyond.</div>
+                    <div class="muted control-note">A ray stops where its distance plus the cost of the ground it has crossed exceeds the reach. Ground is a barrier only where it holds its height for 3 km (W-16), so a gully is crossed for nothing and the scarp is a wall; climbing costs what the slider says and descending its share of that, counted apart and added. A ray ends at the water - the sea or a lake at least 3 km across; a river is crossed. A station the water would take three quarters of its rays from is an island: the water ends none of them, and it reaches across to the shore beyond. The further a station is from the sea, the further it reaches (W-19): at 40 km and 20 %, a station 300 km inland reaches 64 km, to at most 150.</div>
                 </div>
                 <details class="group" id="moreShow" open>
                     <summary>Show</summary>

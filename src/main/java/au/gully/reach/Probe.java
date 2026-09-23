@@ -105,7 +105,6 @@ public class Probe {
         Double stationHeight = t == null ? s.heightM() : t.elevationM();
         m.put("elevationM", stationHeight);
         m.put("aboveM", height == null || stationHeight == null ? null : Math.round(stationHeight - height));
-        m.put("coastal", reach != null && reach.coastal());
         return m;
     }
 
@@ -118,7 +117,6 @@ public class Probe {
             case DISTANCE -> "at its reach";
             case HEIGHT -> "cut by height";
             case WATER -> "at the water";
-            case COASTAL -> "at its coastal limit";
             case UNKNOWN -> "where the model had nothing";
         };
     }

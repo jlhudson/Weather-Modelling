@@ -58,12 +58,12 @@ class TerrainTilesTest {
     void theTerrariumEncodingDecodesToMetresAndTilesAreFetchedOnceEach() throws Exception {
         List<String> urls = new ArrayList<>(), rows = new ArrayList<>();
         TerrainTiles tiles = new TerrainTiles(fetcher(tile(597.5), urls), ledger(rows));
-        // Adelaide's 2,401 points: a dozen or two tiles at zoom 10 (a disc, not a box), each fetched once.
+        // Adelaide's 7,201 points out to 150 km: about a hundred tiles at zoom 10 (a disc, not a box), each fetched once.
         List<double[]> points = List.of(Terrain.points(-34.9257, 138.5832));
         TerrainTiles.Sampled s = tiles.elevations(points);
         assertThat(s.elevations()).hasSize(Terrain.POINTS);
         assertThat(s.elevations().getFirst()).isCloseTo(597.5, within(0.01));
-        assertThat(s.tilesFetched()).isBetween(12, 30);
+        assertThat(s.tilesFetched()).isBetween(70, 140);
         assertThat(urls).hasSize(s.tilesFetched()).allMatch(u -> u.startsWith(TerrainTiles.BASE + TerrainTiles.ZOOM + "/"));
         assertThat(urls.stream().distinct().count()).as("no tile twice").isEqualTo(urls.size());
         assertThat(rows).hasSize(s.tilesFetched()).allMatch(r -> r.startsWith("terrain-tiles ok tile 10/"));
@@ -91,7 +91,7 @@ class TerrainTilesTest {
             }
         };
         au.gully.bureau.StationRegistry registry = new au.gully.bureau.StationRegistry(null);
-        TerrainSampler sampler = new TerrainSampler(registry, store, tiles);
+        TerrainSampler sampler = new TerrainSampler(registry, store, tiles, new Coast(tiles));
         au.gully.bureau.Station s = new au.gully.bureau.Station("023000", "94648", "ADELAIDE", -34.9257, 138.5832, 29.32, "Australia/Adelaide", "SA_PW001", "sa");
         assertThat(sampler.sample(s)).isEmpty();
         assertThat(sampler.lastFailure()).contains("503");

@@ -212,8 +212,8 @@
             }
             if (lit) L.circleMarker(ll, {renderer: canvas, radius: r * 2.4, color: REACH, weight: 2, opacity: .95, fill: false, interactive: false}).addTo(stationLayer);
             if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
-            // A coastal station (W-3) wears a thin ring in the sea's blue; an island (W-12), the ring dashed.
-            if (rf && rf.properties.coastal) L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: SEA, weight: 1, opacity: .8, fill: false, interactive: false, dashArray: rf.properties.island ? '2 2' : null}).addTo(stationLayer);
+            // An island (W-12) wears a dashed ring in the sea's blue: the water ends none of its rays.
+            if (rf && rf.properties.island) L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: SEA, weight: 1, opacity: .8, fill: false, interactive: false, dashArray: '2 2'}).addTo(stationLayer);
             var mark;
             if (p.kind === 'point') {
                 // A point of ours (W-7): a diamond in the model's amber, its fill the value, so it is never taken for a station.
@@ -254,9 +254,9 @@
     }
 
     // ---- the reach (W-2, W-3): every station's polygon under the rule on the sliders, the clicked one's lit
-    function ruleOnSliders() { return {km: Number($('reachKm').value), per: Number($('kmPer100m').value), coastal: Number($('coastalKm').value), descent: Number($('descentShare').value)}; }
-    function ruleQuery(r) { return 'km=' + r.km + '&kmPer100m=' + r.per + '&coastalKm=' + r.coastal + '&descentShare=' + (r.descent / 100); }
-    function ruleWords(r) { return r.reachKm + ' km · 100 m of climb costs ' + r.kmPer100m + ' km · descending ' + Math.round((r.descentShare == null ? .5 : r.descentShare) * 100) + ' % of that · coastal at most ' + r.coastalKm + ' km'; }
+    function ruleOnSliders() { return {km: Number($('reachKm').value), per: Number($('kmPer100m').value), inland: Number($('inlandPct').value), descent: Number($('descentShare').value)}; }
+    function ruleQuery(r) { return 'km=' + r.km + '&kmPer100m=' + r.per + '&inlandPct=' + r.inland + '&descentShare=' + (r.descent / 100); }
+    function ruleWords(r) { return r.reachKm + ' km · 100 m of climb costs ' + r.kmPer100m + ' km · descending ' + Math.round((r.descentShare == null ? .5 : r.descentShare) * 100) + ' % of that · ' + r.inlandPct + ' % more for every 100 km from the sea'; }
     var reachTimer = null, reachLoading = false, reachAgain = false;
     function loadReach(immediate) {
         clearTimeout(reachTimer);
@@ -298,7 +298,7 @@
         return null;
     }
     function reachTip(p) {
-        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.coastal ? ' · coastal' : '') + '</span><br>reach ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
+        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.inlandKm != null ? ' · ' + fmt(p.inlandKm, 0) + ' km from the sea' : '') + '</span><br>reach ' + fmt(p.reachKm, 0) + ' km here · ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
             + '<br><span class="muted">' + cutWords(p.cut) + ' · rule ' + ruleWords(lastReach.rule) + '</span>';
     }
     function drawReach() {
@@ -328,13 +328,13 @@
         $('reachSet').disabled = !!inForce;
         $('reachKmValue').textContent = r.km;
         $('kmPer100mValue').textContent = r.per;
-        $('coastalKmValue').textContent = r.coastal;
+        $('inlandPctValue').textContent = r.inland;
         $('descentShareValue').textContent = r.descent;
     }
-    function reachSaved(km, per, coastal, descentPct, by, since) {
+    function reachSaved(km, per, inland, descentPct, by, since) {
         var s = $('reachSaved');
-        s.dataset.km = km; s.dataset.per = per; s.dataset.coastal = coastal; s.dataset.descent = descentPct;
-        s.textContent = 'set to ' + km + ' km · ' + per + ' km/100 m climb · ' + descentPct + ' % down · ' + coastal + ' km coastal' + (by ? ' by ' + by + ', ' + ago(since) : ' (default)');
+        s.dataset.km = km; s.dataset.per = per; s.dataset.inland = inland; s.dataset.descent = descentPct;
+        s.textContent = 'set to ' + km + ' km · ' + per + ' km/100 m climb · ' + descentPct + ' % down · ' + inland + ' % per 100 km inland' + (by ? ' by ' + by + ', ' + ago(since) : ' (default)');
         s.title = since ? when(since) : '';
     }
     function setReach() {
@@ -342,7 +342,7 @@
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
         $('reachSet').disabled = true;
         fetch('/console/map/reach/rule', {method: 'POST', headers: headers, body: ruleQuery(r)}).then(function (x) { return x.json(); }).then(function (o) {
-            reachSaved(o.reachKm, o.kmPer100m, o.coastalKm, Math.round(o.descentShare * 100), o.by, o.since);
+            reachSaved(o.reachKm, o.kmPer100m, o.inlandPct, Math.round(o.descentShare * 100), o.by, o.since);
             note('reach set: ' + ruleWords(o));
             loadReach(true);
             if (state.selected) detail(state.selected);
@@ -370,7 +370,6 @@
         if (c.distance) parts.push(c.distance + ' at the reach');
         if (c.height) parts.push(c.height + ' by height');
         if (c.water) parts.push(c.water + ' at the water');
-        if (c.coastal) parts.push(c.coastal + ' at the coastal limit');
         if (c.unknown) parts.push(c.unknown + ' unknown');
         return parts.join(' · ');
     }
@@ -383,8 +382,9 @@
         html += kv([
             ['area', fmt(r.areaKm2, 0) + ' km²'],
             ['reach', fmt(r.minKm, 0) + '–' + fmt(r.maxKm, 0) + ' km <span class="muted">mean ' + fmt(r.meanKm, 1) + '</span>'],
+            ['inland', r.inlandKm != null ? fmt(r.inlandKm, 0) + ' km from the sea <span class="muted">so it reaches ' + fmt(r.reachKm, 1) + ' km over flat ground: ' + r.rule.reachKm + ' km and ' + r.rule.inlandPct + ' % of that for every 100 km</span>' : 'not known <span class="muted">sample the terrain again</span>'],
             ['rays', cutWords(r.cut) + ' <span class="muted">of ' + r.rays.length + '</span>'],
-            ['the sea', (r.coastal ? '<span class="coastal">coastal</span> · water ' + fmt(r.waterKm, 0) + ' km away at the nearest, so held to the coastal limit' : r.waterKm != null ? 'water ' + fmt(r.waterKm, 0) + ' km away at the nearest' : 'none inside the reach')
+            ['water', (r.waterKm != null ? fmt(r.waterKm, 0) + ' km away at the nearest' : 'none inside the reach')
                 + (r.island ? ' · <span class="coastal">an island</span>: the water would end ' + r.waterRays + ' of ' + r.rays.length + ' rays, so ends none' : r.waterRays ? ' · ends ' + r.waterRays + ' of ' + r.rays.length + ' rays' : '')],
             ['rule', ruleWords(r.rule)],
             ['model height', fmt(t.elevationM, 0) + ' m' + (s.heightM != null ? ' <span class="muted">the Bureau says ' + s.heightM + '</span>' : '')],
@@ -400,7 +400,7 @@
         });
         svg += '<text x="' + cx + '" y="' + (cy - R - 3) + '" text-anchor="middle">N</text><text x="' + (w - 2) + '" y="' + (h - 3) + '" text-anchor="end">' + fmt(max, 0) + ' km</text></svg>';
         return html + '<div class="rose-wrap">' + svg + '<div class="rose-key"><span class="swatch"><i class="k-distance"></i>at the reach</span><span class="swatch"><i class="k-height"></i>cut by height</span>'
-            + (r.cut.water ? '<span class="swatch"><i class="k-water"></i>at the water</span>' : '') + (r.cut.coastal ? '<span class="swatch"><i class="k-coastal"></i>coastal limit</span>' : '')
+            + (r.cut.water ? '<span class="swatch"><i class="k-water"></i>at the water</span>' : '')
             + (r.cut.unknown ? '<span class="swatch"><i class="k-unknown"></i>unknown</span>' : '') + '</div></div>';
     }
     // ---- the reading (W-8): click anywhere, and ask - the weather now and the drought, blended from the
@@ -480,11 +480,11 @@
     function stationRows(list, inReach) {
         var html = '<table class="table table-sm probe"><thead><tr><th>station</th><th class="num">km</th><th>from</th><th class="num">Δ m</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">mm</th><th class="num" title="Keetch-Byram drought index, mm">KBDI</th><th class="num" title="drought factor, 0 to 10">DF</th><th>age</th></tr></thead><tbody>';
         list.forEach(function (s) {
-            html += '<tr' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#" data-station="' + esc(s.id) + '">' + esc(s.name) + '</a>' + (s.coastal ? ' <span class="coastal" title="coastal">~</span>' : '') + '</td>'
+            html += '<tr' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#" data-station="' + esc(s.id) + '">' + esc(s.name) + '</a>' + '</td>'
                 + '<td class="num">' + fmt(s.km, 1) + '</td><td class="mono">' + dirWord(s.bearingDeg) + '</td><td class="num">' + (s.aboveM != null ? (s.aboveM > 0 ? '+' : '') + s.aboveM : '—') + '</td>'
                 + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="num">' + fmt(s.kbdiMm, 0) + '</td><td class="num">' + fmt(s.droughtFactor, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
             if (!inReach) html += '<tr class="why"><td colspan="11" class="muted">' + esc(s.why) + '</td></tr>';
-            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut === 'coastal' ? 'at its coastal limit' : s.rayCut) : '') + '</td></tr>';
+            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut) : '') + '</td></tr>';
         });
         return html + '</tbody></table>';
     }
@@ -599,12 +599,12 @@
         b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
-    ['reachKm', 'kmPer100m', 'coastalKm', 'descentShare'].forEach(function (id) {
+    ['reachKm', 'inlandPct', 'kmPer100m', 'descentShare'].forEach(function (id) {
         $(id).addEventListener('input', function () { reachHint(); loadReach(false); });
         $(id).addEventListener('change', function () { loadReach(true); });
     });
     $('reachSet').addEventListener('click', setReach);
-    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.coastal, $('reachSaved').dataset.descent, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
+    reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.inland, $('reachSaved').dataset.descent, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeDetail();
     });

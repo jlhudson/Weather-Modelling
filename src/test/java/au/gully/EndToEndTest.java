@@ -159,7 +159,7 @@ class EndToEndTest {
         assertThat(none.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(none.getBody()).containsEntry("sampled", 0).containsEntry("inForce", true);
         Map<String, Object> before = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
-        assertThat((Map<String, Object>) before.get("terrain")).containsEntry("sampled", false).containsEntry("points", 2401);
+        assertThat((Map<String, Object>) before.get("terrain")).containsEntry("sampled", false).containsEntry("points", Terrain.POINTS);
         assertThat(before.get("reach")).isNull();
 
         plantFlatTerrain("023000", -34.9257, 138.5832, 29);
@@ -167,7 +167,7 @@ class EndToEndTest {
         assertThat(one.getBody()).containsEntry("sampled", 1);
         List<Map<String, Object>> features = (List<Map<String, Object>>) one.getBody().get("features");
         Map<String, Object> props = (Map<String, Object>) features.getFirst().get("properties");
-        assertThat(props).containsEntry("id", "023000").containsEntry("minKm", ReachRule.DEFAULT_KM).containsEntry("maxKm", ReachRule.DEFAULT_KM);
+        assertThat(props).containsEntry("id", "023000").containsEntry("minKm", ReachRule.DEFAULT_KM).containsEntry("maxKm", ReachRule.DEFAULT_KM).containsEntry("reachKm", ReachRule.DEFAULT_KM).containsKey("inlandKm");
         Map<String, Object> geometry = (Map<String, Object>) features.getFirst().get("geometry");
         assertThat(geometry).containsEntry("type", "Polygon");
         assertThat(((List<List<List<Double>>>) geometry.get("coordinates")).getFirst()).hasSize(Terrain.BEARINGS + 1);
@@ -203,7 +203,7 @@ class EndToEndTest {
         terrain.rehydrate();
         assertThat(terrain.get("023000")).isPresent();
         assertThat(terrain.get("023000").get().at(3, 3)).isEqualTo(29);
-        reachRule.set(ReachRule.DEFAULT_KM, ReachRule.DEFAULT_KM_PER_100M, ReachRule.DEFAULT_COASTAL_KM, ReachRule.DEFAULT_DESCENT_SHARE, "test", Instant.now());
+        reachRule.set(ReachRule.DEFAULT_KM, ReachRule.DEFAULT_KM_PER_100M, ReachRule.DEFAULT_INLAND_PCT, ReachRule.DEFAULT_DESCENT_SHARE, "test", Instant.now());
     }
 
     /**
@@ -432,7 +432,7 @@ class EndToEndTest {
                 assertThat(client().get().uri("/api/diagnostics").header("X-Api-Key", key.group(1)).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             }
         }
-        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&coastalKm=15",
+        for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&inlandPct=15",
                 "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);

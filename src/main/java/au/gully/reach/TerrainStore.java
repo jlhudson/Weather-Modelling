@@ -29,21 +29,28 @@ public class TerrainStore {
 
     public void rehydrate() {
         byStation.clear();
-        db.sql("select station_id, lat, lon, elevations, sampled_at, calls from terrain").query().listOfRows().forEach(row ->
-                byStation.put((String) row.get("station_id"), Terrain.fromBytes((String) row.get("station_id"),
-                        Db.dbl(row.get("lat")), Db.dbl(row.get("lon")), (byte[]) row.get("elevations"),
-                        Db.instant(row.get("sampled_at")), Db.integer(row.get("calls")))));
-        log.info("terrain rehydrated for {} stations", byStation.size());
+        int[] older = {0};
+        db.sql("select station_id, lat, lon, elevations, sampled_at, calls, inland_km from terrain").query().listOfRows().forEach(row -> {
+            Terrain t = Terrain.fromBytes((String) row.get("station_id"), Db.dbl(row.get("lat")), Db.dbl(row.get("lon")), (byte[]) row.get("elevations"),
+                    Db.instant(row.get("sampled_at")), Db.integer(row.get("calls")), Db.dbl(row.get("inland_km")));
+            if (t == null) {
+                older[0]++;
+            } else {
+                byStation.put(t.stationId(), t);
+            }
+        });
+        // A station sampled to another extent (W-19) is absent here, so the housekeeping samples it again.
+        log.info("terrain rehydrated for {} stations{}", byStation.size(), older[0] == 0 ? "" : ", " + older[0] + " sampled to another extent and wanting sampling again");
     }
 
     public void put(Terrain t) {
         db.sql("""
-                insert into terrain (station_id, lat, lon, elevations, sampled_at, calls)
-                values (:id, :lat, :lon, :elevations, :at, :calls)
+                insert into terrain (station_id, lat, lon, elevations, sampled_at, calls, inland_km)
+                values (:id, :lat, :lon, :elevations, :at, :calls, :inland)
                 on conflict (station_id) do update set lat = excluded.lat, lon = excluded.lon,
-                  elevations = excluded.elevations, sampled_at = excluded.sampled_at, calls = excluded.calls""")
+                  elevations = excluded.elevations, sampled_at = excluded.sampled_at, calls = excluded.calls, inland_km = excluded.inland_km""")
                 .param("id", t.stationId()).param("lat", t.lat()).param("lon", t.lon()).param("elevations", t.toBytes())
-                .param("at", Db.ts(t.sampledAt())).param("calls", t.calls()).update();
+                .param("at", Db.ts(t.sampledAt())).param("calls", t.calls()).param("inland", t.inlandKm()).update();
         byStation.put(t.stationId(), t);
     }
 

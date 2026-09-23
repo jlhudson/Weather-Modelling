@@ -113,10 +113,10 @@ class ReachTest {
     }
 
     @Test
-    void aRayEndsAtTheWaterAndTheStationIsCoastal() {
+    void aRayEndsAtTheWaterAndNoLimitHoldsTheRest() {
         // The sea from 4 km out on bearings 12 to 36 (east round through south to west), read at minus five; land at 10 m elsewhere.
         Terrain t = terrain(10, (b, s) -> b >= 12 && b <= 36 && s >= 4 ? -5 : 10);
-        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10, 25));
+        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10));
         // The ray stops half a step short of the first sample of water: the beach is inside, the sea is not.
         assertThat(r.km()[24]).isEqualTo(3.5);
         assertThat(r.cut()[24]).isEqualTo(Reach.Cut.WATER);
@@ -124,59 +124,51 @@ class ReachTest {
         // Twenty-five of forty-eight rays at the water: a shore, not an island.
         assertThat(r.waterRays()).isEqualTo(25);
         assertThat(r.island()).isFalse();
-        // Water inside 10 km: coastal, so the landward rays are held to the coastal limit.
-        assertThat(r.coastal()).isTrue();
-        assertThat(r.km()[0]).isEqualTo(25);
-        assertThat(r.cut()[0]).isEqualTo(Reach.Cut.COASTAL);
-        assertThat(r.cuts()).containsEntry(Reach.Cut.WATER, 25).containsEntry(Reach.Cut.COASTAL, 23);
-        // Water only beyond ten kilometres: the ray still ends at it, but the station is not coastal.
-        Reach inland = Reach.of(terrain(10, (b, s) -> b == 6 && s >= 30 ? 0 : 10), ReachRule.Rule.of(40, 10, 25));
-        assertThat(inland.coastal()).isFalse();
+        // No coastal limit (W-19): the landward rays run the whole reach.
+        assertThat(r.km()[0]).isEqualTo(40);
+        assertThat(r.cut()[0]).isEqualTo(Reach.Cut.DISTANCE);
+        assertThat(r.cuts()).containsEntry(Reach.Cut.WATER, 25).containsEntry(Reach.Cut.DISTANCE, 23);
+        // Water further out: the ray still ends at it.
+        Reach inland = Reach.of(terrain(10, (b, s) -> b == 6 && s >= 30 ? 0 : 10), ReachRule.Rule.of(40, 10));
         assertThat(inland.waterKm()).isEqualTo(30);
         assertThat(inland.km()[6]).isEqualTo(29.5);
         assertThat(inland.cut()[6]).isEqualTo(Reach.Cut.WATER);
         assertThat(inland.km()[0]).isEqualTo(40);
         // Water beyond the reach is not a border: the ray ends at the reach first.
-        Reach far = Reach.of(terrain(10, (b, s) -> b == 6 && s >= 41 ? 0 : 10), ReachRule.Rule.of(40, 10, 25));
+        Reach far = Reach.of(terrain(10, (b, s) -> b == 6 && s >= 41 ? 0 : 10), ReachRule.Rule.of(40, 10));
         assertThat(far.km()[6]).isEqualTo(40);
         assertThat(far.cut()[6]).isEqualTo(Reach.Cut.DISTANCE);
         assertThat(far.waterRays()).isZero();
         // A ridge crossed before the water: three samples of it, so it holds; the ray stops at it and the water beyond is not seen.
-        Reach ridge = Reach.of(terrain(10, (b, s) -> b == 0 ? ((s >= 4 && s <= 6) ? 600 : s >= 9 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10, 25));
+        Reach ridge = Reach.of(terrain(10, (b, s) -> b == 0 ? ((s >= 4 && s <= 6) ? 600 : s >= 9 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10));
         assertThat(ridge.cut()[0]).isEqualTo(Reach.Cut.HEIGHT);
-        assertThat(ridge.coastal()).isFalse();
-        // One sample of ridge is no barrier (W-16): the ray crosses it and ends at the water, which makes the station coastal.
-        Reach nick = Reach.of(terrain(10, (b, s) -> b == 0 ? (s == 5 ? 600 : s >= 9 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10, 25));
+        // One sample of ridge is no barrier (W-16): the ray crosses it and ends at the water.
+        Reach nick = Reach.of(terrain(10, (b, s) -> b == 0 ? (s == 5 ? 600 : s >= 9 ? -5 : 10) : 10), ReachRule.Rule.of(40, 10));
         assertThat(nick.cut()[0]).isEqualTo(Reach.Cut.WATER);
-        assertThat(nick.coastal()).isTrue();
     }
 
     @Test
-    void anIslandIgnoresTheWaterAndStaysCoastal() {
+    void anIslandIgnoresTheWater() {
         // A station a kilometre out on a jetty: the sea from 2 km on every bearing but the six back along the shore (bearings 21 to 26).
         Terrain t = terrain(5, (b, s) -> b >= 21 && b <= 26 ? 5 : s >= 2 ? -20 : 5);
-        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10, 25));
+        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10));
         // The water would end 42 of 48 rays: an island, so it ends none, and the sea costs only its five metres below the station.
         assertThat(r.waterRays()).isEqualTo(42);
         assertThat(r.island()).isTrue();
         assertThat(r.cuts()).containsEntry(Reach.Cut.WATER, 0);
-        assertThat(r.km()).containsOnly(25.0);
-        // Still coastal, still held to the coastal limit.
-        assertThat(r.coastal()).isTrue();
         assertThat(r.waterKm()).isEqualTo(2);
-        assertThat(r.cuts()).containsEntry(Reach.Cut.COASTAL, Terrain.BEARINGS);
-        // With the coastal limit above the reach, the sea costs its depth as ground at sea level - not the tiles' minus twenty.
-        Reach wide = Reach.of(t, ReachRule.Rule.of(40, 10, 50));
-        assertThat(wide.km()[0]).as("40 + 0.5 exceeds the reach; 39 + 0.5 does not").isEqualTo(39);
-        assertThat(wide.cut()[0]).isEqualTo(Reach.Cut.HEIGHT);
+        // The sea costs its depth as ground at sea level - not the tiles' minus twenty - and the shore runs the whole reach.
+        assertThat(r.km()[0]).as("40 + 0.5 exceeds the reach; 39 + 0.5 does not").isEqualTo(39);
+        assertThat(r.cut()[0]).isEqualTo(Reach.Cut.HEIGHT);
+        assertThat(r.km()[24]).isEqualTo(40);
         // Just under the share - 35 of 48 - and the water is a border again.
-        Reach shore = Reach.of(terrain(5, (b, s) -> b >= 21 && b <= 33 ? 5 : s >= 2 ? -20 : 5), ReachRule.Rule.of(40, 10, 25));
+        Reach shore = Reach.of(terrain(5, (b, s) -> b >= 21 && b <= 33 ? 5 : s >= 2 ? -20 : 5), ReachRule.Rule.of(40, 10));
         assertThat(shore.waterRays()).isEqualTo(35);
         assertThat(shore.island()).isFalse();
         assertThat(shore.km()[0]).isEqualTo(1.5);
         assertThat(shore.cut()[0]).isEqualTo(Reach.Cut.WATER);
         // Exactly the share - 36 of 48 - is an island.
-        Reach edge = Reach.of(terrain(5, (b, s) -> b >= 21 && b <= 32 ? 5 : s >= 2 ? -20 : 5), ReachRule.Rule.of(40, 10, 25));
+        Reach edge = Reach.of(terrain(5, (b, s) -> b >= 21 && b <= 32 ? 5 : s >= 2 ? -20 : 5), ReachRule.Rule.of(40, 10));
         assertThat(edge.waterRays()).isEqualTo(36);
         assertThat(edge.island()).isTrue();
     }
@@ -190,7 +182,7 @@ class ReachTest {
             case 24 -> s >= 12 ? 0 : 39;
             default -> 39;
         });
-        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10, 25));
+        Reach r = Reach.of(t, ReachRule.Rule.of(40, 10));
         // The river and the two-sample strip are crossed, and since W-16 a bed that narrow costs nothing at all.
         assertThat(r.km()[0]).isEqualTo(40);
         assertThat(r.km()[12]).isEqualTo(40);
@@ -199,13 +191,30 @@ class ReachTest {
         assertThat(r.km()[24]).isEqualTo(11.5);
         assertThat(r.cut()[24]).isEqualTo(Reach.Cut.WATER);
         assertThat(r.waterKm()).isEqualTo(12);
-        assertThat(r.coastal()).isFalse();
-        // With the lake 6 km away the station is coastal to it, and held to the coastal limit everywhere else.
-        Reach lakeside = Reach.of(terrain(39, (b, s) -> b == 24 ? (s >= 6 ? 0 : 39) : (s == 2 ? -1 : 39)), ReachRule.Rule.of(40, 10, 25));
-        assertThat(lakeside.coastal()).isTrue();
+        // With the lake 6 km away the ray towards it ends there, and nothing else is held back (W-19).
+        Reach lakeside = Reach.of(terrain(39, (b, s) -> b == 24 ? (s >= 6 ? 0 : 39) : (s == 2 ? -1 : 39)), ReachRule.Rule.of(40, 10));
         assertThat(lakeside.waterKm()).isEqualTo(6);
         assertThat(lakeside.km()[24]).isEqualTo(5.5);
-        assertThat(lakeside.km()[0]).isEqualTo(25);
+        assertThat(lakeside.km()[0]).isEqualTo(40);
+    }
+
+    @Test
+    void theReachGrowsWithTheDistanceFromTheSea() {
+        Terrain coast = terrain(30, (b, s) -> 30);
+        Terrain inland = new Terrain("017031", LAT, LON, 30, coast.elevations(), coast.sampledAt(), 25, 300.0);
+        ReachRule.Rule rule = ReachRule.Rule.of(40, 10, 20, .5);
+        // 300 km from the sea at a fifth per hundred: 40 × 1.6 = 64 km on every bearing of flat ground.
+        Reach r = Reach.of(inland, rule);
+        assertThat(r.reachKm()).isEqualTo(64);
+        assertThat(r.inlandKm()).isEqualTo(300);
+        assertThat(r.km()).containsOnly(64.0);
+        assertThat(r.cuts()).containsEntry(Reach.Cut.DISTANCE, Terrain.BEARINGS);
+        // Not known, or no share: the reach itself.
+        assertThat(Reach.of(coast, rule).km()).containsOnly(40.0);
+        assertThat(Reach.of(inland, ReachRule.Rule.of(40, 10, 0, .5)).km()).containsOnly(40.0);
+        // Never past what the terrain was sampled to.
+        assertThat(rule.reachKmAt(2000.0)).isEqualTo(Terrain.MAX_KM);
+        assertThat(rule.reachKmAt(55.0)).isEqualTo(44.4);
     }
 
     @Test
@@ -220,12 +229,15 @@ class ReachTest {
 
     @Test
     void theRuleIsClampedToWhatTheTerrainCanAnswer() {
-        assertThat(ReachRule.Rule.of(80, 10).reachKm()).isEqualTo(Terrain.MAX_KM);
+        assertThat(ReachRule.Rule.of(200, 10).reachKm()).isEqualTo(Terrain.MAX_KM);
         assertThat(ReachRule.Rule.of(1, 10).reachKm()).isEqualTo(ReachRule.MIN_KM);
         assertThat(ReachRule.Rule.of(40, -5).kmPer100m()).isEqualTo(0);
         assertThat(ReachRule.Rule.of(40, 99).kmPer100m()).isEqualTo(ReachRule.MAX_KM_PER_100M);
-        assertThat(ReachRule.Rule.of(40.3, 10.1, 25)).as("to the quarter").isEqualTo(new ReachRule.Rule(40.25, 10, 25, ReachRule.DEFAULT_DESCENT_SHARE));
-        assertThat(ReachRule.Rule.of(40, 10, 99).coastalKm()).isEqualTo(Terrain.MAX_KM);
+        assertThat(ReachRule.Rule.of(40.3, 10.1)).as("to the quarter").isEqualTo(new ReachRule.Rule(40.25, 10, ReachRule.DEFAULT_INLAND_PCT, ReachRule.DEFAULT_DESCENT_SHARE));
+        // The inland share is a whole per cent, 0 to the most.
+        assertThat(ReachRule.Rule.of(40, 10, 99, .5).inlandPct()).isEqualTo(ReachRule.MAX_INLAND_PCT);
+        assertThat(ReachRule.Rule.of(40, 10, -3, .5).inlandPct()).isZero();
+        assertThat(ReachRule.Rule.of(40, 10, 12.4, .5).inlandPct()).isEqualTo(12);
         // The descent share is a share, to the twentieth.
         assertThat(ReachRule.Rule.of(40, 10, 25, 1.4).descentShare()).isEqualTo(1);
         assertThat(ReachRule.Rule.of(40, 10, 25, -1).descentShare()).isZero();
@@ -235,7 +247,10 @@ class ReachTest {
     @Test
     void theTerrainRoundTripsThroughItsBytes() {
         Terrain t = terrain(29, (b, s) -> b * 100 + s);
-        Terrain back = Terrain.fromBytes(t.stationId(), t.lat(), t.lon(), t.toBytes(), t.sampledAt(), t.calls());
+        Terrain back = Terrain.fromBytes(t.stationId(), t.lat(), t.lon(), t.toBytes(), t.sampledAt(), t.calls(), 120.5);
+        assertThat(back.inlandKm()).isEqualTo(120.5);
+        // Sampled to another extent - the 50 km of before W-19 - and it is read as absent, to be sampled again.
+        assertThat(Terrain.fromBytes("x", LAT, LON, new byte[8 * 2401], Instant.now(), 1, null)).isNull();
         assertThat(back.elevationM()).isEqualTo(29);
         assertThat(back.at(7, 3)).isEqualTo(703);
         assertThat(back.elevations()).containsExactly(t.elevations());
@@ -244,7 +259,7 @@ class ReachTest {
     @Test
     void theSamplePointsAreTheStationThenEveryStepOnEveryBearing() {
         double[][] pts = Terrain.points(LAT, LON);
-        assertThat(pts.length).isEqualTo(Terrain.POINTS).isEqualTo(2401);
+        assertThat(pts.length).isEqualTo(Terrain.POINTS).isEqualTo(7201);
         assertThat(pts[0]).containsExactly(LAT, LON);
         // Bearing 0, step 1: a kilometre north. Bearing 12 (90°), step 50: fifty kilometres east.
         assertThat(Geo.distanceKm(LAT, LON, pts[1][0], pts[1][1])).isCloseTo(1, within(0.001));

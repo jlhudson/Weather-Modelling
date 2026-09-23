@@ -37,12 +37,12 @@ the file carries for the station - pressure, dew point, visibility, cloud and ok
 
 Each station carries a polygon — its reach — which is the ground it speaks for.
 
-**The terrain, sampled once.** For each station, 2,401 points of a digital elevation model: the
-station itself, then every kilometre out to 50 km along 48 bearings, 7.5° apart. The model is the
+**The terrain, sampled once.** For each station, 7,201 points of a digital elevation model: the
+station itself, then every kilometre out to 150 km along 48 bearings, 7.5° apart (50 km before W-19). The model is the
 Terrain Tiles on AWS's open data registry (Mapzen's, from SRTM, GMTED2010 and others, with
 bathymetry over the sea): public, no key, no published limit, 256-pixel PNG tiles at zoom 10 —
-about 125 m a pixel here — decoded with the JDK. A station's fifty-kilometre disc is some fifteen
-tiles (a megabyte), neighbouring stations share them through a cache, and every tile fetched is a
+about 125 m a pixel here — decoded with the JDK. A station's 150-kilometre disc is about a hundred
+tiles, neighbouring stations share them through a cache, and every tile fetched is a
 row in the ledger. The daily housekeeping (W-15) samples every station lacking terrain, so a new
 station in the file is picked up on its own; the console can sample one station now from its drawer. (Open-Meteo's elevation
 endpoint was tried first and counts every point as a call: 2,401 a station against 10,000 a day.) The samples are kept in `terrain` (eight-byte doubles, the station's own first) with the
@@ -80,19 +80,25 @@ bathymetry, so the sea is negative and the shoreline zero) stops it half a step 
 is inside and the sea is not. Water is water only when it is at least 3 km across along the ray —
 three samples in a row at or below sea level (W-4): a river is a line and never is, so the lower
 Murray, which the tiles read at sea level, is crossed like any dip in the ground; the sea and Lake
-Alexandrina are areas and always are. A station with such water inside 10 km on any bearing is
-*coastal*, and every one of its rays is held to the rule's coastal limit, 25 km by default — about
-how far a sea breeze carries on a summer afternoon. Land below sea level reads as water too (Lake
+Alexandrina are areas and always are. (A station with such water inside 10 km used to be *coastal*,
+held to a shorter coastal limit on every bearing; W-19 removed it.) Land below sea level reads as water too (Lake
 Eyre, at minus fifteen), which for a reach is right: a salt lake is not the station's ground.
 
 Unless the station is an *island* (W-12): where the water would end three quarters or more of its
 rays — a station on a small island, or a few hundred metres out on a jetty — the water ends none of
 them. The sea is then ground at sea level for the height cost and no more, and the station reaches
-across it to the shore beyond as it would across a plain; it is still coastal, and still held to
-the coastal limit. A station on a bordered coast keeps its border; one the sea would take
-everything from keeps its reach. The drawer says whether a station is coastal, how near the water
-is, how many rays it ends, and whether the station is an island; a coastal station wears a thin
-blue ring on the map, an island a dashed one.
+across it to the shore beyond as it would across a plain. A station on a bordered coast keeps its border; one the sea would take
+everything from keeps its reach. The drawer says how near the water
+is, how many rays it ends, and whether the station is an island; an island wears a dashed blue
+ring on the map.
+
+**Inland, further** (W-19). A station's reach grows with its distance from the sea: the rule's
+reach, and a share of it again for every hundred kilometres inland - 20 % by default, a slider from
+0 to 50 - to at most 150 km, what the terrain is sampled to. At 40 km a station on the coast
+reaches 40, one 300 km inland 64; so the outback's few stations speak for the wide country between
+them. The distance is to the sea, found once in 64 coarse tiles (zoom 7, about a kilometre a pixel,
+over the state and the ocean below it) as the water joined to the ocean - the gulfs are sea, Lake
+Eyre and the salt lakes are not - and kept with the station's terrain (`terrain.inland_km`).
 
 What this does around Adelaide: West Terrace (29 m) reaches the plains north and south, stops at the
 foothill scarp, never crosses to the Hills, and ends at the gulf; Mount Lofty (700 m) keeps the ridge

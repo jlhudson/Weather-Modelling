@@ -343,3 +343,25 @@ all rain, those extra locations and more. This is intentional, as we should have
 setup. I also expect history to be removed." The ledger is kept deliberately: wiping it would let a
 reset spend Open-Meteo's daily allowance twice.
 — James, 23 September 2026.
+
+### W-19 · No coastal limit; the further inland, the further a station reaches
+
+**The decision.** The coastal limit is gone - the slider, the cap it put on a station with water
+inside ten kilometres, and the blue ring; the sea still ends a ray at the shore, and an island still
+reaches across it. In its place a station's reach grows with its distance from the sea: the rule's
+reach, and a share of it again for every hundred kilometres inland, 20 % by default on a slider from
+0 to 50, to at most 150 km - `reach × (1 + share × inland ÷ 100)`. At 40 km a coastal station
+reaches 40 and one 300 km inland 64. To let it, the terrain is sampled to 150 km instead of 50
+(7,201 points, about a hundred tiles a station; a station sampled to 50 is read as unsampled and the
+housekeeping samples it again). The distance is to the sea: found once, in 64 zoom-7 tiles over the
+state and the ocean below it, as the water joined to the ocean - the gulfs are sea, Lake Eyre and
+the salt lakes are not - and kept with the terrain.
+
+**Why.** James: "Lets remove the Stations that are ocean / near to ocean, these have a 'Max distance
+from the ocean' scale - Remove it. Lets add a scale. As in, the further inland a point is, the bigger
+is affective radius ... so the super regional stations have a bigger area, but allow me to use a
+scale to refine it." Of the options put to him he chose the limit and its ring to go and the sea's
+border to stay, the distance measured to the sea only, and a linear share to 150 km. The outback's
+stations are hundreds of kilometres apart; a reach that is right for the Adelaide plains leaves most
+of the state spoken for by nobody.
+— James, 23 September 2026.

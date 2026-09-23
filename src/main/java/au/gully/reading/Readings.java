@@ -299,7 +299,6 @@ public class Readings {
         s.put("weight", m.weight());
         s.put("elevationM", m.heightM());
         s.put("aboveM", height == null || m.heightM() == null ? null : Math.round(m.heightM() - height));
-        s.put("coastal", m.reach() != null && m.reach().coastal());
         s.put("rayKm", m.reach() == null ? null : m.reach().km()[m.bearingIndex()]);
         s.put("margin", m.reach() == null ? null : Math.round((m.reach().km()[m.bearingIndex()] - m.km()) * 10) / 10.0);
         s.put("gives", gives(m));

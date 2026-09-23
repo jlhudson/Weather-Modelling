@@ -14,7 +14,8 @@ import java.util.Optional;
 
 /**
  * Samples the terrain around a station from the elevation tiles ({@link TerrainTiles}):
- * {@link Terrain#POINTS} points read off some fifteen tiles. Done once per station: by the daily
+ * {@link Terrain#POINTS} points read off a hundred-odd tiles, and how far the station is from the sea
+ * ({@link Coast}, W-19). Done once per station: by the daily
  * housekeeping for every station lacking it (W-15), so a new station in the file is picked up on its
  * own; when a point of ours is dropped; and on request from the console for one station now.
  * <p>
@@ -28,13 +29,15 @@ public class TerrainSampler {
     private final StationRegistry stations;
     private final TerrainStore store;
     private final TerrainTiles tiles;
+    private final Coast coast;
     private volatile String lastFailure;
     private volatile Instant lastFailedAt;
 
-    public TerrainSampler(StationRegistry stations, TerrainStore store, TerrainTiles tiles) {
+    public TerrainSampler(StationRegistry stations, TerrainStore store, TerrainTiles tiles, Coast coast) {
         this.stations = stations;
         this.store = store;
         this.tiles = tiles;
+        this.coast = coast;
     }
 
     /**
@@ -71,7 +74,9 @@ public class TerrainSampler {
     public Optional<Terrain> sample(Station s) {
         double[][] points = Terrain.points(s.lat(), s.lon());
         TerrainTiles.Sampled sampled;
+        double inland;
         try {
+            inland = coast.inlandKm(s.lat(), s.lon());
             sampled = tiles.elevations(Arrays.asList(points));
         } catch (UpstreamException | RuntimeException e) {
             lastFailure = e.getMessage();
@@ -89,10 +94,10 @@ public class TerrainSampler {
             // The model has nothing at the station itself: the Bureau's height stands in.
             own = s.heightM() == null ? 0 : s.heightM();
         }
-        Terrain t = new Terrain(s.id(), s.lat(), s.lon(), own, Arrays.copyOfRange(values, 1, values.length), Instant.now(), sampled.tilesFetched());
+        Terrain t = new Terrain(s.id(), s.lat(), s.lon(), own, Arrays.copyOfRange(values, 1, values.length), Instant.now(), sampled.tilesFetched(), inland);
         store.put(t);
         lastFailure = null;
-        log.info("terrain {} ({}): sampled, {} m at the station, {} tiles fetched", s.id(), s.name(), Math.round(own), sampled.tilesFetched());
+        log.info("terrain {} ({}): sampled, {} m at the station, {} km from the sea, {} tiles fetched", s.id(), s.name(), Math.round(own), inland, sampled.tilesFetched());
         return Optional.of(t);
     }
 
