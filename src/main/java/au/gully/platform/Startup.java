@@ -41,6 +41,7 @@ public class Startup implements ApplicationRunner {
     private final TerrainStore terrain;
     private final ReachRule reachRule;
     private final Record record;
+    private final au.gully.reading.Forecasts forecasts;
     private final Housekeeping housekeeping;
     private final GullyProperties properties;
     private final StartupHistory history;
@@ -56,6 +57,7 @@ public class Startup implements ApplicationRunner {
             terrain.rehydrate();
             reachRule.rehydrate();
             record.rehydrate();
+            forecasts.rehydrate();
         });
         step(3, "timers", this::schedule);
         history.ready();

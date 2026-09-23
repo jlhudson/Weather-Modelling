@@ -37,7 +37,7 @@ public class Reset {
     /**
      * The tables emptied, children first: everything the weather is.
      */
-    public static final List<String> TABLES = List.of("station_reading", "station_hour6", "station_day", "terrain", "station");
+    public static final List<String> TABLES = List.of("station_reading", "station_hour6", "station_day", "station_forecast", "terrain", "station");
 
     private final JdbcClient db;
     private final StationRegistry stations;
@@ -45,6 +45,7 @@ public class Reset {
     private final TerrainStore terrain;
     private final TerrainTiles tiles;
     private final Record record;
+    private final au.gully.reading.Forecasts forecasts;
     private final Housekeeping housekeeping;
     private final HttpFetcher http;
     private final TaskScheduler scheduler;
@@ -79,6 +80,7 @@ public class Reset {
                 stations.rehydrate();
                 terrain.rehydrate();
                 record.rehydrate();
+                forecasts.rehydrate();
                 // The file downloaded whole on the next read, not answered by the Bureau's 304; the tiles fetched again.
                 http.forget(URI.create(StationFile.url(StationReader.STATE)));
                 tiles.clearCache();

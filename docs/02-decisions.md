@@ -365,3 +365,23 @@ border to stay, the distance measured to the sea only, and a linear share to 150
 stations are hundreds of kilometres apart; a reach that is right for the Adelaide plains leaves most
 of the state spoken for by nobody.
 — James, 23 September 2026.
+
+### W-20 · Forecasts, and the model's now when the Bureau goes quiet
+
+**The decision.** A reading carries the next twelve hours and three days: the forecast of the nearest
+station whose reach contains the point, or of the point of ours where none does. One forecast a
+station, kept in `station_forecast` and fetched again by the next ask that finds it older than three
+hours; nothing fetches on a clock. A station in reach whose file has gone quiet - its latest older than
+seventy minutes - has the model's now fetched for it, which stands in for its reading in the blend and
+on the map, labelled the model's, and is never written into its readings or its history. The station
+drawer shows its forecast too, and the admin reset empties the table with the rest.
+
+**Why.** James: "Lets now add in openmeteo forecasts please. If it's overlapping a station then we use
+the NEAREST station's forecast. If it's not near then we create a temporary one. Forecasts are for hourly
+updates for 12 hours plus a 3 day update. Once it's older than 3 hours, if a new request for that
+station comes in, then we need to refresh. If the now files are down we should manually do a NOW update
+for all overlapping stations at that point to somewhat force an update." He chose: overlapping means
+inside a reach; the model's now in the reading and on the map but never in the history; the forecast in
+the reading, the station's drawer and the API; kept in the database. The evening the Bureau's file
+stopped for two hours, every station went hollow and the map said nothing - this is the answer to that.
+— James, 23 September 2026.

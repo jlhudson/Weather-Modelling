@@ -26,7 +26,7 @@ import java.util.Map;
  * <ol>
  *   <li>the fold: each Bureau station's last three days lacking a row of its own, from its stored readings;</li>
  *   <li>the pruning: readings older than three days, windows and days older than 548, the upstream
- *       ledger, and the points of ours no ask has used for 548 days;</li>
+ *       ledger, the forecasts older than a day (W-20), and the points of ours no ask has used for 548 days;</li>
  *   <li>the terrain of any station lacking it;</li>
  *   <li>the year of any Bureau station missing days, as far as the day's allowance allows.</li>
  * </ol>
@@ -51,6 +51,7 @@ public class Housekeeping {
     private final Points points;
     private final TerrainSampler sampler;
     private final Backfill backfill;
+    private final au.gully.reading.Forecasts forecasts;
 
     private volatile Map<String, Object> last;
 
@@ -66,6 +67,7 @@ public class Housekeeping {
         step(out, "recordPruned", () -> record.prune(now));
         step(out, "ledgerPruned", ledger::prune);
         step(out, "pointsExpired", () -> points.expire(now));
+        step(out, "forecastsPruned", () -> forecasts.prune(now));
         step(out, "terrainSampled", sampler::sampleMissing);
         step(out, "daysFilled", () -> backfill.fillPending(now));
         out.put("took", Duration.between(now, Instant.now()).toString());

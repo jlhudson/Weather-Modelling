@@ -15,7 +15,6 @@ import au.gully.reach.TerrainTiles;
 import au.gully.record.Backfill;
 import au.gully.record.Record;
 import au.gully.upstreams.Forecast;
-import au.gully.upstreams.Upstreams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
@@ -56,7 +55,7 @@ public class Points {
     private final TerrainSampler sampler;
     private final TerrainTiles tiles;
     private final ReachRule rule;
-    private final Upstreams upstreams;
+    private final Forecasts forecasts;
     private final Backfill backfill;
     private final Record record;
     private final GullyProperties properties;
@@ -159,15 +158,17 @@ public class Points {
         if (!force && currentLives(p, now)) {
             return false;
         }
-        try {
-            Forecast f = upstreams.fetch(p.lat(), p.lon());
-            Observation o = PointCurrent.of(p.id(), f, Record.zoneOf(p));
-            if (o != null) {
-                stations.acceptModel(p, o);
-                return true;
-            }
-        } catch (Upstreams.NoUpstream e) {
-            log.warn("point {}: no current ({})", p.id(), e.getMessage());
+        // One fetch for the point's current and its forecast (W-20), kept as the point's.
+        Instant before = forecasts.held(p.id()).map(Forecast::fetchedAt).orElse(null);
+        Forecast f = forecasts.of(p, now, true).orElse(null);
+        if (f == null || f.fetchedAt() == null || f.fetchedAt().equals(before)) {
+            log.warn("point {}: no current", p.id());
+            return false;
+        }
+        Observation o = PointCurrent.of(p.id(), f, Record.zoneOf(p));
+        if (o != null) {
+            stations.acceptModel(p, o);
+            return true;
         }
         return false;
     }
@@ -193,6 +194,7 @@ public class Points {
                 stations.remove(p.id());
                 terrain.remove(p.id());
                 record.forget(p.id());
+                forecasts.forget(p.id());
                 n++;
                 log.info("point {} ({}) expired: last asked {}", p.id(), p.name(), last);
             }

@@ -177,6 +177,19 @@ its current fetched again however young it is. The reading then carries `grabbed
 Bureau file came, whether the model's current was fetched, how many days of record were filled -
 and the drawer says it in a line. It is the same reading, just fetched first; nothing is guessed.
 
+**The forecast** (W-20). A reading carries the next twelve hours and three days from Open-Meteo
+(Google behind it): the forecast of the nearest station whose reach contains the point, or of the
+point of ours where none does. Forecasts are kept a station at a time in `station_forecast`, and an
+ask that finds one missing or older than three hours fetches it again - a forced ask whatever its
+age; nothing fetches on a clock, and rows older than a day are pruned. Clicking a station is an ask
+for its forecast too. A point of ours' current and its forecast are one fetch.
+
+**When the Bureau goes quiet.** A station in reach whose latest reading is older than seventy
+minutes - its file down - has the model's now fetched for it (the same forecast, fetched again when
+its now is over an hour old), and that stands in: blended into the reading and drawn on the map with
+a dashed amber ring, labelled *model* everywhere, and never written into the station's readings or its
+history. So a point of ours is dropped only where no station reaches, not where they have gone quiet.
+
 ## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the

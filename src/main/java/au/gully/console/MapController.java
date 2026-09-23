@@ -43,6 +43,7 @@ public class MapController {
     private final TerrainSampler sampler;
     private final Droughts droughts;
     private final ConsoleKey consoleKey;
+    private final au.gully.reading.Forecasts forecasts;
 
     @GetMapping
     public String page(Model model) {
@@ -74,7 +75,12 @@ public class MapController {
     public ResponseEntity<Map<String, Object>> station(@PathVariable String id) {
         return feed.detail(id).map(d -> {
             d.putAll(reaches.detail(id));
-            stations.station(id).ifPresent(s -> d.putAll(droughts.detail(s)));
+            stations.station(id).ifPresent(s -> {
+                d.putAll(droughts.detail(s));
+                // Its forecast (W-20), fetched when older than three hours: clicking a station is an ask for it.
+                Instant now = Instant.now();
+                d.put("forecast", forecasts.of(s, now, false).map(f -> au.gully.reading.Forecasts.view(f, s, 0.0, now)).orElse(null));
+            });
             return ResponseEntity.ok(d);
         }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }

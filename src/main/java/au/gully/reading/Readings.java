@@ -10,6 +10,7 @@ import au.gully.fire.Kbdi;
 import au.gully.platform.Status;
 import au.gully.platform.UpstreamException;
 import au.gully.reach.Geo;
+import au.gully.upstreams.Forecast;
 import au.gully.reach.Probe;
 import au.gully.reach.Reach;
 import au.gully.reach.ReachRule;
@@ -63,13 +64,15 @@ public class Readings {
     private final Points points;
     private final StationReader reader;
     private final Backfill backfill;
+    private final Forecasts forecasts;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
-     * One station in reach, with what the blend needs of it.
+     * One station in reach, with what the blend needs of it; {@code model} where its now is the model's -
+     * a point of ours, or a Bureau station whose file has gone quiet (W-20).
      */
     record Member(Station station, Terrain terrain, Reach reach, double km, int bearingIndex, double costKm, double weight,
-                  Double heightM, Observation latest, boolean fresh, Optional<Drought> drought) {
+                  Double heightM, Observation latest, boolean fresh, boolean model, Optional<Drought> drought) {
     }
 
     public Map<String, Object> at(double lat, double lon) {
@@ -158,6 +161,11 @@ public class Readings {
         out.put("current", current);
         out.put("drought", drought);
         out.put("fire", fire(current, drought));
+        // The forecast (W-20): the nearest station in reach's, or the point of ours'; fetched when older than three hours.
+        Member nearest = members.stream().min(Comparator.comparingDouble(Member::km)).orElse(null);
+        Forecast forecast = nearest == null ? null : forecasts.of(nearest.station(), now, force).orElse(null);
+        out.put("forecast", forecast == null ? null : Forecasts.view(forecast, nearest.station(), nearest.km(), now));
+        out.put("modelNow", members.stream().filter(m -> m.model() && !m.station().isPoint()).map(m -> m.station().id()).toList());
         List<Map<String, Object>> listed = new ArrayList<>();
         for (Member m : members) {
             listed.add(station(m, lat, lon, height, now));
@@ -192,7 +200,17 @@ public class Readings {
         double cost = cost(t, b, km, r);
         Observation o = stations.latest(s.id()).orElse(null);
         boolean fresh = o != null && o.at() != null && Duration.between(o.at(), now).compareTo(Status.STALE) < 0;
-        return Optional.of(new Member(s, t, reach, km, b, cost, Blend.weight(cost), t.elevationM(), o, fresh, droughts.of(s, now)));
+        boolean model = s.isPoint();
+        // The Bureau's file gone quiet for this station (W-20): the model's now at it stands in, fetched if none is young enough.
+        if (!fresh && !s.isPoint()) {
+            Observation m = forecasts.modelNow(s, now, false).orElse(null);
+            if (m != null) {
+                o = m;
+                fresh = true;
+                model = true;
+            }
+        }
+        return Optional.of(new Member(s, t, reach, km, b, cost, Blend.weight(cost), t.elevationM(), o, fresh, model, droughts.of(s, now)));
     }
 
     /**
@@ -202,7 +220,7 @@ public class Readings {
         double km = Geo.distanceKm(lat, lon, p.lat(), p.lon());
         Observation o = stations.latest(p.id()).orElse(null);
         boolean fresh = o != null && o.at() != null && Duration.between(o.at(), now).compareTo(Status.STALE) < 0;
-        return new Member(p, null, null, km, 0, km, Blend.weight(km), p.heightM(), o, fresh, droughts.of(p, now));
+        return new Member(p, null, null, km, 0, km, Blend.weight(km), p.heightM(), o, fresh, true, droughts.of(p, now));
     }
 
     /**

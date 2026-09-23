@@ -192,7 +192,7 @@
     function dirWord(deg) { return deg == null ? '—' : ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(deg / 22.5) % 16]; }
     function windWords(deg, kmh, gust) { return deg == null && kmh == null ? '—' : (deg != null ? dirWord(deg) + ' ' + deg + '°' : '—') + ' ' + (kmh != null ? Math.round(kmh) : '—') + ' km/h' + (gust != null ? ' <span class="muted">gust ' + Math.round(gust) + '</span>' : ''); }
     function tip(p) {
-        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours, from the model' : '') + (p.heightM != null ? ' · ' + Math.round(p.heightM) + ' m' : '') + '</span><br>'
+        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours, from the model' : '') + (p.from === 'model' && p.kind !== 'point' ? ' · the model\x27s now: the Bureau\x27s last ' + (p.bureauAt ? ago(p.bureauAt) : 'never') : '') + (p.heightM != null ? ' · ' + Math.round(p.heightM) + ' m' : '') + '</span><br>'
             + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.pressureMslHpa != null ? ' · ' + fmt(p.pressureMslHpa, 1) + ' hPa' : '') + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + windTrend(p) + '<br><span class="muted">' + when(p.at) + '</span>'
                 : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) : 'nothing reported yet') + '</span>');
     }
@@ -212,6 +212,8 @@
             }
             if (lit) L.circleMarker(ll, {renderer: canvas, radius: r * 2.4, color: REACH, weight: 2, opacity: .95, fill: false, interactive: false}).addTo(stationLayer);
             if (p.fresh) L.circleMarker(ll, {renderer: canvas, radius: r * 2.2, color: c, weight: 0, fillColor: c, fillOpacity: .18, interactive: false}).addTo(stationLayer);
+            // A Bureau station gone quiet, showing the model's now (W-20): a dashed ring in the model's amber.
+            if (p.from === 'model' && p.kind !== 'point') L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: MODEL, weight: 1.2, opacity: .9, fill: false, interactive: false, dashArray: '3 2'}).addTo(stationLayer);
             // An island (W-12) wears a dashed ring in the sea's blue: the water ends none of its rays.
             if (rf && rf.properties.island) L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: SEA, weight: 1, opacity: .8, fill: false, interactive: false, dashArray: '2 2'}).addTo(stationLayer);
             var mark;
@@ -449,6 +451,8 @@
                 + tile(c.dewPointC != null ? fmt(c.dewPointC, 1) + ' °C' : '—', 'dew point', c.from.dewPointC, 'ground')
                 + '</div>';
             html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';
+            if (o.modelNow && o.modelNow.length) html += '<p class="grabbed model">' + esc(o.modelNow.length) + ' station' + (o.modelNow.length === 1 ? '' : 's') + ' in reach ' + (o.modelNow.length === 1 ? 'has' : 'have') + ' gone quiet, so the model\x27s now stands in for ' + (o.modelNow.length === 1 ? 'it' : 'them') + ': ' + esc(o.modelNow.join(', ')) + '.</p>';
+            html += forecastSection(o.forecast);
             html += '<h2>The stations <span class="muted">' + o.stations.length + ' in reach · their share of the blend</span></h2>' + stationRows(o.stations, true);
             if (outside.length) html += '<h2>Not in reach <span class="muted">the nearest ' + outside.length + ', and why</span></h2>' + stationRows(outside, false);
             el.innerHTML = html;
@@ -480,13 +484,38 @@
     function stationRows(list, inReach) {
         var html = '<table class="table table-sm probe"><thead><tr><th>station</th><th class="num">km</th><th>from</th><th class="num">Δ m</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">mm</th><th class="num" title="Keetch-Byram drought index, mm">KBDI</th><th class="num" title="drought factor, 0 to 10">DF</th><th>age</th></tr></thead><tbody>';
         list.forEach(function (s) {
-            html += '<tr' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#" data-station="' + esc(s.id) + '">' + esc(s.name) + '</a>' + '</td>'
+            html += '<tr' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#" data-station="' + esc(s.id) + '">' + esc(s.name) + '</a>' + (s.from === 'model' ? ' <span class="model-tag" title="its now is the model\x27s">model</span>' : '') + '</td>'
                 + '<td class="num">' + fmt(s.km, 1) + '</td><td class="mono">' + dirWord(s.bearingDeg) + '</td><td class="num">' + (s.aboveM != null ? (s.aboveM > 0 ? '+' : '') + s.aboveM : '—') + '</td>'
                 + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="num">' + fmt(s.kbdiMm, 0) + '</td><td class="num">' + fmt(s.droughtFactor, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
             if (!inReach) html += '<tr class="why"><td colspan="11" class="muted">' + esc(s.why) + '</td></tr>';
             else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut) : '') + '</td></tr>';
         });
         return html + '</tbody></table>';
+    }
+
+    // ---- the forecast (W-20): the next twelve hours and three days, from the nearest station in reach or the point of ours
+    function forecastSection(fc) {
+        var html = '<h2>Forecast <span class="muted">the next ' + 12 + ' hours and 3 days</span></h2>';
+        if (!fc) return html + '<p class="muted mb-1">None: the upstreams could not answer, and none was held.</p>';
+        var st = fc.station || {};
+        html += '<p class="muted mb-1">For ' + esc(st.name || st.id) + (st.km ? ', ' + fmt(st.km, 1) + ' km away' : '') + ' · ' + esc(fc.upstream) + ' · fetched ' + esc(ago(fc.fetchedAt))
+            + (fc.stale ? ' · <span class="model-tag">old</span> the upstreams could not refresh it' : ' · fetched again after 3 hours') + '</p>';
+        if (fc.hourly && fc.hourly.length) {
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th>sky</th></tr></thead><tbody>';
+            fc.hourly.forEach(function (h) {
+                html += '<tr><td class="mono">' + clock(h.at) + '</td><td class="num">' + fmt(h.temperatureC, 1) + '</td><td class="num">' + fmt(h.humidityPct) + '</td><td class="mono">' + (h.windSpeedKmh != null ? dirWord(h.windDirectionDeg) + ' ' + Math.round(h.windSpeedKmh) : '—') + '</td><td class="num">' + (h.windGustKmh != null ? Math.round(h.windGustKmh) : '—') + '</td><td class="num">' + fmt(h.precipitationMm, 1) + '</td><td class="num">' + (h.precipitationProbabilityPct != null ? h.precipitationProbabilityPct + ' %' : '—') + '</td><td class="muted">' + esc(h.condition || '') + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        if (fc.daily && fc.daily.length) {
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th>sky</th></tr></thead><tbody>';
+            fc.daily.forEach(function (d) {
+                var day = new Date(d.date + 'T12:00:00');
+                html += '<tr><td class="mono">' + (isNaN(day) ? esc(d.date) : day.toLocaleDateString(undefined, {weekday: 'short', day: '2-digit', month: 'short'})) + '</td><td class="num">' + fmt(d.minTemperatureC, 0) + ' · ' + fmt(d.maxTemperatureC, 0) + '</td><td class="num">' + (d.minHumidityPct != null ? d.minHumidityPct + ' %' : '—') + '</td><td class="mono">' + (d.maxWindKmh != null ? dirWord(d.windDirectionDeg) + ' ' + Math.round(d.maxWindKmh) + ' · ' + (d.maxGustKmh != null ? Math.round(d.maxGustKmh) : '—') : '—') + '</td><td class="num">' + fmt(d.precipitationMm, 1) + '</td><td class="num">' + (d.precipitationProbabilityPct != null ? d.precipitationProbabilityPct + ' %' : '—') + '</td><td class="muted">' + esc(d.condition || '') + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        return html + '<p class="muted control-note">' + esc(fc.attribution || '') + '</p>';
     }
 
     // ---- the drought (W-6): the station's deficit and factor from its own record, and the record itself
@@ -535,7 +564,7 @@
                 ['district', esc(s.district)],
                 ['zone', esc(s.zone)]
             ]);
-            html += '<h2>Latest ' + (s.at ? '<span class="muted">' + esc(when(s.at)) + ' · ' + esc(ago(s.at)) + (s.fresh ? '' : ' · not reporting') + '</span>' : '') + '</h2>';
+            html += '<h2>Latest ' + (s.at ? '<span class="muted">' + esc(when(s.at)) + ' · ' + esc(ago(s.at)) + (s.from === 'model' && s.kind !== 'point' ? ' · <span class="model-tag">model</span> the Bureau\'s last ' + (s.bureauAt ? esc(ago(s.bureauAt)) : 'never') : s.fresh ? '' : ' · not reporting') + '</span>' : '') + '</h2>';
             if (s.at) {
                 html += kv([
                     ['temperature', s.temperatureC != null ? fmt(s.temperatureC, 1) + ' °C' + (s.apparentTemperatureC != null ? ' <span class="muted">feels ' + fmt(s.apparentTemperatureC, 1) + '</span>' : '') : null],
@@ -554,6 +583,7 @@
             } else {
                 html += '<p class="muted">Nothing reported since the start.</p>';
             }
+            html += forecastSection(s.forecast);
             html += reachSection(s);
             html += droughtSection(s);
             if (s.recent && s.recent.length > 1) {

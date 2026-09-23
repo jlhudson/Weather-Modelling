@@ -316,7 +316,7 @@ class EndToEndTest {
 
         double[] north = au.gully.reach.Geo.destination(-34.9257, 138.5832, 0, 10);
         Map<String, Object> r = client().get().uri("/api/v1/reading?lat=" + north[0] + "&lon=" + north[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
-        assertThat(r).containsEntry("from", "stations");
+        assertThat(r).containsEntry("from", "stations").containsKey("forecast").containsEntry("modelNow", List.of());
         Map<String, Object> current = (Map<String, Object>) r.get("current");
         // Adelaide says 15.0 at 29 m; the point's height is unknown (no tiles in the test), so no lapse correction.
         assertThat(current).containsEntry("temperatureC", 15.0).containsEntry("humidityPct", 45.0).containsEntry("windSpeedKmh", 11.0).containsEntry("windDirectionDeg", 42);

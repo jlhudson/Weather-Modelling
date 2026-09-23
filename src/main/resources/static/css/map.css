@@ -223,3 +223,8 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .drawer-head .pill { margin-left: auto; white-space: nowrap; }
 .drawer .grabbed { display: flex; align-items: center; gap: .35rem; font-size: .78rem; color: var(--p-reach, #22d3ee); margin: 0 0 .5rem; }
 .drawer .grabbed .ico { width: .9rem; height: .9rem; }
+
+/* ---- the forecast (W-20): the next hours and days, and the model's now standing in for a quiet station */
+.model-tag { display: inline-block; font-size: .66rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #f59e0b; border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent); border-radius: 4px; padding: 0 .3rem; line-height: 1.35; vertical-align: .08em; }
+.drawer .grabbed.model { color: #f59e0b; }
+.drawer .forecast td, .drawer .forecast th { white-space: nowrap; padding: .1rem .3rem; }
