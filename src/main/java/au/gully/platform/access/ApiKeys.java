@@ -35,11 +35,23 @@ public class ApiKeys {
      */
     static final String PREFIX = "weather_";
     static final Duration DRAIN_EVERY = Duration.ofSeconds(5);
+    /**
+     * The most the access log holds waiting to be written; past it, rows are counted and dropped, so a flood
+     * of requests cannot grow the heap.
+     */
+    static final int MAX_PENDING = 20_000;
+    static final int BATCH = 5_000;
+    /**
+     * How long the access log is kept.
+     */
+    public static final Duration KEEP_ACCESS = Duration.ofDays(30);
 
     private final JdbcClient db;
     private final SecureRandom random = new SecureRandom();
-    private final Cache<String, Optional<ApiKey>> byHash = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(1)).build();
+    private final Cache<String, Optional<ApiKey>> byHash = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(1)).build();
     private final ConcurrentLinkedQueue<Access> pending = new ConcurrentLinkedQueue<>();
+    private final java.util.concurrent.atomic.AtomicInteger queued = new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicLong dropped = new java.util.concurrent.atomic.AtomicLong();
 
     public ApiKeys(JdbcClient db, TaskScheduler scheduler) {
         this.db = db;
@@ -106,6 +118,11 @@ public class ApiKeys {
      * Queued; written by {@link #drain}.
      */
     public void logAccess(ApiKey key, String method, String path, String query, int status, String remoteIp) {
+        if (queued.incrementAndGet() > MAX_PENDING) {
+            queued.decrementAndGet();
+            dropped.incrementAndGet();
+            return;
+        }
         pending.add(new Access(key == null ? null : key.id(), key == null ? null : key.consumer(), method,
                 path.length() > 512 ? path.substring(0, 512) : path,
                 query == null ? null : (query.length() > 1024 ? query.substring(0, 1024) : query),
@@ -115,8 +132,13 @@ public class ApiKeys {
     void drain() {
         List<Access> batch = new ArrayList<>();
         Access a;
-        while ((a = pending.poll()) != null && batch.size() < 5_000) {
+        while (batch.size() < BATCH && (a = pending.poll()) != null) {
+            queued.decrementAndGet();
             batch.add(a);
+        }
+        long lost = dropped.getAndSet(0);
+        if (lost > 0) {
+            log.warn("access log: {} rows dropped, the queue was full", lost);
         }
         if (batch.isEmpty()) {
             return;
@@ -138,12 +160,15 @@ public class ApiKeys {
                         .param("at", Db.ts(Instant.now())).param("ids", new ArrayList<>(used)).update();
             }
         } catch (RuntimeException e) {
-            log.debug("access log drain failed: {}", e.toString());
+            log.warn("access log: {} rows not written: {}", batch.size(), e.toString());
         }
     }
 
-    public int pending() {
-        return pending.size();
+    /**
+     * The access log older than {@link #KEEP_ACCESS}, gone.
+     */
+    public int prune(Instant now) {
+        return db.sql("delete from api_access_log where at < :before").param("before", Db.ts(now.minus(KEEP_ACCESS))).update();
     }
 
     private record Access(Long keyId, String consumer, String method, String path, String query, int status, Instant at, String remoteIp) {

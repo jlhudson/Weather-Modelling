@@ -5,8 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,10 +54,6 @@ public class TerrainStore {
 
     public Optional<Terrain> get(String stationId) {
         return Optional.ofNullable(stationId == null ? null : byStation.get(stationId));
-    }
-
-    public Collection<Terrain> all() {
-        return List.copyOf(byStation.values());
     }
 
     public int size() {

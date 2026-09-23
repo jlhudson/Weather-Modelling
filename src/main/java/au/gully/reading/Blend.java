@@ -1,6 +1,5 @@
 package au.gully.reading;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -89,17 +88,5 @@ public final class Blend {
             return null;
         }
         return (int) Math.round((Math.toDegrees(Math.atan2(x, y)) + 360) % 360);
-    }
-
-    /**
-     * The parts' weights as shares of the whole, in the parts' order.
-     */
-    public static List<Double> shares(List<Part> parts) {
-        double total = parts.stream().mapToDouble(Part::weight).sum();
-        List<Double> out = new ArrayList<>(parts.size());
-        for (Part p : parts) {
-            out.add(total == 0 ? 0 : Math.round(p.weight() / total * 1000) / 1000.0);
-        }
-        return out;
     }
 }

@@ -26,7 +26,11 @@ public class ApiKeysController {
 
     @PostMapping
     public String create(@RequestParam String consumer, @RequestParam(defaultValue = "ALL") String scope, Model model) {
-        ApiKeys.Issued issued = keys.create(consumer.trim(), ApiKey.Scope.parse(scope), ConsoleModel.operatorName());
+        ApiKey.Scope s = ApiKey.Scope.parse(scope);
+        if (s == null) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "no such scope: " + scope);
+        }
+        ApiKeys.Issued issued = keys.create(consumer.trim(), s, ConsoleModel.operatorName());
         model.addAttribute("issued", issued);
         model.addAttribute("keys", keys.all());
         model.addAttribute("scopes", ApiKey.Scope.values());

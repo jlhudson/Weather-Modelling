@@ -44,12 +44,12 @@ public class Probe {
     private final TerrainStore terrain;
     private final ReachRule rule;
     private final TerrainTiles tiles;
-    private final GeometryFactory geometry = new GeometryFactory();
+    private static final GeometryFactory GEOMETRY = new GeometryFactory();
 
     public Map<String, Object> at(double lat, double lon) {
         Instant now = Instant.now();
         ReachRule.Rule r = rule.current();
-        Point here = geometry.createPoint(new Coordinate(lon, lat));
+        Point here = GEOMETRY.createPoint(new Coordinate(lon, lat));
         Double height = null;
         try {
             height = tiles.elevations(List.of(new double[]{lat, lon})).elevations().getFirst();
@@ -130,6 +130,6 @@ public class Probe {
         for (int i = 0; i < coords.length; i++) {
             coords[i] = new Coordinate(r.ring()[i][1], r.ring()[i][0]);
         }
-        return new GeometryFactory().createPolygon(coords);
+        return GEOMETRY.createPolygon(coords);
     }
 }

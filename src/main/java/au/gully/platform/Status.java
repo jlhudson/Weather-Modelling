@@ -31,6 +31,13 @@ public class Status {
      */
     public static final Duration STALE = Duration.ofMinutes(70);
 
+    /**
+     * Whether an observation is fresh: it has a time, and that time is inside {@link #STALE} of now.
+     */
+    public static boolean isFresh(au.gully.bureau.Observation o, Instant now) {
+        return o != null && o.at() != null && java.time.Duration.between(o.at(), now).compareTo(STALE) < 0;
+    }
+
     private final Upstreams upstreams;
     private final StationReader reader;
     private final StationRegistry stations;
@@ -111,9 +118,5 @@ public class Status {
         m.put("backfillFailedAt", backfill.lastFailedAt());
         m.put("housekeeping", housekeeping.last());
         return m;
-    }
-
-    public List<Upstreams.Status> upstreams() {
-        return upstreams.status();
     }
 }

@@ -35,7 +35,6 @@ class BlendTest {
         List<Blend.Part> parts = List.of(new Blend.Part("a", Blend.weight(10), 20.0), new Blend.Part("b", Blend.weight(20), 10.0));
         // Four to one: (4 × 20 + 1 × 10) / 5 = 18.
         assertThat(Blend.mean(parts)).isCloseTo(18.0, within(1e-9));
-        assertThat(Blend.shares(parts)).containsExactly(0.8, 0.2);
         assertThat(Blend.mean(List.of())).isNull();
     }
 

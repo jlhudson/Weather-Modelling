@@ -176,7 +176,6 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
         double[] km = new double[Terrain.BEARINGS];
         Cut[] cut = new Cut[Terrain.BEARINGS];
         int[] water = new int[Terrain.BEARINGS];
-        Double nearestWater = null;
         // First every ray as if the water were ground at sea level: the distance and the ground end it.
         for (int b = 0; b < Terrain.BEARINGS; b++) {
             double[][] d = difference(t, b);
@@ -191,9 +190,6 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
                     break;
                 }
                 double dist = s * Terrain.STEP_KM;
-                if (s == water[b] && (nearestWater == null || dist < nearestWater)) {
-                    nearestWater = dist;
-                }
                 maxUp = Math.max(maxUp, up[s]);
                 maxDown = Math.max(maxDown, down[s]);
                 if (costKm(dist, new Crossed(maxUp, maxDown), rule) > reachKm) {
@@ -207,6 +203,13 @@ public record Reach(String stationId, ReachRule.Rule rule, double[] km, Cut[] cu
             }
             km[b] = reached;
             cut[b] = why;
+        }
+        // How near the water is: its first sample on the bearing it is nearest, whether or not a ray got that far.
+        Double nearestWater = null;
+        for (int b = 0; b < Terrain.BEARINGS; b++) {
+            if (water[b] > 0 && (nearestWater == null || water[b] * Terrain.STEP_KM < nearestWater)) {
+                nearestWater = water[b] * Terrain.STEP_KM;
+            }
         }
         // Then the water: the rays it lies across would end at its edge, half a step short of the first sample.
         double[] edge = new double[Terrain.BEARINGS];

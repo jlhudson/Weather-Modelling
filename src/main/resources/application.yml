@@ -82,6 +82,6 @@ logging:
 gully:
   contact: ${WEATHER_CONTACT:https://github.com/jlhudson/Weather-Modelling}
   console:
-    code: ${WEATHER_CONSOLE_CODE:12345678}
+    code: ${WEATHER_CONSOLE_CODE:}
   api:
     cors-origins: ${WEATHER_CORS_ORIGINS:}

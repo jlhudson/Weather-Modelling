@@ -13,7 +13,7 @@ import java.util.Optional;
  * day from field capacity at the start of the year behind today, the mean annual rainfall the run
  * needs taken from that same year, and the Griffiths drought factor from the deficit and the last
  * twenty days of rain, today's so far included. Nothing is stored: the record is, and this is
- * arithmetic over it, memoised until the record or the day changes.
+ * arithmetic over it, done when asked.
  *
  * @param from             the first day integrated
  * @param to               the last complete day, yesterday

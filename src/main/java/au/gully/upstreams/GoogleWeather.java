@@ -25,7 +25,7 @@ import java.util.List;
  * <p>
  * <strong>Three requests, not one.</strong> Current conditions, hourly and daily are separate
  * endpoints and separately billed, so one fetch costs three units against a free allowance of 10,000
- * a month per endpoint, and past that it bills — which is why it is the overflow and not a peer.
+ * a month per endpoint - 30,000 units across the three - and past that it bills, which is why it is the overflow and not a peer.
  */
 @Component
 public class GoogleWeather implements Upstream {
@@ -33,13 +33,8 @@ public class GoogleWeather implements Upstream {
     public static final String ID = "google";
     private static final String ENDPOINT = "https://weather.googleapis.com/v1";
 
-    /**
-     * Google publishes no cadence for its current conditions; half an hour is what it has been
-     * observed to refresh at and is the life a fetched "now" is given here.
-     */
-
     public static final Spec SPEC = new Spec(ID, "weather.googleapis.com", "google-weather-v1",
-            "Weather data from Google Maps Platform", 3.0, new Limits(null, null, null, 10_000), 0.9, 60,
+            "Weather data from Google Maps Platform", 3.0, new Limits(null, null, null, 30_000), 0.9, 60,
             true, Duration.ofMinutes(15));
 
     private final String apiKey;

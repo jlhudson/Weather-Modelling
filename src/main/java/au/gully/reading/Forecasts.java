@@ -19,7 +19,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -144,7 +143,7 @@ public class Forecasts {
     }
 
     private static boolean young(Observation o, Instant now) {
-        return o != null && o.at() != null && Duration.between(o.at(), now).compareTo(Status.STALE) < 0;
+        return Status.isFresh(o, now);
     }
 
     private Optional<Forecast> get(Station s, Instant now, Duration life, boolean force) {
@@ -206,10 +205,10 @@ public class Forecasts {
         out.put("upstream", f.upstream());
         out.put("model", f.model());
         out.put("attribution", f.attribution());
-        Instant hour = now.truncatedTo(ChronoUnit.HOURS);
         List<Map<String, Object>> hours = new ArrayList<>();
         for (Conditions c : f.hourly()) {
-            if (c.at() != null && !c.at().isBefore(hour) && hours.size() < HOURS) {
+            // From the hour now running: the series' hours are local, and Adelaide's fall on the half hour in UTC.
+            if (c.at() != null && c.at().plus(Duration.ofHours(1)).isAfter(now) && hours.size() < HOURS) {
                 Map<String, Object> h = new LinkedHashMap<>();
                 h.put("at", c.at().toString());
                 h.put("temperatureC", c.temperatureC());
@@ -246,9 +245,5 @@ public class Forecasts {
         }
         out.put("daily", days);
         return out;
-    }
-
-    public int size() {
-        return held.size();
     }
 }

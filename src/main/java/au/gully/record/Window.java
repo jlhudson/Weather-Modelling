@@ -24,7 +24,6 @@ public final class Window {
     private int wN;
     public Double wMax, gMax;
     public Double rainSince9am, rain24h, publishedMax;
-    public Instant lastAt;
 
     public Window(Instant end) {
         this.end = end;
@@ -32,7 +31,6 @@ public final class Window {
 
     public void add(Observation o) {
         readings++;
-        lastAt = o.at();
         Double t = o.temperatureC();
         if (t != null) {
             tSum += t;

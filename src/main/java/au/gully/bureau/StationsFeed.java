@@ -80,7 +80,7 @@ public class StationsFeed {
         p.put("at", o == null || o.at() == null ? null : o.at().toString());
         Long age = o == null || o.at() == null ? null : Duration.between(o.at(), now).toMinutes();
         p.put("ageMinutes", age);
-        p.put("fresh", age != null && age < Status.STALE.toMinutes());
+        p.put("fresh", Status.isFresh(o, now));
         p.put("temperatureC", o == null ? null : o.temperatureC());
         p.put("apparentTemperatureC", o == null ? null : o.apparentTemperatureC());
         p.put("dewPointC", o == null ? null : o.dewPointC());

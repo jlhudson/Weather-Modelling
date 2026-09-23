@@ -71,6 +71,8 @@ public class StationReader {
             }
             return true;
         } catch (UpstreamException | javax.xml.stream.XMLStreamException | RuntimeException e) {
+            // Not taken in: the validators are forgotten, so the next read downloads the file whole rather than hearing it is unchanged.
+            http.forget(URI.create(StationFile.url(STATE)));
             if (failure == null) {
                 log.warn("bureau {}: {} (tried again every {})", STATE, e.getMessage(), EVERY);
             }

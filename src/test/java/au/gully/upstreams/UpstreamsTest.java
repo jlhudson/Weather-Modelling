@@ -41,17 +41,8 @@ class UpstreamsTest {
         assertThat(f.current().humidityPct()).isEqualTo(81);
         assertThat(f.current().condition()).isEqualTo("Partly cloudy");
         assertThat(f.current().daytime()).isFalse();
-        // No expiry of its own: the service keeps it for its life. "Now" is the series read at the moment:
-        // halfway between the first two hours the values blend, the words come from the nearer hour.
         assertThat(f.hourly()).hasSize(3);
-        var half = f.at(Instant.ofEpochSecond(1789741800L));
-        assertThat(half.temperatureC()).isCloseTo(10.45, org.assertj.core.api.Assertions.offset(0.001));
-        assertThat(half.humidityPct()).isEqualTo(82);
-        assertThat(half.windDirectionDeg()).isEqualTo(203);
-        assertThat(half.precipitationMm()).as("the hour's own total").isEqualTo(0.0);
-        assertThat(f.at(Instant.ofEpochSecond(1789740000L)).temperatureC()).isEqualTo(10.7);
-        assertThat(f.at(Instant.ofEpochSecond(1789800000L)).temperatureC()).as("past the series: its last hour").isEqualTo(9.8);
-        assertThat(f.at(Instant.ofEpochSecond(1789000000L)).temperatureC()).as("before the series: its first hour").isEqualTo(10.7);
+        assertThat(f.hourly().getFirst().temperatureC()).isEqualTo(10.7);
         assertThat(f.daily()).hasSize(2);
         // Midnight local expressed as a UTC epoch comes back as the local date.
         assertThat(f.daily().getFirst().date()).isEqualTo(LocalDate.of(2026, 9, 18));
@@ -135,7 +126,9 @@ class UpstreamsTest {
         assertThat(new Budget(ledgerSpent(100)).check(OpenMeteo.SPEC, 5).allowed()).isTrue();
         // Google publishes only a monthly limit: a big daily spend is no reason to refuse.
         assertThat(new Budget(ledgerSpent(5_000)).check(GoogleWeather.SPEC, 3).allowed()).isTrue();
-        assertThat(new Budget(ledgerSpent(8_999)).check(GoogleWeather.SPEC, 3).allowed()).isFalse();
+        // 10,000 a month on each of its three endpoints: 30,000 units, retired at the 27,000 guard.
+        assertThat(new Budget(ledgerSpent(8_999)).check(GoogleWeather.SPEC, 3).allowed()).isTrue();
+        assertThat(new Budget(ledgerSpent(26_999)).check(GoogleWeather.SPEC, 3).allowed()).isFalse();
     }
 
     @Test
@@ -160,11 +153,11 @@ class UpstreamsTest {
     void thePacerHoldsCallsToThePerMinuteLimit() {
         Pacer pacer = new Pacer();
         for (int i = 0; i < 5; i++) {
-            assertThat(pacer.acquire("z", 5)).isTrue();
+            assertThat(pacer.acquire("z", 5, 1.0)).isTrue();
         }
         assertThat(pacer.inLastMinute("z")).isEqualTo(5);
         long started = System.nanoTime();
-        assertThat(pacer.acquire("z", 5)).as("the sixth waits up to the ceiling and gives up").isFalse();
+        assertThat(pacer.acquire("z", 5, 1.0)).as("the sixth waits up to the ceiling and gives up").isFalse();
         assertThat(Duration.ofNanos(System.nanoTime() - started)).isGreaterThanOrEqualTo(Pacer.WAIT_CEILING.minusMillis(300));
     }
 

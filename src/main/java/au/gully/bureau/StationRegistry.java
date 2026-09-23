@@ -104,9 +104,13 @@ public class StationRegistry {
     @Transactional
     public int accept(List<StationFile.StationReading> readings, Instant now) {
         int added = 0;
+        // Memory follows the table only once the rows are in: a rollback leaves both as they were, and the next
+        // read writes what this one could not.
+        List<Runnable> afterCommit = new java.util.ArrayList<>();
         for (StationFile.StationReading r : readings) {
             Station s = r.station();
-            Station known = stations.put(s.id(), s);
+            Station known = stations.get(s.id());
+            afterCommit.add(() -> stations.put(s.id(), s));
             if (known == null || !known.equals(s)) {
                 db.sql("""
                         insert into station (id, wmo_id, name, lat, lon, height_m, zone, district, state, first_seen_at, last_seen_at)
@@ -131,9 +135,20 @@ public class StationRegistry {
                 continue;
             }
             write(o);
-            keep(s.id(), o);
+            afterCommit.add(() -> keep(s.id(), o));
         }
-        lastUpdateAt = now;
+        afterCommit.add(() -> lastUpdateAt = now);
+        Runnable apply = () -> afterCommit.forEach(Runnable::run);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    apply.run();
+                }
+            });
+        } else {
+            apply.run();
+        }
         return added;
     }
 

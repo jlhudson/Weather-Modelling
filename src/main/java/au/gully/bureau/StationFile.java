@@ -96,7 +96,11 @@ public class StationFile {
         double lat = Double.parseDouble(r.getAttributeValue(null, "lat"));
         double lon = Double.parseDouble(r.getAttributeValue(null, "lon"));
         Double height = dbl(r.getAttributeValue(null, "stn-height"));
+        // Some stations come tagged UTC; every station in the state keeps the state's clock, or its day would turn at 6:30 pm.
         String tz = r.getAttributeValue(null, "tz");
+        if (tz == null || !tz.startsWith("Australia/")) {
+            tz = "Australia/Adelaide";
+        }
         String district = r.getAttributeValue(null, "forecast-district-id");
         return new Station(bomId == null ? wmo : bomId, wmo, name, lat, lon, height, tz, district, state);
     }
@@ -151,7 +155,6 @@ public class StationFile {
                 case "wind_dir" -> windDirection = text == null ? null : text.trim();
                 case "gust_kmh" -> gust = dbl(text);
                 case "msl_pres" -> pressure = dbl(text);
-                case "pres" -> pressure = pressure == null ? dbl(text) : pressure;
                 case "rainfall" -> rain = dbl(text);
                 case "rainfall_24hr" -> rain24 = dbl(text);
                 case "maximum_air_temperature" -> maxTemp = dbl(text);

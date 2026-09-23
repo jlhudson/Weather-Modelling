@@ -54,6 +54,7 @@ public class Ledger {
         Double units = db.sql("select coalesce(sum(units), 0) from upstream_call where upstream = :u and at >= :since")
                 .param("u", upstream).param("since", Db.ts(since)).query(Double.class).single();
         double total = units == null ? 0 : units;
+        memo.values().removeIf(x -> Duration.between(x.at(), now).compareTo(MEMO) >= 0);
         memo.put(key, new Memo(now, total));
         return total;
     }

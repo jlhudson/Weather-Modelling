@@ -241,13 +241,5 @@ public class Upstreams {
             Integer limit = limit(window);
             return limit == null || limit <= 0 ? 0 : Math.min(1.0, spent.getOrDefault(window, 0.0) / limit);
         }
-
-        public double dayFraction() {
-            return fraction("day");
-        }
-
-        public double monthFraction() {
-            return fraction("month");
-        }
     }
 }

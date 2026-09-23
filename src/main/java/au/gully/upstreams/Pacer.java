@@ -31,13 +31,6 @@ public class Pacer {
     private final Map<String, Deque<Call>> windows = new ConcurrentHashMap<>();
 
     /**
-     * Takes the slots for one call of one unit, waiting briefly if the minute is full.
-     */
-    public boolean acquire(String upstream, int perMinute) {
-        return acquire(upstream, perMinute, 1.0);
-    }
-
-    /**
      * Takes the slots for one call weighing {@code units}, waiting briefly for them if the minute is
      * full. A call heavier than the whole limit is let through alone rather than never.
      *

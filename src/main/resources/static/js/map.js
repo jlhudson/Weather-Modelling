@@ -14,6 +14,8 @@
     var clock = function (iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}); };
     var ago = function (iso) { if (!iso) return '—'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 120 ? m + ' min ago' : m < 2880 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
     var icon = function (id) { return '<svg class="ico"><use href="#i-' + id + '"/></svg>'; };
+    // A response as JSON, or a failure: an error page is never taken for data.
+    var json = function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); };
 
     // ---- the catalogue: what a station can be coloured by, each a property of the feed with a range.
     var VARS = [
@@ -28,7 +30,7 @@
         {id: 'heightM', name: 'Height', hint: 'of the station', unit: 'm', icon: 'elevation', range: [0, 800], always: true},
         {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true}
     ];
-    var GROUND = '#3b82f6', NONE = '#6b7280', SEA = '#0ea5e9', MODEL = '#f59e0b';
+    var NONE = '#6b7280', SEA = '#0ea5e9', MODEL = '#f59e0b';
     // A diamond of a size in pixels at a place, as a polygon in the map's own units: it keeps its size across zoom.
     function diamond(ll, px, style) {
         var c = map.latLngToLayerPoint(ll), pts = [[c.x, c.y - px], [c.x + px, c.y], [c.x, c.y + px], [c.x - px, c.y]].map(function (q) { return map.layerPointToLatLng(L.point(q[0], q[1])); });
@@ -58,6 +60,8 @@
     var stationLayer = L.layerGroup().addTo(map);
     var labelLayer = L.layerGroup().addTo(map);
     var probeLayer = L.layerGroup().addTo(map);
+    // The reaches in a pane under the stations' canvas, so a dot is always what a click over it hits.
+    map.createPane('reaches').style.zIndex = 350;
     var state = {id: 'temperatureC', selected: null, probe: null, bin: null};
     var togs = {labels: true, reach: true, all: false};
     var lastStations = null, lastReach = null;
@@ -166,13 +170,14 @@
         var all = lastStations ? lastStations.features.map(function (f) { return f.properties; }) : [];
         var props = all.filter(function (p) { return p.kind !== 'point'; }), pts = all.filter(function (p) { return p.kind === 'point'; });
         var fresh = props.filter(function (p) { return p.fresh; });
+        var temps = fresh.map(function (p) { return p.temperatureC; }).filter(function (x) { return x != null; });
         var reaches = lastReach ? lastReach.features.map(function (f) { return f.properties; }) : [];
         var t = [
             {v: props.length, k: 'stations'},
             {v: fresh.length, k: 'reporting', cls: 'ground'},
             {v: pts.length, k: 'points of ours', cls: 'model', t: "Places nobody's reach contained when asked, dropped as stations of our own: the model's current, a year of the archive, the same reach"},
             {v: lastStations && lastStations.updatedAt ? ago(lastStations.updatedAt) : '—', k: 'file read'},
-            {v: fresh.length ? fmt(fresh.reduce(function (a, p) { return a + (p.temperatureC || 0); }, 0) / fresh.filter(function (p) { return p.temperatureC != null; }).length, 1) + ' °C' : '—', k: 'mean temperature'},
+            {v: temps.length ? fmt(temps.reduce(function (a, x) { return a + x; }, 0) / temps.length, 1) + ' °C' : '—', k: 'mean temperature'},
             {v: lastReach ? reaches.length + (reaches.length < all.length ? ' of ' + all.length : '') : '—', k: 'reaches drawn', cls: 'reach', t: 'Stations whose terrain has been sampled; the daily housekeeping samples the rest'},
             {v: reaches.length ? fmt(reaches.reduce(function (a, p) { return a + p.areaKm2; }, 0) / reaches.length, 0) + ' km²' : '—', k: 'mean reach area', cls: 'reach'}
         ];
@@ -180,8 +185,12 @@
     }
 
     // ---- the stations
+    // Loads race (the minute's timer, a new point, read now): only the newest answer is drawn.
+    var loadSeq = 0;
     function load() {
-        fetch('/console/map/stations.geojson').then(function (r) { return r.json(); }).then(function (fc) {
+        var my = ++loadSeq;
+        fetch('/console/map/stations.geojson').then(json).then(function (fc) {
+            if (my !== loadSeq) return;
             lastStations = fc;
             stations();
             legend();
@@ -266,7 +275,7 @@
             if (reachLoading) { reachAgain = true; return; }
             reachLoading = true;
             var r = ruleOnSliders();
-            fetch('/console/map/reach.geojson?' + ruleQuery(r)).then(function (x) { return x.json(); }).then(function (fc) {
+            fetch('/console/map/reach.geojson?' + ruleQuery(r)).then(json).then(function (fc) {
                 reachLoading = false;
                 lastReach = fc;
                 drawReach();
@@ -274,7 +283,7 @@
                 tiles();
                 reachHint();
                 if (reachAgain) { reachAgain = false; loadReach(true); }
-            }).catch(function (e) { reachLoading = false; note('reach failed: ' + e); });
+            }).catch(function (e) { reachLoading = false; note('reach failed: ' + e); if (reachAgain) { reachAgain = false; loadReach(true); } });
         }, immediate ? 0 : 150);
     }
     function reachFeature(id) {
@@ -310,12 +319,12 @@
         lastReach.features.forEach(function (f) {
             var p = f.properties, lit = p.id === state.selected, probed = state.probe && state.probe.ids.indexOf(p.id) >= 0;
             if (lit && togs.reach) {
-                L.geoJSON(f, {style: reachStyle(true), interactive: false}).addTo(reachLayer);
+                L.geoJSON(f, {style: reachStyle(true), interactive: false, pane: 'reaches'}).addTo(reachLayer);
             } else if (probed && togs.reach) {
                 // The reaches that contain the probed point, faintly, so the membership shows.
-                L.geoJSON(f, {style: reachStyle(false), interactive: false}).addTo(reachLayer);
+                L.geoJSON(f, {style: reachStyle(false), interactive: false, pane: 'reaches'}).addTo(reachLayer);
             } else if (togs.all) {
-                L.geoJSON(f, {style: reachStyleBy(p.id)}).bindTooltip(function () { return reachTip(p); }, {sticky: true, className: 'hx-tip'})
+                L.geoJSON(f, {style: reachStyleBy(p.id), pane: 'reaches'}).bindTooltip(function () { return reachTip(p); }, {sticky: true, className: 'hx-tip'})
                     .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
                     .on('mouseover', function () { var sp = stationProps(p.id), x = sp ? valueOf(sp) : null; if (state.bin == null) markBar(x == null ? null : binOf(x)); })
                     .on('mouseout', function () { if (state.bin == null) markBar(null); }).addTo(allLayer);
@@ -323,7 +332,7 @@
         });
     }
     function reachHint() {
-        var r = ruleOnSliders(), s = $('reachSaved');
+        var r = ruleOnSliders();
         var inForce = lastReach && lastReach.inForce;
         $('reachHint').textContent = inForce ? '' : 'preview';
         $('reach').classList.toggle('on', !inForce);
@@ -343,7 +352,7 @@
         var r = ruleOnSliders(), headers = window.gullyCsrf ? window.gullyCsrf() : {};
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
         $('reachSet').disabled = true;
-        fetch('/console/map/reach/rule', {method: 'POST', headers: headers, body: ruleQuery(r)}).then(function (x) { return x.json(); }).then(function (o) {
+        fetch('/console/map/reach/rule', {method: 'POST', headers: headers, body: ruleQuery(r)}).then(json).then(function (o) {
             reachSaved(o.reachKm, o.kmPer100m, o.inlandPct, Math.round(o.descentShare * 100), o.by, o.since);
             note('reach set: ' + ruleWords(o));
             loadReach(true);
@@ -354,11 +363,11 @@
         var headers = window.gullyCsrf ? window.gullyCsrf() : {};
         var b = $('sampleNow');
         if (b) { b.disabled = true; b.textContent = 'sampling…'; }
-        fetch('/console/map/terrain/' + encodeURIComponent(id), {method: 'POST', headers: headers}).then(function (x) { return x.json(); }).then(function (o) {
+        fetch('/console/map/terrain/' + encodeURIComponent(id), {method: 'POST', headers: headers}).then(json).then(function (o) {
             note(o.sampled ? 'terrain sampled: ' + o.terrain.tiles + ' tiles fetched' : 'sampling failed: ' + (o.failure || ''));
             loadReach(true);
-            detail(id);
-        }).catch(function (e) { note('sampling failed: ' + e); detail(id); });
+            if (state.selected === id) detail(id);
+        }).catch(function (e) { note('sampling failed: ' + e); if (state.selected === id) detail(id); });
     }
 
     // ---- the drawer: everything held for one station
@@ -386,8 +395,8 @@
             ['reach', fmt(r.minKm, 0) + '–' + fmt(r.maxKm, 0) + ' km <span class="muted">mean ' + fmt(r.meanKm, 1) + '</span>'],
             ['inland', r.inlandKm != null ? fmt(r.inlandKm, 0) + ' km from the sea <span class="muted">so it reaches ' + fmt(r.reachKm, 1) + ' km over flat ground: ' + r.rule.reachKm + ' km and ' + r.rule.inlandPct + ' % of that for every 100 km</span>' : 'not known <span class="muted">sample the terrain again</span>'],
             ['rays', cutWords(r.cut) + ' <span class="muted">of ' + r.rays.length + '</span>'],
-            ['water', (r.waterKm != null ? fmt(r.waterKm, 0) + ' km away at the nearest' : 'none inside the reach')
-                + (r.island ? ' · <span class="coastal">an island</span>: the water would end ' + r.waterRays + ' of ' + r.rays.length + ' rays, so ends none' : r.waterRays ? ' · ends ' + r.waterRays + ' of ' + r.rays.length + ' rays' : '')],
+            ['water', (r.waterKm != null ? fmt(r.waterKm, 0) + ' km away at the nearest' : 'none within 150 km')
+                + (r.island ? ' · <span class="island">an island</span>: the water would end ' + r.waterRays + ' of ' + r.rays.length + ' rays, so ends none' : r.waterRays ? ' · ends ' + r.waterRays + ' of ' + r.rays.length + ' rays' : '')],
             ['rule', ruleWords(r.rule)],
             ['model height', fmt(t.elevationM, 0) + ' m' + (s.heightM != null ? ' <span class="muted">the Bureau says ' + s.heightM + '</span>' : '')],
             ['sampled', esc(ago(t.sampledAt)) + ' <span class="muted">' + t.tiles + ' tiles fetched · ' + esc(t.source) + '</span>']
@@ -408,6 +417,8 @@
     // ---- the reading (W-8): click anywhere, and ask - the weather now and the drought, blended from the
     // stations whose reach contains the point, or from a point of ours where none can say; then the
     // stations that fed it with their shares, and the nearest outside with why (the probe, W-5).
+    // One question at a time: a reading or a station asked for later wins, and an answer to an earlier one is dropped.
+    var askSeq = 0;
     function clearProbe() { state.probe = null; probeLayer.clearLayers(); }
     // A click is an ask from outside (W-14): it goes through the API's front door with the console's own key - scope,
     // rate and access log like any consumer's - so what the map shows is what The Hub gets. A refusal is a problem
@@ -421,6 +432,7 @@
     // The reading at a point; forced (W-13), the upstreams are asked first - the Bureau's file now, the days the stations
     // in reach are missing, a point of ours' current again - and the drawer says what came.
     function probe(lat, lon, force) {
+        var my = ++askSeq;
         state.selected = null;
         clearProbe();
         stations();
@@ -429,10 +441,11 @@
         note(force ? 'grabbing…' : 'asking…');
         var q = 'lat=' + lat.toFixed(5) + '&lon=' + lon.toFixed(5);
         Promise.all([api('/api/v1/reading?' + q + (force ? '&force=true' : '')), api('/api/v1/stations/at?' + q)]).then(function (both) {
+            if (my !== askSeq) return;
             var o = both[0], pr = both[1];
             var ids = o.stations.map(function (s) { return s.id; });
             state.probe = {lat: lat, lon: lon, ids: ids};
-            if (o.from !== 'stations') { lastStations = null; load(); loadReach(true); } else drawReach();
+            if (o.from !== 'stations') { load(); loadReach(true); } else drawReach();
             o.stations.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: REACH, weight: 1.5, opacity: .85, interactive: false}).addTo(probeLayer); });
             var outside = pr.outside.filter(function (s) { return ids.indexOf(s.id) < 0; });
             outside.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: NONE, weight: 1, opacity: .6, dashArray: '4 5', interactive: false}).addTo(probeLayer); });
@@ -550,11 +563,13 @@
     }
 
     function detail(id) {
+        var my = ++askSeq;
         state.selected = id;
         clearProbe();
         stations();
         drawReach();
         fetch('/console/map/station/' + encodeURIComponent(id)).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+            if (my !== askSeq) return;
             var el = $('detail');
             if (!s) { el.innerHTML = '<div class="drawer-head"><h3>' + esc(id) + '</h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div><p class="muted">not held</p>'; el.classList.remove('hidden'); $('close').addEventListener('click', closeDetail); return; }
             var html = '<div class="drawer-head"><h3>' + esc(s.name) + ' <span class="muted">' + esc(s.id) + (s.wmoId ? ' · WMO ' + esc(s.wmoId) : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
@@ -598,7 +613,7 @@
             if ($('sampleNow')) $('sampleNow').addEventListener('click', function () { sampleTerrain(id); });
         }).catch(function (e) { note('station failed: ' + e); });
     }
-    function closeDetail() { $('detail').classList.add('hidden'); state.selected = null; clearProbe(); stations(); drawReach(); }
+    function closeDetail() { askSeq++; $('detail').classList.add('hidden'); state.selected = null; clearProbe(); stations(); drawReach(); }
 
     // ---- the footer: read now, and live
     var noteTimer = null;
@@ -611,13 +626,12 @@
     function readNow() {
         var headers = window.gullyCsrf ? window.gullyCsrf() : {};
         $('readNow').disabled = true;
-        fetch('/console/map/bureau/read', {method: 'POST', headers: headers}).then(function (r) { return r.json(); }).then(function (o) {
+        fetch('/console/map/bureau/read', {method: 'POST', headers: headers}).then(json).then(function (o) {
             $('readNow').disabled = false;
             note(o.downloaded ? 'read: ' + o.bureau.stationsInFile + ' stations in the file' : (o.bureau.failure ? 'failed: ' + o.bureau.failure : 'unchanged since ' + ago(o.bureau.readAt)));
             load();
         }).catch(function (e) { $('readNow').disabled = false; note('read failed: ' + e); });
     }
-    var lastLoadAt = null;
     function liveTick() {
         var el = $('live');
         el.classList.toggle('paused', document.hidden);
@@ -642,7 +656,7 @@
     map.on('zoomend', stations);
     map.on('moveend', function () { if (inView) legend(); });
     map.on('click', function (e) { probe(e.latlng.lat, e.latlng.lng); });
-    document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; stations(); drawReach(); });
+    document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; probeLayer.eachLayer(function (l) { if (l.setStyle && l.options.color !== NONE) l.setStyle({color: REACH}); }); stations(); drawReach(); });
     document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); loadReach(true); } });
 
     buildSide();
@@ -653,5 +667,5 @@
     setInterval(liveTick, 1000);
     setInterval(function () { if (!document.hidden) load(); }, 60000);
     // The reaches follow the sampler: a station sampled since the last look appears on the next.
-    setInterval(function () { if (!document.hidden && lastReach && lastStations && lastReach.sampled < lastStations.stations) loadReach(true); }, 20000);
+    setInterval(function () { if (!document.hidden && lastReach && lastStations && lastReach.sampled < lastReach.stations) loadReach(true); }, 20000);
 })();

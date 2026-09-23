@@ -87,7 +87,7 @@ public class Coast {
         List<int[]> edge = coastline(heights, side);
         double[][] out = new double[edge.size()][];
         for (int i = 0; i < out.length; i++) {
-            out[i] = latLon(edge.get(i)[0], edge.get(i)[1], side);
+            out[i] = latLon(edge.get(i)[0], edge.get(i)[1]);
         }
         coastline = out;
         failedAt = null;
@@ -140,19 +140,11 @@ public class Coast {
     /**
      * A pixel's centre in the square, as {@code {lat, lon}}.
      */
-    static double[] latLon(int column, int row, int side) {
+    static double[] latLon(int column, int row) {
         double n = Math.pow(2, ZOOM);
         double x = X0 + (column + .5) / TerrainTiles.SIZE, y = Y0 + (row + .5) / TerrainTiles.SIZE;
         double lon = x / n * 360 - 180;
         double lat = Math.toDegrees(Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))));
         return new double[]{lat, lon};
-    }
-
-    public boolean found() {
-        return coastline != null;
-    }
-
-    public String failure() {
-        return failure;
     }
 }

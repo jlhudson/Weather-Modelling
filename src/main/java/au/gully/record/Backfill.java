@@ -95,10 +95,47 @@ public class Backfill {
         if (missing.isEmpty() || (!force && missing.size() <= TOLERANCE_DAYS)) {
             return null;
         }
-        return new Range(missing.getFirst(), missing.getLast(), missing.size());
+        return new Range(missing.getFirst(), missing.getLast(), missing);
     }
 
-    public record Range(LocalDate from, LocalDate to, int missing) {
+    /**
+     * What a station wants: its first and last missing day, and every missing day between.
+     */
+    public record Range(LocalDate from, LocalDate to, List<LocalDate> days) {
+        public int missing() {
+            return days.size();
+        }
+    }
+
+    /**
+     * Days in runs to fetch: consecutive, or near enough that one fetch costs no more than two - the archive
+     * counts a fortnight as one unit - so a gap a year back and a few recent days are two small fetches, not
+     * a year of archive.
+     */
+    static List<LocalDate[]> runs(List<LocalDate> days) {
+        List<LocalDate[]> out = new ArrayList<>();
+        LocalDate start = null, last = null;
+        for (LocalDate d : days) {
+            if (start != null && java.time.temporal.ChronoUnit.DAYS.between(last, d) > OpenMeteo.ARCHIVE_DAYS_PER_UNIT) {
+                out.add(new LocalDate[]{start, last});
+                start = null;
+            }
+            if (start == null) {
+                start = d;
+            }
+            last = d;
+        }
+        if (start != null) {
+            out.add(new LocalDate[]{start, last});
+        }
+        return out;
+    }
+
+    /**
+     * Every station's rest forgotten: after the admin reset (W-18), every station is filled on the next run.
+     */
+    public void clear() {
+        attempted.clear();
     }
 
     /**
@@ -129,18 +166,19 @@ public class Backfill {
         LocalDate archiveEnd = today.minusDays(OpenMeteo.ARCHIVE_LAG_DAYS);
         int added = 0;
         boolean any = false;
-        if (!r.from().isAfter(archiveEnd)) {
-            LocalDate to = r.to().isBefore(archiveEnd) ? r.to() : archiveEnd;
-            Optional<List<OpenMeteo.DailyRow>> rows = upstreams.archive(s.lat(), s.lon(), r.from(), to, s.id());
+        // Only the missing days are asked for (W-6): the archive's in runs, the recent week's from the first of them.
+        for (LocalDate[] run : runs(r.days().stream().filter(d -> !d.isAfter(archiveEnd)).toList())) {
+            Optional<List<OpenMeteo.DailyRow>> rows = upstreams.archive(s.lat(), s.lon(), run[0], run[1], s.id());
             if (rows.isEmpty()) {
-                failed(s, "the archive did not answer for " + r.from() + " to " + to);
-                return 0;
+                failed(s, "the archive did not answer for " + run[0] + " to " + run[1]);
+                return added;
             }
             added += record.fill(s.id(), rows.get());
             any = true;
         }
-        if (r.to().isAfter(archiveEnd)) {
-            int pastDays = (int) java.time.temporal.ChronoUnit.DAYS.between(r.from().isAfter(archiveEnd) ? r.from() : archiveEnd, today) + 1;
+        LocalDate firstRecent = r.days().stream().filter(d -> d.isAfter(archiveEnd)).findFirst().orElse(null);
+        if (firstRecent != null) {
+            int pastDays = (int) java.time.temporal.ChronoUnit.DAYS.between(firstRecent, today) + 1;
             Optional<List<OpenMeteo.DailyRow>> rows = upstreams.recentDays(s.lat(), s.lon(), Math.min(pastDays, 30), s.id());
             if (rows.isEmpty()) {
                 failed(s, "the recent days did not answer");

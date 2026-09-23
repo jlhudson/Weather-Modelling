@@ -85,6 +85,10 @@ public class DiagnosticsLayer {
         return logs.clear(level, before, by);
     }
 
+    public int clear(String level, Instant since, Instant before, String by) {
+        return logs.clear(level, since, before, by);
+    }
+
     public boolean clear(long id, String by) {
         return logs.clear(id, by);
     }

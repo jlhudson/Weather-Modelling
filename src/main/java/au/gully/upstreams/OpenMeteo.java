@@ -61,10 +61,6 @@ public class OpenMeteo implements Upstream {
      * The archive lags real time by about this much; the days since come from {@link #recent}.
      */
     public static final int ARCHIVE_LAG_DAYS = 6;
-    /**
-     * The hour the Bureau's rain day turns: the 24 hours to 9 am local are the day before's rain.
-     */
-    static final int RAIN_DAY_TURNS_AT = 9;
 
     private static final List<String> CURRENT = List.of("temperature_2m", "relative_humidity_2m",
             "apparent_temperature", "dew_point_2m", "precipitation", "weather_code", "cloud_cover",
@@ -260,8 +256,8 @@ public class OpenMeteo implements Upstream {
             if (now != null && !at.plusSeconds(3600).isBefore(now.plusSeconds(1))) {
                 continue;
             }
-            java.time.ZonedDateTime local = at.atZone(zone);
-            LocalDate day = local.getHour() < RAIN_DAY_TURNS_AT ? local.toLocalDate().minusDays(1) : local.toLocalDate();
+            // The Bureau's rain day, as the record cuts it: the 24 hours to 9 am local are the day before's.
+            LocalDate day = au.gully.record.Record.dayOf(at, zone);
             double[] acc = days.computeIfAbsent(day, k -> new double[]{0, Double.NEGATIVE_INFINITY, 0});
             acc[0] += rain;
             acc[1] = Math.max(acc[1], temp);
@@ -269,7 +265,7 @@ public class OpenMeteo implements Upstream {
         }
         List<DailyRow> out = new ArrayList<>();
         days.forEach((day, acc) -> {
-            long hoursInDay = java.time.Duration.between(day.atTime(RAIN_DAY_TURNS_AT, 0).atZone(zone), day.plusDays(1).atTime(RAIN_DAY_TURNS_AT, 0).atZone(zone)).toHours();
+            long hoursInDay = java.time.Duration.between(day.atTime(au.gully.record.Record.DAY_TURNS_AT).atZone(zone), day.plusDays(1).atTime(au.gully.record.Record.DAY_TURNS_AT).atZone(zone)).toHours();
             if (acc[2] < hoursInDay || (from != null && day.isBefore(from)) || (to != null && day.isAfter(to))) {
                 return;
             }

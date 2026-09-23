@@ -56,9 +56,6 @@ public class ReachRule {
      * The console's values, if ever set, else the defaults.
      */
     public void rehydrate() {
-        if (settings == null) {
-            return;
-        }
         Optional<ConsoleSettings.Setting> km = settings.read(KEY_KM);
         Optional<ConsoleSettings.Setting> per = settings.read(KEY_KM_PER_100M);
         Optional<ConsoleSettings.Setting> inland = settings.read(KEY_INLAND_PCT);

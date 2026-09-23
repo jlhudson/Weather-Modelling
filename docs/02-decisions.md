@@ -385,3 +385,42 @@ inside a reach; the model's now in the reading and on the map but never in the h
 the reading, the station's drawer and the API; kept in the database. The evening the Bureau's file
 stopped for two hours, every station went hollow and the map said nothing - this is the answer to that.
 — James, 23 September 2026.
+
+### W-21 · A round of bugs and dead code
+
+**The decision.** A review of the whole service, and every finding fixed. The ones that change what it
+does:
+
+- *The console's lockout held.* An attempt is now counted, atomically, before the code is checked, and
+  the login is no longer transactional - a refusal rolled its own count back, and parallel guesses all
+  read the same count. The default code `12345678` is gone: without `WEATHER_CONSOLE_CODE` the stack
+  will not start.
+- *An unknown API scope reads nothing* (it read everything), and the console refuses to issue one.
+- *The access log is bounded*: 20,000 rows waiting at most, the rest counted and dropped; written in
+  full batches; pruned after thirty days by the housekeeping.
+- *Diagnostics' "clear what is shown" clears what is shown* - the page's window, not the week.
+- *The Bureau's file*: a station tagged `UTC` keeps the state's clock (Thevenard's day turned at
+  6:30 pm); station-level pressure is no longer taken for sea-level; a file that fails to be taken in is
+  downloaded whole on the next read rather than answered "unchanged", and memory follows the table only
+  once the rows are committed.
+- *The day's maximum* takes the Bureau's running maximum as it stood at 9 pm (6 am to 9 pm), not the
+  next morning's three hours.
+- *The backfill asks for the missing days only*, in runs a fortnight apart at most, not the whole span
+  between the first and the last; and the admin reset forgets each station's rest, so its housekeeping
+  fills every year at once.
+- *Forecasts*: the hour now running is kept (Adelaide's hours fall on the half hour in UTC), and a forced
+  ask never fetches the same forecast twice. The API's station detail carries the forecast as the map's
+  does - one service builds both.
+- *Google's allowance* is 10,000 a month per endpoint, 30,000 units across its three.
+- *The ledger's memo* no longer grows a key a minute for the life of the process.
+- *`waterKm`* is the nearest water within the terrain on any bearing, not only where a ray got that far.
+- *The map*: an answer to an earlier click is dropped rather than drawn over a later one; an error
+  response is never taken for data; the reaches sit in a pane under the stations, so a click on a dot
+  hits the dot; sampling a station no longer pulls the drawer back to it; the probe's spokes follow the
+  theme.
+
+The dead code went with it: the pre-W-19 coastal leftovers, unused overloads and helpers, the version
+counter of the retired drought memo, CSS for classes nothing renders.
+
+**Why.** James: "Please perform a round of bug check and redundant code, and implement fixes for the lot."
+— James, 23 September 2026.

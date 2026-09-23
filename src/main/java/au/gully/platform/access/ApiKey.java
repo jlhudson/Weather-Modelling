@@ -21,7 +21,7 @@ public record ApiKey(long id, String consumer, String keyPrefix, String keyHash,
      */
     public boolean allows(String path) {
         Scope s = Scope.parse(scope);
-        return s == Scope.ALL || s.covers(path);
+        return s != null && s.covers(path);
     }
 
     /**
@@ -34,14 +34,17 @@ public record ApiKey(long id, String consumer, String keyPrefix, String keyHash,
         /** The diagnostics reads and clears only: the morning agent. */
         DIAGNOSTICS;
 
+        /**
+         * A scope by name, or null for none it knows: an unknown scope reads nothing, never everything.
+         */
         public static Scope parse(String name) {
             if (name == null) {
-                return ALL;
+                return null;
             }
             try {
                 return valueOf(name.trim().toUpperCase());
             } catch (IllegalArgumentException e) {
-                return ALL;
+                return null;
             }
         }
 

@@ -127,9 +127,16 @@ public class LogEventStore {
     // ---------------------------------------------------------------- clear
 
     public int clear(String level, Instant before, String by) {
+        return clear(level, null, before, by);
+    }
+
+    /**
+     * The signatures last seen in a span - from {@code since} (or ever) to {@code before} (or now) - gone.
+     */
+    public int clear(String level, Instant since, Instant before, String by) {
         String lv = blank(level);
-        int cleared = db.sql("delete from log_event where (:level::text is null or level = :level) and last_seen_at <= :before")
-                .param("level", lv).param("before", Db.ts(before == null ? Instant.now() : before)).update();
+        int cleared = db.sql("delete from log_event where (:level::text is null or level = :level) and last_seen_at <= :before and (:since::timestamptz is null or last_seen_at >= :since)")
+                .param("level", lv).param("before", Db.ts(before == null ? Instant.now() : before)).param("since", Db.ts(since)).update();
         log.info("diagnostics: {} signatures cleared by {}{}{}", cleared, by,
                 lv == null ? "" : " level=" + lv, before == null ? "" : " before=" + before);
         return cleared;

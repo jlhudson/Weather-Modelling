@@ -4,14 +4,12 @@ import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
 import au.gully.bureau.StationRegistry;
 import au.gully.platform.GullyProperties;
-import au.gully.platform.UpstreamException;
 import au.gully.reach.Probe;
 import au.gully.reach.Reach;
 import au.gully.reach.ReachRule;
 import au.gully.reach.Terrain;
 import au.gully.reach.TerrainSampler;
 import au.gully.reach.TerrainStore;
-import au.gully.reach.TerrainTiles;
 import au.gully.record.Backfill;
 import au.gully.record.Record;
 import au.gully.upstreams.Forecast;
@@ -53,7 +51,6 @@ public class Points {
     private final StationRegistry stations;
     private final TerrainStore terrain;
     private final TerrainSampler sampler;
-    private final TerrainTiles tiles;
     private final ReachRule rule;
     private final Forecasts forecasts;
     private final Backfill backfill;
@@ -92,34 +89,20 @@ public class Points {
     }
 
     /**
-     * A point dropped here, now: in the register, its terrain sampled, its current fetched and its
+     * A point dropped here, now, at the height the ask found: in the register, its terrain sampled, its current fetched and its
      * record filled - each as far as the upstreams allow; what did not come is tried again on the
      * next ask.
      */
-    public Station drop(double lat, double lon, Instant now) {
+    public Station drop(double lat, double lon, Double height, Instant now) {
         String id = idOf(lat, lon);
-        Double height = null;
-        try {
-            height = tiles.elevations(List.of(new double[]{lat, lon})).elevations().getFirst();
-        } catch (UpstreamException | RuntimeException e) {
-            log.debug("point {}: no height ({})", id, e.getMessage());
-        }
         Station p = new Station(id, null, String.format(Locale.ROOT, "Point %.4f, %.4f", lat, lon), lat, lon, height,
                 properties.zone(), null, "sa", Station.POINT);
         stations.addPoint(p, now);
         log.info("point {} dropped at {}, {} ({} m)", id, lat, lon, height == null ? "?" : Math.round(height));
         sampler.sample(p);
-        refresh(p, now);
-        fill(p, now);
+        refresh(p, now, false);
+        fill(p, now, false);
         return p;
-    }
-
-    /**
-     * A point asked about: its current fetched again when it is older than its life, its record
-     * filled for the days missing, and the ask remembered.
-     */
-    public void use(Station p, Instant now) {
-        use(p, now, false);
     }
 
     /**
@@ -150,10 +133,6 @@ public class Points {
         return o != null && o.at() != null && Duration.between(o.at(), now).compareTo(CURRENT_LIFE) < 0;
     }
 
-    private void refresh(Station p, Instant now) {
-        refresh(p, now, false);
-    }
-
     private boolean refresh(Station p, Instant now, boolean force) {
         if (!force && currentLives(p, now)) {
             return false;
@@ -171,10 +150,6 @@ public class Points {
             return true;
         }
         return false;
-    }
-
-    private void fill(Station p, Instant now) {
-        fill(p, now, false);
     }
 
     private int fill(Station p, Instant now, boolean force) {

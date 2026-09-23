@@ -42,7 +42,7 @@ public record GullyProperties(
     /**
      * One user, an 8-digit code, lockout on consecutive failures.
      */
-    public record Console(@DefaultValue("12345678") String code,
+    public record Console(String code,
                           @DefaultValue("5") int lockoutAfter,
                           @DefaultValue("15m") Duration lockoutFor) {
     }

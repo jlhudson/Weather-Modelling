@@ -62,8 +62,8 @@ public class ConsoleUsers implements AuthenticationProvider {
         return db.sql("select * from console_user where username = :u").param("u", username).query().listOfRows().stream().findFirst();
     }
 
+    // Not transactional: a refusal is an exception, and a rollback would undo the attempt it counted.
     @Override
-    @Transactional
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
         String username = String.valueOf(authentication.getName()).trim();
         String code = String.valueOf(authentication.getCredentials()).trim();
@@ -74,24 +74,34 @@ public class ConsoleUsers implements AuthenticationProvider {
             encoder.matches(code, "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5y0FfL3hsQ8B0R0Dr1n2aJ2iP0XvW");
             throw new BadCredentialsException("bad credentials");
         }
-        Instant lockedUntil = Db.instant(user.get("locked_until"));
-        if (lockedUntil != null && now.isBefore(lockedUntil)) {
-            throw new LockedException("locked until " + lockedUntil);
+        // The attempt is counted before the code is checked, in one statement: guesses sent in parallel each take
+        // their own number, so no more than the lockout's worth are ever checked before the lock falls.
+        Integer attempt = db.sql("""
+                        update console_user set failed_attempts = failed_attempts + 1
+                        where username = :u and (locked_until is null or locked_until <= :now) returning failed_attempts""")
+                .param("u", username).param("now", Db.ts(now)).query(Integer.class).optional().orElse(null);
+        if (attempt == null) {
+            throw new LockedException("locked until " + Db.instant(user.get("locked_until")));
+        }
+        if (attempt > properties.console().lockoutAfter()) {
+            lock(username, now, attempt);
+            throw new LockedException("locked");
         }
         if (!encoder.matches(code, (String) user.get("code_hash"))) {
-            int failures = Db.integer(user.get("failed_attempts")) + 1;
-            if (failures >= properties.console().lockoutAfter()) {
-                db.sql("update console_user set failed_attempts = 0, locked_until = :until where username = :u")
-                        .param("until", Db.ts(now.plus(properties.console().lockoutFor()))).param("u", username).update();
-                log.warn("console user {} locked for {} after {} consecutive failures", username, properties.console().lockoutFor(), failures);
-            } else {
-                db.sql("update console_user set failed_attempts = :n where username = :u").param("n", failures).param("u", username).update();
+            if (attempt >= properties.console().lockoutAfter()) {
+                lock(username, now, attempt);
             }
             throw new BadCredentialsException("bad credentials");
         }
         db.sql("update console_user set failed_attempts = 0, locked_until = null, last_login_at = :at where username = :u")
                 .param("at", Db.ts(now)).param("u", username).update();
         return UsernamePasswordAuthenticationToken.authenticated(username, null, List.of(new SimpleGrantedAuthority(ROLE)));
+    }
+
+    private void lock(String username, Instant now, int failures) {
+        db.sql("update console_user set failed_attempts = 0, locked_until = :until where username = :u")
+                .param("until", Db.ts(now.plus(properties.console().lockoutFor()))).param("u", username).update();
+        log.warn("console user {} locked for {} after {} consecutive failures", username, properties.console().lockoutFor(), failures);
     }
 
     @Override

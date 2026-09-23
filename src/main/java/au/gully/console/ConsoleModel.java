@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -19,7 +18,6 @@ import java.util.Locale;
 @ControllerAdvice(basePackages = "au.gully.console")
 public class ConsoleModel {
 
-    private static final ZoneId ADELAIDE = ZoneId.of("Australia/Adelaide");
     private static final Fmt FMT = new Fmt();
     private final String cartoKey;
 
@@ -53,7 +51,6 @@ public class ConsoleModel {
      */
     public static final class Fmt {
 
-        private static final DateTimeFormatter LOCAL = DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(ADELAIDE);
         private static final DateTimeFormatter UTC = DateTimeFormatter.ofPattern("dd/MM HH:mm'Z'").withZone(ZoneOffset.UTC);
 
         private static String parts(long large, String largeUnit, long small, String smallUnit) {
@@ -83,11 +80,6 @@ public class ConsoleModel {
             return parts(s / 86_400, "d", (s % 86_400) / 3600, "h");
         }
 
-        public String adelaide(Object when) {
-            Instant at = au.gully.storage.Db.instant(when);
-            return at == null ? "—" : LOCAL.format(at);
-        }
-
         public String utc(Object when) {
             Instant at = au.gully.storage.Db.instant(when);
             return at == null ? "—" : UTC.format(at);
@@ -95,10 +87,6 @@ public class ConsoleModel {
 
         public String n(Object v) {
             return v == null ? "—" : String.valueOf(v);
-        }
-
-        public String n(Object v, String unit) {
-            return v == null ? "—" : v + unit;
         }
 
         /**

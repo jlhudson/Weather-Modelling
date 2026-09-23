@@ -24,6 +24,16 @@ class BureauFilesTest {
     }
 
     @Test
+    void aStationTaggedUtcKeepsTheStateClockAndOnlySeaLevelPressureIsPressure() throws Exception {
+        StationFile.StationReading thevenard = StationFile.parse(fixture("IDS60920-three-stations.xml"), "sa").stream()
+                .filter(r -> r.station().id().equals("018207")).findFirst().orElseThrow();
+        // The file says tz="UTC": its day would turn at 6:30 pm. It is in South Australia.
+        assertThat(thevenard.station().zone()).isEqualTo("Australia/Adelaide");
+        // It gives station-level pressure and no msl_pres: not blended with sea-level pressures.
+        assertThat(thevenard.observation().pressureMslHpa()).isNull();
+    }
+
+    @Test
     void theStationFileGivesEveryStationItsDetailsAndItsLatestValues() throws Exception {
         List<StationFile.StationReading> readings = StationFile.parse(fixture("IDS60920-three-stations.xml"), "sa");
         assertThat(readings).hasSize(3);

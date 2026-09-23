@@ -43,7 +43,7 @@ public class MapController {
     private final TerrainSampler sampler;
     private final Droughts droughts;
     private final ConsoleKey consoleKey;
-    private final au.gully.reading.Forecasts forecasts;
+    private final au.gully.reading.StationDetails details;
 
     @GetMapping
     public String page(Model model) {
@@ -55,7 +55,6 @@ public class MapController {
         model.addAttribute("kmPer100mMax", ReachRule.MAX_KM_PER_100M);
         model.addAttribute("inlandPct", (int) r.inlandPct());
         model.addAttribute("inlandPctMax", (int) ReachRule.MAX_INLAND_PCT);
-        model.addAttribute("descentShare", r.descentShare());
         model.addAttribute("descentPct", (int) Math.round(r.descentShare() * 100));
         model.addAttribute("reachBy", rule.by());
         model.addAttribute("reachSince", rule.since() == null ? null : rule.since().toString());
@@ -73,16 +72,7 @@ public class MapController {
     @GetMapping(value = "/station/{id}", produces = "application/json")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> station(@PathVariable String id) {
-        return feed.detail(id).map(d -> {
-            d.putAll(reaches.detail(id));
-            stations.station(id).ifPresent(s -> {
-                d.putAll(droughts.detail(s));
-                // Its forecast (W-20), fetched when older than three hours: clicking a station is an ask for it.
-                Instant now = Instant.now();
-                d.put("forecast", forecasts.of(s, now, false).map(f -> au.gully.reading.Forecasts.view(f, s, 0.0, now)).orElse(null));
-            });
-            return ResponseEntity.ok(d);
-        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+        return details.of(id).map(ResponseEntity::ok).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
 
     /**

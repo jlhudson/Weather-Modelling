@@ -80,8 +80,14 @@ public class DiagnosticsPageController {
     @PostMapping("/logs/clear")
     public String clear(@RequestParam(required = false) String level, @RequestParam(required = false) String before,
                         @RequestParam(required = false) String window, RedirectAttributes flash) {
-        Instant bound = blank(before) == null ? null : Instant.parse(before.trim());
-        int cleared = layer.clear(blank(level) == null ? null : level.trim().toUpperCase(), bound, ConsoleModel.operatorName());
+        Instant bound;
+        try {
+            bound = blank(before) == null ? Instant.now() : Instant.parse(before.trim());
+        } catch (RuntimeException e) {
+            bound = Instant.now();
+        }
+        // What the page showed: the signatures last seen inside its window, and no older.
+        int cleared = layer.clear(blank(level) == null ? null : level.trim().toUpperCase(), bound.minus(window(window)), bound, ConsoleModel.operatorName());
         flash.addFlashAttribute("cleared", cleared);
         return "redirect:/console/diagnostics" + (blank(window) == null ? "" : "?window=" + window.trim());
     }

@@ -75,14 +75,6 @@ public class Readings {
                   Double heightM, Observation latest, boolean fresh, boolean model, Optional<Drought> drought) {
     }
 
-    public Map<String, Object> at(double lat, double lon) {
-        return at(lat, lon, Instant.now(), false);
-    }
-
-    public Map<String, Object> at(double lat, double lon, Instant now) {
-        return at(lat, lon, now, false);
-    }
-
     /**
      * The reading at a point; forced, the upstreams are asked first, and {@code grabbed} says what came.
      */
@@ -134,7 +126,7 @@ public class Readings {
             } else {
                 from = "new point";
             }
-            Station p = found != null ? found : points.drop(lat, lon, now);
+            Station p = found != null ? found : points.drop(lat, lon, height, now);
             if (force && found == null) {
                 grabbed.put("currentFetched", points.currentLives(p, now));
             }
@@ -163,7 +155,9 @@ public class Readings {
         out.put("fire", fire(current, drought));
         // The forecast (W-20): the nearest station in reach's, or the point of ours'; fetched when older than three hours.
         Member nearest = members.stream().min(Comparator.comparingDouble(Member::km)).orElse(null);
-        Forecast forecast = nearest == null ? null : forecasts.of(nearest.station(), now, force).orElse(null);
+        // Forced, it is fetched again - unless this ask already did (a point's current, a quiet station's now).
+        boolean again = force && nearest != null && forecasts.held(nearest.station().id()).map(f -> f.fetchedAt() == null || f.fetchedAt().isBefore(now)).orElse(true);
+        Forecast forecast = nearest == null ? null : forecasts.of(nearest.station(), now, again).orElse(null);
         out.put("forecast", forecast == null ? null : Forecasts.view(forecast, nearest.station(), nearest.km(), now));
         out.put("modelNow", members.stream().filter(m -> m.model() && !m.station().isPoint()).map(m -> m.station().id()).toList());
         List<Map<String, Object>> listed = new ArrayList<>();
@@ -199,7 +193,7 @@ public class Readings {
         int b = Probe.bearingIndex(Geo.bearingDeg(s.lat(), s.lon(), lat, lon));
         double cost = cost(t, b, km, r);
         Observation o = stations.latest(s.id()).orElse(null);
-        boolean fresh = o != null && o.at() != null && Duration.between(o.at(), now).compareTo(Status.STALE) < 0;
+        boolean fresh = Status.isFresh(o, now);
         boolean model = s.isPoint();
         // The Bureau's file gone quiet for this station (W-20): the model's now at it stands in, fetched if none is young enough.
         if (!fresh && !s.isPoint()) {
@@ -219,7 +213,7 @@ public class Readings {
     private Member bare(Station p, double lat, double lon, Double height, Instant now) {
         double km = Geo.distanceKm(lat, lon, p.lat(), p.lon());
         Observation o = stations.latest(p.id()).orElse(null);
-        boolean fresh = o != null && o.at() != null && Duration.between(o.at(), now).compareTo(Status.STALE) < 0;
+        boolean fresh = Status.isFresh(o, now);
         return new Member(p, null, null, km, 0, km, Blend.weight(km), p.heightM(), o, fresh, true, droughts.of(p, now));
     }
 

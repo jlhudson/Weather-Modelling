@@ -112,7 +112,6 @@ public class SecurityConfig {
         http.authorizeHttpRequests(a -> a
                         .requestMatchers("/login", "/error", "/webjars/**", "/css/**", "/js/**", "/favicon.ico").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
-                        .requestMatchers("/actuator/**").hasAuthority(ConsoleUsers.ROLE)
                         .anyRequest().hasAuthority(ConsoleUsers.ROLE))
                 .formLogin(f -> f.loginPage("/login").loginProcessingUrl("/login")
                         .usernameParameter("username").passwordParameter("code")

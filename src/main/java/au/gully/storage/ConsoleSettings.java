@@ -40,13 +40,4 @@ public class ConsoleSettings {
                 .param("key", key).param("value", value).param("by", by).param("at", Db.ts(at)).update();
     }
 
-    /**
-     * Every setting, for the status.
-     */
-    public Map<String, Setting> all() {
-        Map<String, Setting> out = new java.util.LinkedHashMap<>();
-        db.sql("select key, value, updated_by, updated_at from setting order by key").query().listOfRows()
-                .forEach(row -> out.put((String) row.get("key"), new Setting(String.valueOf(row.get("value")), (String) row.get("updated_by"), Db.instant(row.get("updated_at")))));
-        return out;
-    }
 }

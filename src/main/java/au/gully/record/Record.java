@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
  * last 9 am: four six-hour {@link Window}s ending 3 pm, 9 pm, 3 am and 9 am local, written to
  * {@code station_hour6}, and the day itself, written to {@code station_day}. The day's rain is the
  * total to 9 am that the first reading at or after 9 am publishes; its maximum the highest of the
- * day's windows and of the running maximum the Bureau published just before 9 am. A day is written
+ * day's windows and of the running maximum the Bureau published by 9 pm (6 am to 9 pm). A day is written
  * only when it has a rain figure and a reading in each of its four windows; one without is left
  * absent for the archive to fill, whose maximum is the whole day's where a part-day's is not. The
  * fold is idempotent, and the housekeeping folds the last three days lacking their own row, so a
@@ -48,7 +48,6 @@ public class Record {
      * How long the record is kept: a year's spin-up and a half again.
      */
     public static final Duration KEEP = Duration.ofDays(548);
-    public static final int KEEP_DAYS = 548;
     /**
      * How much record the drought wants behind it.
      */
@@ -70,7 +69,6 @@ public class Record {
     private final JdbcClient db;
     private final StationRegistry stations;
     private final Map<String, NavigableMap<LocalDate, Day>> days = new ConcurrentHashMap<>();
-    private final Map<String, Long> versions = new ConcurrentHashMap<>();
 
     public Record(JdbcClient db, StationRegistry stations) {
         this.db = db;
@@ -173,13 +171,16 @@ public class Record {
             }
             windows.computeIfAbsent(boundaryAfter(o.at(), zone), Window::new).add(o);
         }
+        // The Bureau's running maximum runs 6 am to 9 pm: the last of it, in the window closing at 9 pm, holds the
+        // afternoon's peak even where it fell between two readings.
+        Instant evening = day.atTime(21, 0).atZone(zone).toInstant();
         List<Hour6> out = new ArrayList<>();
         Double max = null;
         for (Window w : windows.values()) {
             Hour6 h = hour6(w);
             out.add(h);
             max = maxOf(max, h.tMax());
-            if (h.at().equals(to)) {
+            if (h.at().equals(evening)) {
                 max = maxOf(max, h.publishedMax());
             }
         }
@@ -246,7 +247,6 @@ public class Record {
         NavigableMap<LocalDate, Day> d = daysOf(stationId);
         if (replace || !d.containsKey(day.day())) {
             d.put(day.day(), day);
-            versions.merge(stationId, 1L, Long::sum);
         }
     }
 
@@ -289,13 +289,6 @@ public class Record {
             }
         }
         return out;
-    }
-
-    /**
-     * Changes when the station's days do.
-     */
-    public long version(String stationId) {
-        return versions.getOrDefault(stationId, 0L);
     }
 
     /**
@@ -347,7 +340,6 @@ public class Record {
         db.sql("delete from station_hour6 where station_id = :id").param("id", stationId).update();
         db.sql("delete from station_day where station_id = :id").param("id", stationId).update();
         days.remove(stationId);
-        versions.merge(stationId, 1L, Long::sum);
     }
 
     public static ZoneId zoneOf(Station s) {

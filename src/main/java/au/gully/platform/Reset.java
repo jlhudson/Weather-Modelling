@@ -46,6 +46,7 @@ public class Reset {
     private final TerrainTiles tiles;
     private final Record record;
     private final au.gully.reading.Forecasts forecasts;
+    private final au.gully.record.Backfill backfill;
     private final Housekeeping housekeeping;
     private final HttpFetcher http;
     private final TaskScheduler scheduler;
@@ -81,6 +82,7 @@ public class Reset {
                 terrain.rehydrate();
                 record.rehydrate();
                 forecasts.rehydrate();
+                backfill.clear();
                 // The file downloaded whole on the next read, not answered by the Bureau's 304; the tiles fetched again.
                 http.forget(URI.create(StationFile.url(StationReader.STATE)));
                 tiles.clearCache();

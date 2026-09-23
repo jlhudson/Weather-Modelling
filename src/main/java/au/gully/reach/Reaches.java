@@ -25,14 +25,6 @@ public class Reaches {
     private final TerrainStore terrain;
     private final ReachRule rule;
 
-    public Optional<Reach> of(String stationId, ReachRule.Rule r) {
-        return terrain.get(stationId).map(t -> Reach.of(t, r));
-    }
-
-    public Optional<Reach> of(String stationId) {
-        return of(stationId, rule.current());
-    }
-
     /**
      * Every station with terrain, its reach under the rule, as a FeatureCollection of polygons.
      */

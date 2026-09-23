@@ -119,7 +119,8 @@ readings into the Bureau day that ended at the last 9 am: four six-hour windows 
 humidity's extremes, the wind's mean and maximum, the strongest gust, and the Bureau's running
 figures as they stood at the window's last reading), and the day into `station_day`: dated by the
 9 am it began at, its rain the total to 9 am that the first reading at or after 9 am publishes, its
-maximum the highest of the day's windows and the running maximum published just before 9 am. A day
+maximum the highest of the day's windows and the Bureau's running maximum (6 am to 9 pm) as it stood
+at 9 pm, which catches an afternoon peak that fell between two readings. A day
 without a total, or without a reading in each of its four windows - a restart at dusk, a station
 silent till evening - is left absent for the archive to fill, whose maximum is the whole day's. The fold is
 idempotent and looks back three days, so a run that was missed is caught up by the next. Both
@@ -231,7 +232,8 @@ is what a click on a station opens and `/api/v1/stations/at?lat=&lon=` what a cl
 
 ## 9. Storage
 
-Ten tables: `api_key`, `console_user`, `api_access_log`, `log_event`, `setting` (what the console
-sets and a restart must keep), `upstream_call`, `station` (`V1`), `terrain` (`V2`), `station_hour6`
-and `station_day` (`V3`). Three in-memory registers - the stations, their terrain, their days - rebuilt
-at start.
+Twelve tables: `api_key`, `console_user`, `api_access_log` (kept thirty days), `log_event`, `setting`
+(what the console sets and a restart must keep), `upstream_call`, `station` (`V1`), `terrain` (`V2`;
+`inland_km` since `V6`), `station_hour6` and `station_day` (`V3`), `station_reading` (`V5`) and
+`station_forecast` (`V7`). Held in memory as well, and read back at start: the stations with their
+latest readings, their terrain, their days and their forecasts.

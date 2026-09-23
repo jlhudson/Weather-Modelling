@@ -40,7 +40,7 @@ class CoastTest {
     @Test
     void aPixelIsPlacedAtItsCentre() {
         // The first pixel of the square is just inside its north-west corner: 126.56°E, about 24.5°S at zoom 7.
-        double[] nw = Coast.latLon(0, 0, Coast.TILES_ACROSS * TerrainTiles.SIZE);
+        double[] nw = Coast.latLon(0, 0);
         assertThat(nw[1]).isCloseTo(126.57, within(0.02));
         assertThat(nw[0]).isCloseTo(-24.53, within(0.05));
     }
