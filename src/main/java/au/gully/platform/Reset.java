@@ -37,7 +37,7 @@ public class Reset {
     /**
      * The tables emptied, children first: everything the weather is.
      */
-    public static final List<String> TABLES = List.of("station_reading", "station_hour6", "station_day", "station_forecast", "terrain", "station");
+    public static final List<String> TABLES = List.of("station_reading", "station_hour6", "station_day", "station_forecast", "reading_snapshot", "terrain", "station");
 
     private final JdbcClient db;
     private final StationRegistry stations;

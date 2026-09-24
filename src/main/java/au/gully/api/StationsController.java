@@ -80,12 +80,27 @@ public class StationsController {
      * is dropped as a point on the first ask, which may take a few seconds; every later ask inside its
      * reach is immediate. With {@code force=true} (W-13) the upstreams are asked first - the Bureau's
      * file now, the days the stations in reach are missing, a point of ours' current and the forecast
-     * again - and {@code grabbed} says what came.
+     * again - and {@code grabbed} says what came. With {@code ref} (W-27) the reading is kept for that reference, at most
+     * once every three hours; with {@code at}, a past moment, it is answered from what was kept or from the stations' record.
      */
     @GetMapping(value = "/reading", produces = "application/json")
-    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon, @RequestParam(defaultValue = "false") boolean force) {
+    public Map<String, Object> reading(@RequestParam double lat, @RequestParam double lon, @RequestParam(defaultValue = "false") boolean force,
+                                       @RequestParam(required = false) String ref, @RequestParam(required = false) String at) {
         onEarth(lat, lon);
-        return readings.at(lat, lon, Instant.now(), force);
+        Instant now = Instant.now();
+        if (at != null && !at.isBlank()) {
+            Instant when;
+            try {
+                when = Instant.parse(at.trim());
+            } catch (RuntimeException e) {
+                throw new ErrorResponseException(HttpStatus.BAD_REQUEST, ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "at must be an ISO instant, e.g. 2026-09-25T03:00:00Z"), null);
+            }
+            if (when.isAfter(now)) {
+                throw new ErrorResponseException(HttpStatus.BAD_REQUEST, ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "at is in the future; ask without it for now"), null);
+            }
+            return readings.past(lat, lon, when, ref, now);
+        }
+        return readings.at(lat, lon, now, force, ref);
     }
 
     /**

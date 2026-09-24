@@ -234,6 +234,15 @@ the channel - at Renmark the Murray is the next cell west - so the river is the 
 three-by-three block around the point, found once in one call (nine units) and remembered; the chosen
 cell's series (eight units) is held twelve hours. A block with no flow is no river, which is said.
 
+**Kept readings and past moments** (W-27). A reading asked with `ref` - what it is for; The Hub sends an
+incident's id - is kept for that reference in `reading_snapshot`, at most once every three hours, and says
+whether it was (`kept`). A reading asked with `at`, a past moment, is answered with the one kept for the
+reference nearest it within three hours; else it is rebuilt from the stations in reach today and their own
+record - each one's reading nearest the moment within the hour while the raw readings are kept (three days),
+its six-hour window after that (mean temperature, least humidity, mean wind, strongest gust) - blended as a
+reading now is, with the drought of that day. `history` says which, and on what. Kept 548 days; the admin
+reset empties it with the rest.
+
 ## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the

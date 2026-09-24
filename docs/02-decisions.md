@@ -496,3 +496,16 @@ the river - at Renmark it reads nothing and the Murray (276 m³/s that day) is t
 searched, once, for nine units, and the chosen cell's history costs eight every twelve hours only where someone
 asks.
 — James, 25 September 2026.
+
+### W-27 · Readings kept for a reference; past moments answered
+
+**The decision.** `ref` on a reading keeps it for that reference, at most once every three hours; `at` answers a
+past moment - from the reading kept for the reference nearest it (within three hours), else rebuilt from the
+stations' own record: raw readings within the hour for the last three days, six-hour windows before that, blended
+the same way, with the drought of that day. The answer's `history` block says which. Kept 548 days.
+
+**Why.** The Hub files a reading against each incident and, for an incident reported late, asks for the weather as
+it was. That was the pre-W-1 history per hexagon; now it is per reference, which is what the caller actually asks
+about, and the fallback reads the stations' record, which the service keeps anyway. A window is summarised as its
+mean temperature, least humidity and mean wind - the fire-weather reading of six hours - and says so.
+— James, 25 September 2026.

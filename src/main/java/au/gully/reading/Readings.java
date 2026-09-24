@@ -70,6 +70,7 @@ public class Readings {
     private final au.gully.bureau.Warnings warnings;
     private final au.gully.record.Record record;
     private final Rivers rivers;
+    private final Snapshots snapshots;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -78,6 +79,116 @@ public class Readings {
      */
     record Member(Station station, Terrain terrain, Reach reach, double km, int bearingIndex, double costKm, double weight,
                   Double heightM, Observation latest, boolean fresh, boolean model, Optional<Drought> drought) {
+    }
+
+    /**
+     * The reading now, kept for a reference when one is named (W-27): at most once every three hours a reference.
+     */
+    public Map<String, Object> at(double lat, double lon, Instant now, boolean force, String ref) {
+        Map<String, Object> out = at(lat, lon, now, force);
+        if (ref != null && !ref.isBlank()) {
+            out.put("ref", ref.trim());
+            out.put("kept", snapshots.keep(ref, lat, lon, now, out));
+        }
+        return out;
+    }
+
+    /**
+     * The reading as it was at a past moment (W-27): the one kept for the reference nearest it, within three hours;
+     * else rebuilt from the stations' own record - each station in reach today, its reading nearest the moment within
+     * the hour while the raw readings are kept (three days), its six-hour window after that - blended as a reading now
+     * is, with the drought of that day. {@code history} says which, and what the values are.
+     */
+    public Map<String, Object> past(double lat, double lon, Instant at, String ref, Instant now) {
+        Map<String, Object> history = new LinkedHashMap<>();
+        history.put("requested", at.toString());
+        history.put("ref", ref);
+        Optional<Map<String, Object>> kept = snapshots.near(ref, at);
+        if (kept.isPresent()) {
+            Map<String, Object> out = new LinkedHashMap<>(kept.get());
+            history.put("answeredFrom", "kept");
+            history.put("keptAt", out.remove("keptAt"));
+            out.put("history", history);
+            return out;
+        }
+        ReachRule.Rule r = rule.current();
+        org.locationtech.jts.geom.Point here = geometry.createPoint(new Coordinate(lon, lat));
+        Double height = height(lat, lon);
+        boolean raw = Duration.between(at, now).compareTo(au.gully.bureau.StationRegistry.KEEP_READINGS) < 0;
+        List<Member> members = new ArrayList<>();
+        for (Station s : stations.bureau()) {
+            Terrain t = terrain.get(s.id()).orElse(null);
+            if (t == null) {
+                continue;
+            }
+            Reach reach = Reach.of(t, r);
+            if (!Probe.polygon(reach).contains(here)) {
+                continue;
+            }
+            Observation o = raw ? nearest(s.id(), at) : window(s.id(), at);
+            if (o == null) {
+                continue;
+            }
+            double km = Geo.distanceKm(lat, lon, s.lat(), s.lon());
+            int b = Probe.bearingIndex(Geo.bearingDeg(s.lat(), s.lon(), lat, lon));
+            double cost = cost(t, b, km, r);
+            // The drought of that day, with the rain since 9 am the station had at that moment.
+            Optional<Drought> dry = Drought.of(record.days(s.id()), au.gully.record.Record.dayOf(at, au.gully.record.Record.zoneOf(s)), o.rainSince9amMm());
+            members.add(new Member(s, t, reach, km, b, cost, Blend.weight(cost), t.elevationM(), o, true, false, dry));
+        }
+        members.sort(Comparator.comparingDouble(Member::costKm));
+        history.put("answeredFrom", members.isEmpty() ? null : raw ? "readings" : "windows");
+        history.put("basis", members.isEmpty() ? "no station in reach held a reading within the hour, or a window, for that moment"
+                : raw ? "each station's reading nearest the moment, within the hour"
+                : "each station's six-hour window around the moment: its mean temperature, its least humidity and its mean wind, gust its strongest");
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("at", at.toString());
+        Map<String, Object> point = new LinkedHashMap<>();
+        point.put("lat", lat);
+        point.put("lon", lon);
+        point.put("heightM", height);
+        point.put("water", height != null && height <= 0);
+        out.put("point", point);
+        out.put("from", members.isEmpty() ? "nothing" : "stations");
+        out.put("rule", Reaches.rule(r));
+        Map<String, Object> current = current(members, height, at);
+        Map<String, Object> drought = drought(members);
+        out.put("current", current);
+        out.put("drought", drought);
+        out.put("fire", fire(current, drought));
+        List<Map<String, Object>> listed = new ArrayList<>();
+        for (Member m : members) {
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("id", m.station().id());
+            s.put("name", m.station().name());
+            s.put("km", Math.round(m.km() * 10) / 10.0);
+            s.put("weight", m.weight());
+            s.put("at", m.latest().at() == null ? null : m.latest().at().toString());
+            listed.add(s);
+        }
+        out.put("stations", listed);
+        out.put("history", history);
+        return out;
+    }
+
+    /**
+     * A station's raw reading nearest a moment, within the hour either side.
+     */
+    private Observation nearest(String stationId, Instant at) {
+        return stations.readings(stationId, at.minus(Duration.ofHours(1)), at.plus(Duration.ofHours(1))).stream()
+                .min(Comparator.comparingLong(o -> Math.abs(Duration.between(o.at(), at).toSeconds()))).orElse(null);
+    }
+
+    /**
+     * A station's six-hour window around a moment, as a reading: its mean temperature, its least humidity (the driest of
+     * it, the fire-weather case), its mean wind and its strongest gust, its rain since 9 am at its last reading.
+     */
+    private Observation window(String stationId, Instant at) {
+        return record.windowAt(stationId, at).map(w -> new Observation(stationId, au.gully.storage.Db.instant(w.get("at")),
+                au.gully.storage.Db.dbl(w.get("temp_mean_c")), null, null, au.gully.storage.Db.integer(w.get("rh_min_pct")),
+                au.gully.storage.Db.dbl(w.get("wind_mean_kmh")), null, null, au.gully.storage.Db.dbl(w.get("gust_max_kmh")), null,
+                au.gully.storage.Db.dbl(w.get("rain_since_9am_mm")), au.gully.storage.Db.dbl(w.get("rain_24h_mm")),
+                au.gully.storage.Db.dbl(w.get("temp_max_c")), au.gully.storage.Db.dbl(w.get("temp_min_c")), null, null, null, null)).orElse(null);
     }
 
     /**

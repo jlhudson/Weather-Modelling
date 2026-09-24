@@ -313,6 +313,15 @@ public class Record {
                 .param("id", stationId).param("n", Math.max(1, Math.min(limit, 200))).query().listOfRows();
     }
 
+    /**
+     * The six-hour window a moment fell in, for a station: the first window ending after it (W-27).
+     */
+    public Optional<Map<String, Object>> windowAt(String stationId, Instant at) {
+        return db.sql("select at, readings, temp_min_c, temp_max_c, temp_mean_c, rh_min_pct, rh_max_pct, wind_mean_kmh, wind_max_kmh, gust_max_kmh,"
+                        + " rain_since_9am_mm, rain_24h_mm, published_max_c from station_hour6 where station_id = :id and at > :at and at <= :until order by at limit 1")
+                .param("id", stationId).param("at", Db.ts(at)).param("until", Db.ts(at.plus(Duration.ofHours(6)))).query().listOfRows().stream().findFirst();
+    }
+
     public long windowRows() {
         Long n = db.sql("select count(*) from station_hour6").query(Long.class).single();
         return n == null ? 0 : n;

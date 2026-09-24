@@ -53,6 +53,7 @@ public class Housekeeping {
     private final Backfill backfill;
     private final au.gully.reading.Forecasts forecasts;
     private final au.gully.platform.access.ApiKeys apiKeys;
+    private final au.gully.reading.Snapshots snapshots;
 
     private volatile Map<String, Object> last;
 
@@ -70,6 +71,7 @@ public class Housekeeping {
         step(out, "pointsExpired", () -> points.expire(now));
         step(out, "forecastsPruned", () -> forecasts.prune(now));
         step(out, "accessLogPruned", () -> apiKeys.prune(now));
+        step(out, "snapshotsPruned", () -> snapshots.prune(now));
         step(out, "terrainSampled", sampler::sampleMissing);
         step(out, "daysFilled", () -> backfill.fillPending(now));
         out.put("took", Duration.between(now, Instant.now()).toString());

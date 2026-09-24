@@ -466,6 +466,33 @@ class EndToEndTest {
         assertThat(stations.latest("023000")).isPresent();
     }
 
+    /**
+     * A reading kept for a reference, at most once every three hours, and a past moment answered from it (W-27).
+     */
+    @Test
+    @org.junit.jupiter.api.Order(10)
+    @SuppressWarnings("unchecked")
+    void aReadingIsKeptForItsReferenceAndAPastMomentIsAnsweredFromIt() throws Exception {
+        issueHubKey();
+        takeInTheFixture();
+        plantFlatTerrain("023000", -34.9257, 138.5832, 29);
+        String q = "/api/v1/reading?lat=-34.93&lon=138.60&ref=incident-42";
+        Map<String, Object> first = client().get().uri(q).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(first).containsEntry("ref", "incident-42").containsEntry("kept", true);
+        Map<String, Object> again = client().get().uri(q).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(again).containsEntry("kept", false);
+        String past = Instant.now().minusSeconds(3600).toString();
+        Map<String, Object> then = client().get().uri(q + "&at=" + past).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat((Map<String, Object>) then.get("history")).containsEntry("answeredFrom", "kept").containsEntry("requested", past);
+        assertThat(then).containsKey("current").containsKey("fire");
+        // Another reference has nothing kept: the stations' own record answers, or says it cannot.
+        Map<String, Object> other = client().get().uri("/api/v1/reading?lat=-34.93&lon=138.60&ref=incident-7&at=" + past).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat((Map<String, Object>) other.get("history")).containsKey("answeredFrom").containsKey("basis");
+        // The future is not history, and a moment has to be one.
+        assertThat(client().get().uri(q + "&at=" + Instant.now().plusSeconds(7200)).header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(client().get().uri(q + "&at=yesterday").header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
     private static String firstCookie(HttpHeaders headers) {
         java.util.List<String> set = headers.get(HttpHeaders.SET_COOKIE);
         assertThat(set).as("a session cookie").isNotEmpty();
