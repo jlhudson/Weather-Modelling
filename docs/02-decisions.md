@@ -467,3 +467,18 @@ is the honest source; a district without one has no grass index and says so. The
 it (4.5 t/ha by default) because both models need it and the land-use class that used to supply it went
 with the hexagons.
 — James, 25 September 2026.
+
+### W-25 · The Bureau's warnings, flood warnings among them
+
+**The decision.** The Bureau's South Australian warnings are read when asked - the listing by conditional GET,
+each product once while the listing names it - and held ten minutes. Every area a warning names is kept: public
+districts, fire weather districts, river basins. A reading carries the warnings naming its public district or
+its fire weather district in full, and every other warning in the state by title. The map shows a banner while
+any is in force.
+
+**Why.** Flood warnings were the gap. The old reader kept only public districts, and a flood warning is filed
+by river basin, so it matched nothing and vanished. Matching by what can be matched and listing the rest -
+rather than drawing basins nobody publishes as shapes - means a warning in force is never silently absent from
+a reading. There were no warnings in force anywhere in the country the day this was built; the parser is tested
+on a real severe weather warning kept from before the start-over.
+— James, 25 September 2026.

@@ -34,6 +34,7 @@ public class StationsController {
     private final StationDetails details;
     private final Readings readings;
     private final au.gully.cfs.FireBan fireBan;
+    private final au.gully.bureau.Warnings warnings;
 
     @GetMapping(value = "/stations.geojson", produces = {"application/geo+json", "application/json"})
     public Map<String, Object> stations() {
@@ -47,6 +48,16 @@ public class StationsController {
     public Map<String, Object> station(@PathVariable String id) {
         return details.of(id).orElseThrow(() -> new ErrorResponseException(HttpStatus.NOT_FOUND,
                 ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "no station " + id), null));
+    }
+
+    /**
+     * The Bureau's warnings in force in South Australia (W-25), each with the areas it covers.
+     */
+    @GetMapping(value = "/warnings", produces = "application/json")
+    public Map<String, Object> warnings() {
+        Instant now = Instant.now();
+        return Map.of("warnings", warnings.ensure(now).stream().filter(w -> w.until() == null || w.until().isAfter(now)).map(au.gully.bureau.Warnings::view).toList(),
+                "readAt", String.valueOf(warnings.readAt()));
     }
 
     /**

@@ -217,6 +217,14 @@ each forecast day carries the worst hour of each. Without a curing figure the gr
 carries no index; a figure older than a fortnight is used and marked old. The curing is the operator's
 entry, not the weather: the admin reset keeps it.
 
+**The warnings** (W-25). The Bureau's South Australian warnings - fire weather, severe weather, severe
+thunderstorms, floods - from the state's listing and each product it names, read when asked and held ten
+minutes. A warning carries every area it covers; a reading is under it when it names the public district of
+the nearest Bureau station in reach (or the nearest at all) or the point's fire weather district, and every
+other warning in force in the state is listed beside it by title, so a flood warning filed by river basin
+is never dropped for want of a district to match. The map's side panel carries a banner while any is in
+force; `/api/v1/warnings` lists them.
+
 ## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the

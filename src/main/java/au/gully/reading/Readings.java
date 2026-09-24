@@ -67,6 +67,7 @@ public class Readings {
     private final Forecasts forecasts;
     private final au.gully.cfs.FireBan fireBan;
     private final au.gully.cfs.Curing curing;
+    private final au.gully.bureau.Warnings warnings;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -166,6 +167,18 @@ public class Readings {
         }
         out.put("fire", fire);
         out.put("fireBan", ban);
+        // The Bureau's warnings in force here (W-25): by the public district of the nearest Bureau station in reach, or the
+        // nearest at all, and by the fire weather district; the rest of the state's listed apart, never dropped.
+        List<String> aacs = new ArrayList<>();
+        members.stream().filter(m -> !m.station().isPoint() && m.station().district() != null).min(Comparator.comparingDouble(Member::km)).ifPresent(m -> aacs.add(m.station().district()));
+        if (aacs.isEmpty()) {
+            stations.bureau().stream().filter(s -> s.district() != null)
+                    .min(Comparator.comparingDouble(s -> Geo.distanceKm(lat, lon, s.lat(), s.lon()))).ifPresent(s -> aacs.add(s.district()));
+        }
+        if (ban != null && ban.get("aac") != null) {
+            aacs.add((String) ban.get("aac"));
+        }
+        out.put("warnings", warningsView(warnings.at(aacs, now), aacs, warnings.readAt()));
         // The forecast (W-20): the nearest station in reach's, or the point of ours'; fetched when older than three hours.
         Member nearest = members.stream().min(Comparator.comparingDouble(Member::km)).orElse(null);
         // Forced, it is fetched again - unless this ask already did (a point's current, a quiet station's now).
@@ -183,6 +196,25 @@ public class Readings {
         }
         out.put("stations", listed);
         return out;
+    }
+
+    /**
+     * The warnings as a reading carries them: in force here in full, elsewhere in the state by title.
+     */
+    static Map<String, Object> warningsView(au.gully.bureau.Warnings.Split split, List<String> aacs, Instant readAt) {
+        Map<String, Object> w = new LinkedHashMap<>();
+        w.put("areas", aacs);
+        w.put("here", split.here().stream().map(au.gully.bureau.Warnings::view).toList());
+        w.put("elsewhere", split.elsewhere().stream().map(x -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", x.id());
+            m.put("kind", x.kind());
+            m.put("title", x.title());
+            m.put("until", x.until() == null ? null : x.until().toString());
+            return m;
+        }).toList());
+        w.put("readAt", readAt == null ? null : readAt.toString());
+        return w;
     }
 
     private Double height(double lat, double lon) {

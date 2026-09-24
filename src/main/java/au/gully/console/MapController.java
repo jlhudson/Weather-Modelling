@@ -45,6 +45,7 @@ public class MapController {
     private final ConsoleKey consoleKey;
     private final au.gully.reading.StationDetails details;
     private final au.gully.cfs.FireBan fireBan;
+    private final au.gully.bureau.Warnings warnings;
 
     @GetMapping
     public String page(Model model) {
@@ -62,6 +63,13 @@ public class MapController {
         // The map asks through the API with the console's own key (W-14), so a click is an ask from outside.
         model.addAttribute("apiKey", consoleKey.current());
         return "map";
+    }
+
+    @GetMapping(value = "/warnings.json", produces = "application/json")
+    @ResponseBody
+    public Map<String, Object> warnings() {
+        Instant now = Instant.now();
+        return Map.of("warnings", warnings.ensure(now).stream().filter(w -> w.until() == null || w.until().isAfter(now)).map(au.gully.bureau.Warnings::view).toList());
     }
 
     @GetMapping(value = "/districts.geojson", produces = "application/geo+json")

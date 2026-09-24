@@ -469,6 +469,7 @@
                 + '</div>';
             html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';
             if (o.modelNow && o.modelNow.length) html += '<p class="grabbed model">' + esc(o.modelNow.length) + ' station' + (o.modelNow.length === 1 ? '' : 's') + ' in reach ' + (o.modelNow.length === 1 ? 'has' : 'have') + ' gone quiet, so the model\x27s now stands in for ' + (o.modelNow.length === 1 ? 'it' : 'them') + ': ' + esc(o.modelNow.join(', ')) + '.</p>';
+            html += warningsSection(o.warnings);
             html += fireBanSection(o.fireBan);
             html += forecastSection(o.forecast);
             html += '<h2>The stations <span class="muted">' + o.stations.length + ' in reach · their share of the blend</span></h2>' + stationRows(o.stations, true);
@@ -529,6 +530,27 @@
         var t = p.today;
         return '<b>' + esc(p.district) + '</b> <span class="muted">fire ban district ' + esc(p.number) + '</span><br>'
             + (t ? esc(t.rating) + (t.fbi != null ? ' · FBI ' + esc(t.fbi) : '') + (t.totalFireBan ? ' · <b>TOTAL FIRE BAN</b>' : '') : '<span class="muted">' + esc(p.note || 'no rating') + '</span>');
+    }
+    // ---- the warnings (W-25): in force here in full, the rest of the state by title
+    var WARN_COLOURS = {'fire weather': '#f36c21', 'severe weather': '#eab308', 'severe thunderstorm': '#a855f7', 'flood': '#0ea5e9', 'other': '#9ca3af'};
+    function warningsSection(w) {
+        var html = '<h2>Warnings <span class="muted">the Bureau\x27s, in force' + (w && w.areas && w.areas.length ? ' for ' + esc(w.areas.join(', ')) : '') + '</span></h2>';
+        if (!w) return html + '<p class="muted mb-1">Not read.</p>';
+        if (!w.here.length) html += '<p class="muted mb-1">None in force here.</p>';
+        w.here.forEach(function (x) {
+            html += '<div class="warn" style="--r:' + (WARN_COLOURS[x.kind] || NONE) + '"><b>' + esc(x.title) + '</b>' + (x.headline ? '<div>' + esc(x.headline) + '</div>' : '')
+                + (x.phenomena ? '<div class="muted">' + esc(x.phenomena) + '</div>' : '')
+                + '<div class="muted">' + (x.until ? 'until ' + esc(when(x.until)) + ' · ' : '') + x.areas.length + ' areas' + (x.link ? ' · <a href="' + esc(x.link) + '" target="_blank" rel="noopener">the Bureau\x27s page</a>' : '') + '</div></div>';
+        });
+        if (w.elsewhere.length) html += '<p class="muted mb-1">Elsewhere in South Australia: ' + w.elsewhere.map(function (x) { return esc(x.title); }).join('; ') + '.</p>';
+        return html;
+    }
+    function warnBanner() {
+        fetch('/console/map/warnings.json').then(json).then(function (o) {
+            var el = $('warnBanner'), n = (o.warnings || []).length;
+            el.classList.toggle('hidden', n === 0);
+            el.innerHTML = n ? '<b>' + n + ' warning' + (n === 1 ? '' : 's') + ' in force</b> ' + o.warnings.map(function (x) { return '<span class="warn-pill" style="--r:' + (WARN_COLOURS[x.kind] || NONE) + '">' + esc(x.title) + '</span>'; }).join(' ') : '';
+        }).catch(function () { });
     }
     function fireBanSection(fb) {
         var html = '<h2>Fire ban district <span class="muted">what the CFS has published</span></h2>';
@@ -663,6 +685,7 @@
             } else {
                 html += '<p class="muted">Nothing reported since the start.</p>';
             }
+            html += warningsSection(s.warnings);
             html += fireBanSection(s.fireBan);
             html += forecastSection(s.forecast);
             html += reachSection(s);
@@ -731,7 +754,8 @@
     load();
     loadReach(true);
     setInterval(liveTick, 1000);
-    setInterval(function () { if (!document.hidden) load(); }, 60000);
+    warnBanner();
+    setInterval(function () { if (!document.hidden) { load(); warnBanner(); } }, 60000);
     // The reaches follow the sampler: a station sampled since the last look appears on the next.
     setInterval(function () { if (!document.hidden && lastReach && lastStations && lastReach.sampled < lastReach.stations) loadReach(true); }, 20000);
 })();

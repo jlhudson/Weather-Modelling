@@ -27,6 +27,7 @@ public class StationDetails {
     private final Forecasts forecasts;
     private final au.gully.cfs.FireBan fireBan;
     private final au.gully.cfs.Curing curing;
+    private final au.gully.bureau.Warnings warnings;
 
     public Optional<Map<String, Object>> of(String id) {
         return stations.station(id).flatMap(s -> feed.detail(id).map(d -> {
@@ -35,6 +36,14 @@ public class StationDetails {
             d.putAll(droughts.detail(s));
             Map<String, Object> ban = fireBan.at(s.lat(), s.lon(), now).orElse(null);
             d.put("fireBan", ban);
+            java.util.List<String> aacs = new java.util.ArrayList<>();
+            if (s.district() != null) {
+                aacs.add(s.district());
+            }
+            if (ban != null && ban.get("aac") != null) {
+                aacs.add((String) ban.get("aac"));
+            }
+            d.put("warnings", Readings.warningsView(warnings.at(aacs, now), aacs, warnings.readAt()));
             String district = ban == null ? null : (String) ban.get("district");
             au.gully.record.Drought dry = droughts.of(s, now).orElse(null);
             Forecasts.FireInputs in = new Forecasts.FireInputs(dry, dry == null ? null : s, district, district == null ? null : curing.of(district).orElse(null));
