@@ -208,6 +208,15 @@ the last day it published; every day carries its date, and a day before today is
 today's - the answer says there is no rating for today, and when the last one was. The map draws the
 districts on a toggle, each in the colour of today's rating.
 
+**The grass fire danger** (W-24). Grass curing - how dry the grass is - and the fuel load are entered per fire
+ban district on the console's Curing page from the CFS's weekly curing map; no open feed publishes them
+(4.5 t/ha, McArthur's standard, where no load is known). With them every reading and every forecast hour
+carries McArthur's grassland index (Mk5, Noble, Bary and Gill 1980) and the AFDRS grass model (CSIRO,
+Cheney, Gould and Catchpole 1998) with its Fire Behaviour Index, rating, rate of spread and flame height;
+each forecast day carries the worst hour of each. Without a curing figure the grass block says so and
+carries no index; a figure older than a fortnight is used and marked old. The curing is the operator's
+entry, not the weather: the admin reset keeps it.
+
 ## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the

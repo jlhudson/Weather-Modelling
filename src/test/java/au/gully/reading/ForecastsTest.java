@@ -42,6 +42,16 @@ class ForecastsTest {
         assertThat(days).extracting(d -> d.get("date")).containsExactly("2026-09-23", "2026-09-24", "2026-09-25");
         assertThat(v).containsEntry("ageMinutes", 100L).containsEntry("stale", false);
         assertThat((Map<String, Object>) v.get("station")).containsEntry("id", "023000").containsEntry("km", 3.2);
+        // With a drought and a curing figure (W-22, W-24), every hour carries the forest and grass indices, every day its worst.
+        double[] dry = new double[20];
+        au.gully.record.Drought d = new au.gully.record.Drought(LocalDate.parse("2025-09-23"), LocalDate.parse("2026-09-22"), 365, true, 500, 120, 8, "HIGH", dry, LocalDate.parse("2026-09-23"));
+        au.gully.cfs.Curing.Entry cured = new au.gully.cfs.Curing.Entry("Adelaide Metropolitan", 80, 4.5, LocalDate.parse("2026-09-20"), null, null, null);
+        Map<String, Object> fire = Forecasts.view(f, ADELAIDE, 3.2, now, new Forecasts.FireInputs(d, ADELAIDE, "Adelaide Metropolitan", cured));
+        List<Map<String, Object>> fh = (List<Map<String, Object>>) fire.get("hourly");
+        assertThat(fh.getFirst()).containsKey("ffdi").containsKey("gfdi").containsKey("fbi");
+        Map<String, Object> today = (Map<String, Object>) ((List<Map<String, Object>>) fire.get("daily")).getFirst().get("fire");
+        assertThat(today).containsKeys("ffdiMax", "gfdiMax", "fbiMax", "afdrsRating");
+        assertThat((Map<String, Object>) fire.get("fireFrom")).containsEntry("station", "023000").containsEntry("district", "Adelaide Metropolitan");
         // Three hours on, it is old: an ask fetches it again.
         assertThat(Forecasts.view(f, ADELAIDE, 3.2, fetched.plus(Forecasts.LIFE))).containsEntry("stale", true);
     }

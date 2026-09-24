@@ -26,15 +26,19 @@ public class StationDetails {
     private final Droughts droughts;
     private final Forecasts forecasts;
     private final au.gully.cfs.FireBan fireBan;
+    private final au.gully.cfs.Curing curing;
 
     public Optional<Map<String, Object>> of(String id) {
         return stations.station(id).flatMap(s -> feed.detail(id).map(d -> {
             Instant now = Instant.now();
             d.putAll(reaches.detail(id));
             d.putAll(droughts.detail(s));
-            d.put("fireBan", fireBan.at(s.lat(), s.lon(), now).orElse(null));
+            Map<String, Object> ban = fireBan.at(s.lat(), s.lon(), now).orElse(null);
+            d.put("fireBan", ban);
+            String district = ban == null ? null : (String) ban.get("district");
             au.gully.record.Drought dry = droughts.of(s, now).orElse(null);
-            d.put("forecast", forecasts.of(s, now, false).map(f -> Forecasts.view(f, s, 0.0, now, dry, dry == null ? null : s)).orElse(null));
+            Forecasts.FireInputs in = new Forecasts.FireInputs(dry, dry == null ? null : s, district, district == null ? null : curing.of(district).orElse(null));
+            d.put("forecast", forecasts.of(s, now, false).map(f -> Forecasts.view(f, s, 0.0, now, in)).orElse(null));
             return d;
         }));
     }

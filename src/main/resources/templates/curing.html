@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html th:replace="~{layout :: page('Curing', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section>
+    <h1>Grass curing per fire ban district</h1>
+    <p class="muted">Entered from the CFS's weekly curing map in fire season: no open feed publishes it. The grass indices -
+        McArthur's grassland index and the AFDRS grass Fire Behaviour Index - are drawn for a district only where it has a
+        figure; one older than a fortnight is still used, and marked old. The fuel load is what the grass carries,
+        4.5 t/ha where nothing better is known (McArthur's standard); under 3 is eaten out, 6 and over natural.</p>
+    <div class="alert alert-success py-1 my-2" th:if="${message}" th:text="${message}"></div>
+    <div class="table-responsive">
+        <table class="table w-auto">
+            <thead>
+            <tr><th>district</th><th class="num">curing %</th><th class="num">t/ha</th><th>for</th><th>source</th><th>by</th><th>CFS today</th><th></th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="e : ${entries}">
+                <td th:text="${e.district}"></td>
+                <td class="num" th:text="${fmt.n(e.percent)}"></td>
+                <td class="num" th:text="${e.percent == null} ? '—' : ${e.fuelLoadTHa}"></td>
+                <td class="mono"><span th:text="${fmt.n(e.enteredOn)}"></span> <span class="badge text-bg-warning" th:if="${e.percent != null and e.old(today)}">old</span></td>
+                <td th:text="${fmt.n(e.source)}"></td>
+                <td class="muted" th:text="${e.updatedBy == null} ? '' : ${e.updatedBy} + ' · ' + ${fmt.ago(e.updatedAt)}"></td>
+                <td th:with="p=${published.get(e.district.toUpperCase())}">
+                    <span th:if="${p != null}" th:text="${p}"></span>
+                    <span class="muted" th:if="${p == null}">no rating today</span>
+                </td>
+                <td>
+                    <form class="d-flex gap-1" method="post" th:action="@{/console/curing}">
+                        <input name="district" th:value="${e.district}" type="hidden">
+                        <input class="form-control form-control-sm" style="width:5rem" max="100" min="0" name="percent" placeholder="%" required th:value="${e.percent}" type="number">
+                        <input class="form-control form-control-sm" style="width:5rem" max="25" min="0.5" name="fuelLoad" placeholder="t/ha" step="0.5" th:value="${e.fuelLoadTHa}" type="number">
+                        <input class="form-control form-control-sm w-auto" name="enteredOn" th:value="${e.enteredOn != null} ? ${e.enteredOn} : ${today}" type="date">
+                        <input class="form-control form-control-sm w-auto" name="source" placeholder="source" th:value="${e.source}">
+                        <button class="btn btn-sm btn-outline-primary py-0">Set</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <details>
+        <summary class="muted">Clear a district's figure</summary>
+        <form class="d-flex gap-1 mt-1" method="post" th:action="@{/console/curing/clear}">
+            <select class="form-select form-select-sm w-auto" name="district">
+                <option th:each="e : ${entries}" th:if="${e.percent != null}" th:text="${e.district}" th:value="${e.district}"></option>
+            </select>
+            <button class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('Clear this district\'s curing figure?')">Clear</button>
+        </form>
+    </details>
+</section>
+</body>
+</html>

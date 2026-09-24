@@ -412,7 +412,7 @@ class EndToEndTest {
         assertThat(login.getHeaders().getLocation().toString()).endsWith("/console/map");
         String session = login.getHeaders().containsHeader(HttpHeaders.SET_COOKIE) ? firstCookie(login.getHeaders()) : cookie;
 
-        for (String page : new String[]{"/console/map", "/console/upstreams", "/console/upstreams?calls=all", "/console/diagnostics", "/console/api-keys", "/console/admin"}) {
+        for (String page : new String[]{"/console/map", "/console/upstreams", "/console/upstreams?calls=all", "/console/diagnostics", "/console/api-keys", "/console/admin", "/console/curing"}) {
             ResponseEntity<String> r = client().get().uri(page).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(page).isEqualTo(HttpStatus.OK);
             assertThat(r.getBody()).as(page).contains("bootstrap.min.css").contains("console.js").contains("/logout");

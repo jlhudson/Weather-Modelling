@@ -453,3 +453,17 @@ beats derived: the rating the public were told stands beside the indices compute
 are read with their holes (Esri's clockwise outer, anticlockwise hole), so a district cut out of another
 is not swallowed by it.
 — James, 25 September 2026.
+
+### W-24 · Grass fire danger: curing per district, both grass models, now and ahead
+
+**The decision.** A Curing page holds each fire ban district's grass curing and fuel load, entered from the
+CFS's weekly curing map. Every reading and forecast hour carries McArthur's grassland index and the AFDRS
+grass Fire Behaviour Index, rating, rate of spread and flame height on it, and every forecast day the worst
+hour of each. The two models and their tests come back from before the start-over unchanged.
+
+**Why.** The grass index cannot be computed without curing, and nobody publishes curing openly - the CFS
+GeoHub carries no layer for it, checked again. An entered figure, dated and marked old after a fortnight,
+is the honest source; a district without one has no grass index and says so. The fuel load was added beside
+it (4.5 t/ha by default) because both models need it and the land-use class that used to supply it went
+with the hexagons.
+— James, 25 September 2026.

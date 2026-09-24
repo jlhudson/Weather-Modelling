@@ -464,6 +464,7 @@
                 + tile(fmt(d.kbdiMm, 0) + '<small>mm' + (d.band ? ' · ' + esc(String(d.band).toLowerCase()) : '') + '</small>', 'KBDI', d.from, 'drought')
                 + tile(fmt(d.droughtFactor, 1) + '<small>of 10' + (d.complete === false ? ' · spin-up short' : '') + '</small>', 'drought factor', d.from, 'drought')
                 + tile(f.ffdi != null ? fmt(f.ffdi, 0) + '<small>' + esc(String(f.ffdiRating).toLowerCase()) + '</small>' : '—', 'FFDI', f.ffdi != null ? null : Object.keys(f.inputs).filter(function (k) { return !f.inputs[k]; }), 'fire')
+                + grassTiles(f.grass)
                 + tile(c.dewPointC != null ? fmt(c.dewPointC, 1) + ' °C' : '—', 'dew point', c.from.dewPointC, 'ground')
                 + '</div>';
             html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';
@@ -549,8 +550,21 @@
         return '<span class="ffdi" style="--r:' + (AFDRS_COLOURS[rating] || NONE) + '">' + esc(rating || '—') + '</span>';
     }
 
+    // The grass indices at the point (W-24): McArthur's grassland index and the AFDRS grass Fire Behaviour Index, on the
+    // district's curing; without a curing figure, a word on why there are none.
+    function grassTiles(g) {
+        if (!g) return '';
+        if (g.curingPct == null) return tile('—', 'grass', [g.note || 'no curing figure'], 'fire');
+        var cured = [g.curingPct + ' % cured, ' + g.fuelLoadTHa + ' t/ha' + (g.curingOld ? ' (old)' : '')];
+        return tile(g.gfdi != null ? fmt(g.gfdi, 0) + '<small>' + esc(String(g.gfdiRating).toLowerCase()) + '</small>' : '—', 'GFDI', cured, 'fire')
+            + tile(g.fbi != null ? fmt(g.fbi, 0) + '<small>' + esc(g.afdrsRating) + ' 00b7 ' + fmt(g.rateOfSpreadKmh, 1) + ' km/h</small>' : '—', 'grass FBI (AFDRS)', [g.condition || ''], 'fire');
+    }
     // An index in its band's colour: the six pre-2022 bands the FFDI was drawn against.
     var FFDI_COLOURS = {'LOW-MODERATE': '#22c55e', 'HIGH': '#3b82f6', 'VERY HIGH': '#eab308', 'SEVERE': '#f97316', 'EXTREME': '#ef4444', 'CATASTROPHIC': '#991b1b'};
+    function grassCell(gfdi, fbi, rating) {
+        if (gfdi == null && fbi == null) return '—';
+        return fmt(gfdi, 0) + ' 00b7 ' + (fbi == null ? '—' : '<span class="ffdi" style="--r:' + (AFDRS_COLOURS[rating] || NONE) + '" title="' + esc(rating) + '">' + fmt(fbi, 0) + '</span>');
+    }
     function ffdiCell(v, rating) {
         if (v == null) return '—';
         return '<span class="ffdi" style="--r:' + (FFDI_COLOURS[rating] || NONE) + '" title="' + esc(String(rating || '').toLowerCase()) + '">' + fmt(v, 0) + '</span>';
@@ -563,17 +577,17 @@
         html += '<p class="muted mb-1">For ' + esc(st.name || st.id) + (st.km ? ', ' + fmt(st.km, 1) + ' km away' : '') + ' · ' + esc(fc.upstream) + ' · fetched ' + esc(ago(fc.fetchedAt))
             + (fc.stale ? ' · <span class="model-tag">old</span> the upstreams could not refresh it' : ' · fetched again after 3 hours') + '</p>';
         if (fc.hourly && fc.hourly.length) {
-            html += '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="McArthur forest fire danger index, from the hour\x27s own values and the day\x27s drought factor">FFDI</th><th>sky</th></tr></thead><tbody>';
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="McArthur forest fire danger index, from the hour\x27s own values and the day\x27s drought factor">FFDI</th><th class="num" title="McArthur\x27s grassland index and the AFDRS grass Fire Behaviour Index, on the district\x27s curing">grass</th><th>sky</th></tr></thead><tbody>';
             fc.hourly.forEach(function (h) {
-                html += '<tr><td class="mono">' + clock(h.at) + '</td><td class="num">' + fmt(h.temperatureC, 1) + '</td><td class="num">' + fmt(h.humidityPct) + '</td><td class="mono">' + (h.windSpeedKmh != null ? dirWord(h.windDirectionDeg) + ' ' + Math.round(h.windSpeedKmh) : '—') + '</td><td class="num">' + (h.windGustKmh != null ? Math.round(h.windGustKmh) : '—') + '</td><td class="num">' + fmt(h.precipitationMm, 1) + '</td><td class="num">' + (h.precipitationProbabilityPct != null ? h.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + ffdiCell(h.ffdi, h.ffdiRating) + '</td><td class="muted">' + esc(h.condition || '') + '</td></tr>';
+                html += '<tr><td class="mono">' + clock(h.at) + '</td><td class="num">' + fmt(h.temperatureC, 1) + '</td><td class="num">' + fmt(h.humidityPct) + '</td><td class="mono">' + (h.windSpeedKmh != null ? dirWord(h.windDirectionDeg) + ' ' + Math.round(h.windSpeedKmh) : '—') + '</td><td class="num">' + (h.windGustKmh != null ? Math.round(h.windGustKmh) : '—') + '</td><td class="num">' + fmt(h.precipitationMm, 1) + '</td><td class="num">' + (h.precipitationProbabilityPct != null ? h.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + ffdiCell(h.ffdi, h.ffdiRating) + '</td><td class="num">' + grassCell(h.gfdi, h.fbi, h.afdrsRating) + '</td><td class="muted">' + esc(h.condition || '') + '</td></tr>';
             });
             html += '</tbody></table>';
         }
         if (fc.daily && fc.daily.length) {
-            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="the day\x27s worst hour of the forest fire danger index">FFDI peak</th><th>sky</th></tr></thead><tbody>';
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="the day\x27s worst hour of the forest fire danger index">FFDI peak</th><th class="num" title="the day\x27s worst hour of each grass index">grass peak</th><th>sky</th></tr></thead><tbody>';
             fc.daily.forEach(function (d) {
                 var day = new Date(d.date + 'T12:00:00');
-                html += '<tr><td class="mono">' + (isNaN(day) ? esc(d.date) : day.toLocaleDateString(undefined, {weekday: 'short', day: '2-digit', month: 'short'})) + '</td><td class="num">' + fmt(d.minTemperatureC, 0) + ' · ' + fmt(d.maxTemperatureC, 0) + '</td><td class="num">' + (d.minHumidityPct != null ? d.minHumidityPct + ' %' : '—') + '</td><td class="mono">' + (d.maxWindKmh != null ? dirWord(d.windDirectionDeg) + ' ' + Math.round(d.maxWindKmh) + ' · ' + (d.maxGustKmh != null ? Math.round(d.maxGustKmh) : '—') : '—') + '</td><td class="num">' + fmt(d.precipitationMm, 1) + '</td><td class="num">' + (d.precipitationProbabilityPct != null ? d.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + (d.fire ? ffdiCell(d.fire.ffdiMax, d.fire.ffdiRating) + (d.fire.peakAt ? ' <span class="muted">' + clock(d.fire.peakAt) + '</span>' : '') : '—') + '</td><td class="muted">' + esc(d.condition || '') + '</td></tr>';
+                html += '<tr><td class="mono">' + (isNaN(day) ? esc(d.date) : day.toLocaleDateString(undefined, {weekday: 'short', day: '2-digit', month: 'short'})) + '</td><td class="num">' + fmt(d.minTemperatureC, 0) + ' · ' + fmt(d.maxTemperatureC, 0) + '</td><td class="num">' + (d.minHumidityPct != null ? d.minHumidityPct + ' %' : '—') + '</td><td class="mono">' + (d.maxWindKmh != null ? dirWord(d.windDirectionDeg) + ' ' + Math.round(d.maxWindKmh) + ' · ' + (d.maxGustKmh != null ? Math.round(d.maxGustKmh) : '—') : '—') + '</td><td class="num">' + fmt(d.precipitationMm, 1) + '</td><td class="num">' + (d.precipitationProbabilityPct != null ? d.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + (d.fire ? ffdiCell(d.fire.ffdiMax, d.fire.ffdiRating) + (d.fire.peakAt ? ' <span class="muted">' + clock(d.fire.peakAt) + '</span>' : '') : '—') + '</td><td class="num">' + (d.fire ? grassCell(d.fire.gfdiMax, d.fire.fbiMax, d.fire.afdrsRating) : '—') + '</td><td class="muted">' + esc(d.condition || '') + '</td></tr>';
             });
             html += '</tbody></table>';
         }

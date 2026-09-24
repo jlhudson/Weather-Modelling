@@ -42,6 +42,7 @@ public class Startup implements ApplicationRunner {
     private final ReachRule reachRule;
     private final Record record;
     private final au.gully.reading.Forecasts forecasts;
+    private final au.gully.cfs.Curing curing;
     private final Housekeeping housekeeping;
     private final GullyProperties properties;
     private final StartupHistory history;
@@ -58,6 +59,7 @@ public class Startup implements ApplicationRunner {
             reachRule.rehydrate();
             record.rehydrate();
             forecasts.rehydrate();
+            curing.rehydrate();
         });
         step(3, "timers", this::schedule);
         history.ready();

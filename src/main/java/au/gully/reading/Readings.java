@@ -66,6 +66,7 @@ public class Readings {
     private final Backfill backfill;
     private final Forecasts forecasts;
     private final au.gully.cfs.FireBan fireBan;
+    private final au.gully.cfs.Curing curing;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -153,9 +154,18 @@ public class Readings {
         Map<String, Object> drought = drought(members);
         out.put("current", current);
         out.put("drought", drought);
-        out.put("fire", fire(current, drought));
-        // The fire ban district and what the CFS has published for it (W-23).
-        out.put("fireBan", fireBan.at(lat, lon, now).orElse(null));
+        // The fire ban district and what the CFS has published for it (W-23); the district's curing, and the grass indices on the blend (W-24).
+        Map<String, Object> ban = fireBan.at(lat, lon, now).orElse(null);
+        String district = ban == null ? null : (String) ban.get("district");
+        au.gully.cfs.Curing.Entry cured = district == null ? null : curing.of(district).orElse(null);
+        Map<String, Object> fire = fire(current, drought);
+        if (district != null) {
+            Double rh = (Double) current.get("humidityPct");
+            fire.put("grass", au.gully.cfs.Grass.block(district, cured, (Double) current.get("temperatureC"), rh == null ? null : (int) Math.round(rh),
+                    (Double) current.get("windSpeedKmh"), now.atZone(java.time.ZoneId.of("Australia/Adelaide")).toLocalDate()));
+        }
+        out.put("fire", fire);
+        out.put("fireBan", ban);
         // The forecast (W-20): the nearest station in reach's, or the point of ours'; fetched when older than three hours.
         Member nearest = members.stream().min(Comparator.comparingDouble(Member::km)).orElse(null);
         // Forced, it is fetched again - unless this ask already did (a point's current, a quiet station's now).
@@ -165,7 +175,7 @@ public class Readings {
         Member dry = nearest != null && nearest.drought().isPresent() ? nearest
                 : members.stream().filter(m -> m.drought().isPresent()).findFirst().orElse(null);
         out.put("forecast", forecast == null ? null : Forecasts.view(forecast, nearest.station(), nearest.km(), now,
-                dry == null ? null : dry.drought().get(), dry == null ? null : dry.station()));
+                new Forecasts.FireInputs(dry == null ? null : dry.drought().get(), dry == null ? null : dry.station(), district, cured)));
         out.put("modelNow", members.stream().filter(m -> m.model() && !m.station().isPoint()).map(m -> m.station().id()).toList());
         List<Map<String, Object>> listed = new ArrayList<>();
         for (Member m : members) {

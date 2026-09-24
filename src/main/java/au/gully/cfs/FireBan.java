@@ -99,6 +99,17 @@ public class FireBan {
     }
 
     /**
+     * What the CFS published for each district today, in a line, by the district's name in capitals: the curing page.
+     */
+    public Map<String, String> today(Instant now) {
+        LocalDate today = now.atZone(FireRatings.ADELAIDE).toLocalDate();
+        Map<String, String> out = new LinkedHashMap<>();
+        ratings.ensure(now).values().forEach(r -> r.on(today).ifPresent(d -> out.put(r.district().toUpperCase(),
+                d.rating() + (d.fbi() == null ? "" : " (FBI " + d.fbi() + ")") + (d.totalFireBan() ? " 00b7 TOTAL FIRE BAN" : ""))));
+        return out;
+    }
+
+    /**
      * Every district's shape with today's published rating, for the map's layer: GeoJSON polygons, holes kept.
      */
     public Map<String, Object> geojson(Instant now) {

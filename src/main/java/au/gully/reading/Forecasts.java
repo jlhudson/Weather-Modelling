@@ -184,6 +184,32 @@ public class Forecasts {
      * The rows older than {@link #KEEP}, gone.
      */
     /**
+     * A day's worst hour of each grass index, from the hours now running on: McArthur's and the AFDRS's may peak at
+     * different hours, and each is its own worst.
+     */
+    static Map<String, Object> grassPeak(List<au.gully.upstreams.Conditions> hourly, java.time.LocalDate date, ZoneId zone, Instant now, FireInputs in, java.time.LocalDate today) {
+        Double gfdi = null, fbi = null;
+        for (au.gully.upstreams.Conditions c : hourly) {
+            if (c.at() == null || !c.at().plusSeconds(3600).isAfter(now) || !c.at().atZone(zone).toLocalDate().equals(date)) {
+                continue;
+            }
+            Map<String, Object> g = au.gully.cfs.Grass.block(in.district(), in.curing(), c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), today);
+            if (g.get("gfdi") instanceof Double v && (gfdi == null || v > gfdi)) {
+                gfdi = v;
+            }
+            if (g.get("fbi") instanceof Integer v && (fbi == null || v > fbi)) {
+                fbi = v.doubleValue();
+            }
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("gfdiMax", gfdi);
+        m.put("gfdiRating", gfdi == null ? null : au.gully.fire.GrassFireDanger.rating(gfdi));
+        m.put("fbiMax", fbi == null ? null : fbi.intValue());
+        m.put("afdrsRating", fbi == null ? null : au.gully.fire.CsiroGrassland.afdrs(fbi));
+        return m;
+    }
+
+    /**
      * A day's fire block: its worst hour and the values of that hour, and the drought it was drawn with.
      */
     static Map<String, Object> fire(Outlook.Day d) {
@@ -210,17 +236,26 @@ public class Forecasts {
      * now running, and {@link #DAYS} days from today.
      */
     public static Map<String, Object> view(Forecast f, Station from, Double km, Instant now) {
-        return view(f, from, km, now, null, null);
+        return view(f, from, km, now, FireInputs.NONE);
+    }
+
+    /**
+     * What the fire outlook is drawn from: a drought to carry forward and the station it is, and the district's grass
+     * curing and fuel load (W-24). Any may be missing, and then so is what rests on it.
+     */
+    public record FireInputs(Drought drought, Station droughtFrom, String district, au.gully.cfs.Curing.Entry curing) {
+        public static final FireInputs NONE = new FireInputs(null, null, null, null);
     }
 
     /**
      * The same, with the fire outlook (W-22) drawn from a drought: every hour's forest index, and each day's worst
      * hour. Without a drought, no index - never one drawn from a guessed factor.
      *
-     * @param drought     the drought the outlook is carried forward from, or null
-     * @param droughtFrom the station that drought is, named in the answer
      */
-    public static Map<String, Object> view(Forecast f, Station from, Double km, Instant now, Drought drought, Station droughtFrom) {
+    public static Map<String, Object> view(Forecast f, Station from, Double km, Instant now, FireInputs in) {
+        Drought drought = in.drought();
+        Station droughtFrom = in.droughtFrom();
+        java.time.LocalDate todayLocal = now.atZone(Record.zoneOf(from)).toLocalDate();
         ZoneId zone = Record.zoneOf(from);
         List<Outlook.Hour> fireHours = drought == null ? List.of()
                 : Outlook.hours(f.hourly(), drought.kbdiMm(), drought.meanAnnualRainMm(), drought.recentRainMm(), now, zone, Record.DAY_TURNS_AT);
@@ -260,6 +295,12 @@ public class Forecasts {
                 h.put("ffdi", fh == null ? null : fh.ffdi());
                 h.put("ffdiRating", fh == null ? null : fh.rating());
                 h.put("droughtFactor", fh == null ? null : fh.droughtFactor());
+                if (in.curing() != null) {
+                    Map<String, Object> g = au.gully.cfs.Grass.block(in.district(), in.curing(), c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), todayLocal);
+                    h.put("gfdi", g.get("gfdi"));
+                    h.put("fbi", g.get("fbi"));
+                    h.put("afdrsRating", g.get("afdrsRating"));
+                }
                 hours.add(h);
             }
         }
@@ -280,7 +321,11 @@ public class Forecasts {
                 m.put("precipitationProbabilityPct", d.precipitationProbabilityPct());
                 m.put("condition", d.condition());
                 Outlook.Day fd = fireDay.get(d.date());
-                m.put("fire", fd == null ? null : fire(fd));
+                Map<String, Object> fb = fd != null ? fire(fd) : in.curing() != null ? new LinkedHashMap<>() : null;
+                if (fb != null && in.curing() != null) {
+                    fb.putAll(grassPeak(f.hourly(), d.date(), zone, now, in, todayLocal));
+                }
+                m.put("fire", fb);
                 days.add(m);
             }
         }
@@ -290,6 +335,8 @@ public class Forecasts {
         basis.put("kbdiMm", drought == null ? null : drought.kbdiMm());
         basis.put("droughtFactor", drought == null ? null : drought.droughtFactor());
         basis.put("computedFor", drought == null ? null : drought.computedFor().toString());
+        basis.put("district", in.district());
+        basis.put("curing", in.curing() == null ? null : au.gully.cfs.Grass.block(in.district(), in.curing(), null, null, null, todayLocal));
         out.put("fireFrom", basis);
         return out;
     }
