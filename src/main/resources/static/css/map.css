@@ -220,3 +220,5 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 
 /* ---- the fire outlook (W-22): an index in its band's colour */
 .ffdi { font-family: var(--g-mono); font-weight: 600; padding: 0 .3rem; border-radius: 4px; background: color-mix(in srgb, var(--r) 22%, transparent); border-left: 3px solid var(--r); }
+.drawer .tfb { color: #fff; background: #b00020; border-radius: 4px; padding: 0 .35rem; font-weight: 700; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; }
+.tog[data-tog=districts].on .ico { color: #f36c21; }

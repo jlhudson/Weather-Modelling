@@ -65,6 +65,7 @@ public class Readings {
     private final StationReader reader;
     private final Backfill backfill;
     private final Forecasts forecasts;
+    private final au.gully.cfs.FireBan fireBan;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -153,6 +154,8 @@ public class Readings {
         out.put("current", current);
         out.put("drought", drought);
         out.put("fire", fire(current, drought));
+        // The fire ban district and what the CFS has published for it (W-23).
+        out.put("fireBan", fireBan.at(lat, lon, now).orElse(null));
         // The forecast (W-20): the nearest station in reach's, or the point of ours'; fetched when older than three hours.
         Member nearest = members.stream().min(Comparator.comparingDouble(Member::km)).orElse(null);
         // Forced, it is fetched again - unless this ask already did (a point's current, a quiet station's now).

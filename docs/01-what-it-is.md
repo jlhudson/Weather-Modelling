@@ -200,6 +200,14 @@ its now is over an hour old), and that stands in: blended into the reading and d
 a dashed amber ring, labelled *model* everywhere, and never written into the station's readings or its
 history. So a point of ours is dropped only where no station reaches, not where they have gone quiet.
 
+**The fire ban district** (W-23). Every station and every reading carries its fire ban district - one of
+the CFS's fifteen, by point in polygon against the CFS's own file (read when asked, held a day, holes
+kept) - and what the CFS has published for it: the AFDRS rating, its Fire Behaviour Index and the total
+fire ban, for today and the days ahead, read when asked and held an hour. Out of season the feed keeps
+the last day it published; every day carries its date, and a day before today is never given as
+today's - the answer says there is no rating for today, and when the last one was. The map draws the
+districts on a toggle, each in the colour of today's rating.
+
 ## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the

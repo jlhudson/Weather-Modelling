@@ -438,3 +438,18 @@ day's maximum temperature, least humidity and strongest wind into one index - an
 so the day read worse than it was. An index per hour costs nothing more and is the honest figure; the
 worst hour is what a day is remembered by.
 — James, 25 September 2026.
+
+### W-23 · Fire ban districts, the CFS rating, total fire bans
+
+**The decision.** The CFS's fifteen fire ban districts, from its own shapes file, give every station and
+every reading its district; the CFS's ratings feed gives the AFDRS rating, the Fire Behaviour Index and
+the total fire ban for today and the days ahead. Both are read when asked - the shapes held a day, the
+ratings an hour - never on a clock (W-15). Every published day carries its date; out of season the feed
+still says "No Rating" for 1 May, and that is never given as today's. The map has a layer of the
+districts in the colour of today's rating; the API has `/api/v1/districts.geojson`.
+
+**Why.** James asked for everything the service had before the start-over, fire danger first. Published
+beats derived: the rating the public were told stands beside the indices computed here. The shapes' rings
+are read with their holes (Esri's clockwise outer, anticlockwise hole), so a district cut out of another
+is not swallowed by it.
+— James, 25 September 2026.

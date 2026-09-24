@@ -62,8 +62,11 @@
     var probeLayer = L.layerGroup().addTo(map);
     // The reaches in a pane under the stations' canvas, so a dot is always what a click over it hits.
     map.createPane('reaches').style.zIndex = 350;
+    // The fire ban districts under everything else (W-23).
+    map.createPane('districts').style.zIndex = 330;
+    var districtLayer = L.layerGroup().addTo(map), lastDistricts = null;
     var state = {id: 'temperatureC', selected: null, probe: null, bin: null};
-    var togs = {labels: true, reach: true, all: false};
+    var togs = {labels: true, reach: true, all: false, districts: false};
     var lastStations = null, lastReach = null;
     var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
 
@@ -465,6 +468,7 @@
                 + '</div>';
             html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';
             if (o.modelNow && o.modelNow.length) html += '<p class="grabbed model">' + esc(o.modelNow.length) + ' station' + (o.modelNow.length === 1 ? '' : 's') + ' in reach ' + (o.modelNow.length === 1 ? 'has' : 'have') + ' gone quiet, so the model\x27s now stands in for ' + (o.modelNow.length === 1 ? 'it' : 'them') + ': ' + esc(o.modelNow.join(', ')) + '.</p>';
+            html += fireBanSection(o.fireBan);
             html += forecastSection(o.forecast);
             html += '<h2>The stations <span class="muted">' + o.stations.length + ' in reach · their share of the blend</span></h2>' + stationRows(o.stations, true);
             if (outside.length) html += '<h2>Not in reach <span class="muted">the nearest ' + outside.length + ', and why</span></h2>' + stationRows(outside, false);
@@ -504,6 +508,45 @@
             else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut) : '') + '</td></tr>';
         });
         return html + '</tbody></table>';
+    }
+
+    // ---- the fire ban districts (W-23): each in the colour of the AFDRS rating the CFS published for today
+    var AFDRS_COLOURS = {'No Rating': '#9ca3af', 'Moderate': '#64bf30', 'High': '#ffd700', 'Extreme': '#f36c21', 'Catastrophic': '#b00020'};
+    function drawDistricts() {
+        districtLayer.clearLayers();
+        if (!togs.districts) return;
+        if (!lastDistricts) {
+            fetch('/console/map/districts.geojson').then(json).then(function (fc) { lastDistricts = fc; drawDistricts(); }).catch(function (e) { note('districts failed: ' + e); });
+            return;
+        }
+        L.geoJSON(lastDistricts, {pane: 'districts', style: function (f) {
+            var t = f.properties.today, c = t ? (AFDRS_COLOURS[t.rating] || NONE) : NONE;
+            return {color: c, weight: 1.5, opacity: .8, fillColor: c, fillOpacity: t && t.rating !== 'No Rating' ? .12 : .02, dashArray: t ? null : '4 4'};
+        }, onEachFeature: function (f, l) { l.bindTooltip(function () { return districtTip(f.properties); }, {sticky: true, className: 'hx-tip'}); }}).addTo(districtLayer);
+    }
+    function districtTip(p) {
+        var t = p.today;
+        return '<b>' + esc(p.district) + '</b> <span class="muted">fire ban district ' + esc(p.number) + '</span><br>'
+            + (t ? esc(t.rating) + (t.fbi != null ? ' · FBI ' + esc(t.fbi) : '') + (t.totalFireBan ? ' · <b>TOTAL FIRE BAN</b>' : '') : '<span class="muted">' + esc(p.note || 'no rating') + '</span>');
+    }
+    function fireBanSection(fb) {
+        var html = '<h2>Fire ban district <span class="muted">what the CFS has published</span></h2>';
+        if (!fb) return html + '<p class="muted mb-1">Outside South Australia\'s fire ban districts, or the CFS\'s districts could not be read.</p>';
+        var t = fb.today;
+        html += kv([
+            ['district', esc(fb.district) + (fb.number != null ? ' <span class="muted">no. ' + esc(fb.number) + (fb.aac ? ' · ' + esc(fb.aac) : '') + '</span>' : '')],
+            ['today', t ? afdrsCell(t.rating) + (t.fbi != null ? ' <span class="muted">FBI ' + esc(t.fbi) + '</span>' : '') + (t.totalFireBan ? ' <span class="tfb">total fire ban</span>' : '') : '<span class="muted">' + esc(fb.note || 'no rating') + '</span>']
+        ]);
+        var ahead = (fb.days || []).filter(function (d) { return !t || d.date !== t.date; });
+        if (ahead.length) {
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th>rating</th><th class="num">FBI</th><th>total fire ban</th></tr></thead><tbody>';
+            ahead.forEach(function (d) { html += '<tr><td class="mono">' + esc(d.date) + '</td><td>' + afdrsCell(d.rating) + '</td><td class="num">' + fmt(d.fbi) + '</td><td>' + (d.totalFireBan ? '<span class="tfb">yes</span>' : 'no') + '</td></tr>'; });
+            html += '</tbody></table>';
+        }
+        return html;
+    }
+    function afdrsCell(rating) {
+        return '<span class="ffdi" style="--r:' + (AFDRS_COLOURS[rating] || NONE) + '">' + esc(rating || '—') + '</span>';
     }
 
     // An index in its band's colour: the six pre-2022 bands the FFDI was drawn against.
@@ -606,6 +649,7 @@
             } else {
                 html += '<p class="muted">Nothing reported since the start.</p>';
             }
+            html += fireBanSection(s.fireBan);
             html += forecastSection(s.forecast);
             html += reachSection(s);
             html += droughtSection(s);
@@ -648,7 +692,7 @@
 
     // ---- wiring
     document.querySelectorAll('.tog[data-tog]').forEach(function (b) {
-        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else drawReach(); });
+        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else if (k === 'districts') drawDistricts(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
     ['reachKm', 'inlandPct', 'kmPer100m', 'descentShare'].forEach(function (id) {

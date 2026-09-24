@@ -33,6 +33,7 @@ public class StationsController {
     private final Probe probe;
     private final StationDetails details;
     private final Readings readings;
+    private final au.gully.cfs.FireBan fireBan;
 
     @GetMapping(value = "/stations.geojson", produces = {"application/geo+json", "application/json"})
     public Map<String, Object> stations() {
@@ -46,6 +47,14 @@ public class StationsController {
     public Map<String, Object> station(@PathVariable String id) {
         return details.of(id).orElseThrow(() -> new ErrorResponseException(HttpStatus.NOT_FOUND,
                 ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "no station " + id), null));
+    }
+
+    /**
+     * South Australia's fire ban districts with what the CFS has published for each today and ahead (W-23).
+     */
+    @GetMapping(value = "/districts.geojson", produces = {"application/geo+json", "application/json"})
+    public Map<String, Object> districts() {
+        return fireBan.geojson(Instant.now());
     }
 
     @GetMapping(value = "/reach.geojson", produces = {"application/geo+json", "application/json"})
