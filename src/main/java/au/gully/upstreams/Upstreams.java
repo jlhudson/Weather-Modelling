@@ -103,6 +103,20 @@ public class Upstreams {
         return spend(OpenMeteo.RECENT_UNITS, "recent " + pastDays + " days " + what, () -> openMeteo.recent(lat, lon, pastDays));
     }
 
+    /**
+     * A point's river discharge from GloFAS (W-26), at one unit: the past 92 days and the week ahead.
+     */
+    public Optional<List<OpenMeteo.DischargeRow>> discharge(double lat, double lon, String what) {
+        return spend(OpenMeteo.dischargeUnits(1, 92 + 7), "river discharge " + what, () -> openMeteo.discharge(lat, lon, 92, 7));
+    }
+
+    /**
+     * Several cells' discharge today in one call, to find the river near a point (W-26).
+     */
+    public Optional<List<double[]>> dischargeAt(double[] lats, double[] lons, String what) {
+        return spend(OpenMeteo.dischargeUnits(lats.length, 2), "river cells " + what, () -> openMeteo.dischargeAt(lats, lons));
+    }
+
     private <T> Optional<T> spend(double units, String what, Call<T> call) {
         if (!properties.enabled()) {
             return Optional.empty();

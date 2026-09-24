@@ -68,6 +68,8 @@ public class Readings {
     private final au.gully.cfs.FireBan fireBan;
     private final au.gully.cfs.Curing curing;
     private final au.gully.bureau.Warnings warnings;
+    private final au.gully.record.Record record;
+    private final Rivers rivers;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -189,6 +191,12 @@ public class Readings {
                 : members.stream().filter(m -> m.drought().isPresent()).findFirst().orElse(null);
         out.put("forecast", forecast == null ? null : Forecasts.view(forecast, nearest.station(), nearest.km(), now,
                 new Forecasts.FireInputs(dry == null ? null : dry.drought().get(), dry == null ? null : dry.station(), district, cured)));
+        // Flood weather (W-26): the rain down at the forecast station, the rain coming, and the river at the point.
+        if (nearest != null) {
+            java.time.ZoneId zone = au.gully.record.Record.zoneOf(nearest.station());
+            out.put("flood", Flood.block(nearest.station(), record.days(nearest.station().id()), record.rainSoFar(nearest.station(), now),
+                    au.gully.record.Record.dayOf(now, zone), forecast, now, rivers.at(lat, lon, now, now.atZone(zone).toLocalDate()).orElse(null)));
+        }
         out.put("modelNow", members.stream().filter(m -> m.model() && !m.station().isPoint()).map(m -> m.station().id()).toList());
         List<Map<String, Object>> listed = new ArrayList<>();
         for (Member m : members) {

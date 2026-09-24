@@ -482,3 +482,17 @@ rather than drawing basins nobody publishes as shapes - means a warning in force
 a reading. There were no warnings in force anywhere in the country the day this was built; the parser is tested
 on a real severe weather warning kept from before the start-over.
 — James, 25 September 2026.
+
+### W-26 · Flood weather: the rain down, the rain coming, the river
+
+**The decision.** Every reading and station carries a flood block: the antecedent rain from the station's own
+record (today, three, seven and thirty days), the forecast's rain over the next day and three with the highest
+chance, both three-day totals added, and GloFAS's river discharge with its ratio to its own 92-day mean, its trend
+and its peak in the week ahead. The river is the largest flow in the 3×3 block of GloFAS cells around the point,
+found once and remembered; the series is held twelve hours.
+
+**Why.** Flood was the last of the pre-W-1 blocks. The river needed the one change: the nearest GloFAS cell is not
+the river - at Renmark it reads nothing and the Murray (276 m³/s that day) is the next cell west - so the block is
+searched, once, for nine units, and the chosen cell's history costs eight every twelve hours only where someone
+asks.
+— James, 25 September 2026.

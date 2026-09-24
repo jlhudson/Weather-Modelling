@@ -472,6 +472,7 @@
             html += warningsSection(o.warnings);
             html += fireBanSection(o.fireBan);
             html += forecastSection(o.forecast);
+            html += floodSection(o.flood);
             html += '<h2>The stations <span class="muted">' + o.stations.length + ' in reach · their share of the blend</span></h2>' + stationRows(o.stations, true);
             if (outside.length) html += '<h2>Not in reach <span class="muted">the nearest ' + outside.length + ', and why</span></h2>' + stationRows(outside, false);
             el.innerHTML = html;
@@ -551,6 +552,25 @@
             el.classList.toggle('hidden', n === 0);
             el.innerHTML = n ? '<b>' + n + ' warning' + (n === 1 ? '' : 's') + ' in force</b> ' + o.warnings.map(function (x) { return '<span class="warn-pill" style="--r:' + (WARN_COLOURS[x.kind] || NONE) + '">' + esc(x.title) + '</span>'; }).join(' ') : '';
         }).catch(function () { });
+    }
+    // ---- flood weather (W-26): the rain down, the rain coming, the river
+    function floodSection(fl) {
+        var html = '<h2>Flood weather <span class="muted">rain down, rain coming, the river</span></h2>';
+        if (!fl) return html + '<p class="muted mb-1">Not read.</p>';
+        var d = fl.fallen || {}, c = fl.coming || {}, r = fl.river;
+        html += kv([
+            ['rain down', fmt(d.todayMm, 1) + ' mm today · ' + fmt(d.last3DaysMm, 1) + ' in 3 days · ' + fmt(d.last7DaysMm, 1) + ' in 7 · ' + fmt(d.last30DaysMm, 1) + ' in 30' + (d.station ? ' <span class="muted">at ' + esc(d.station) + '</span>' : '')],
+            ['rain coming', fmt(c.next24hMm, 1) + ' mm in 24 h · ' + fmt(c.next72hMm, 1) + ' in 72 h' + (c.maxChancePct != null ? ' <span class="muted">chance up to ' + c.maxChancePct + ' %</span>' : '')],
+            ['three days each side', fl.threeDaysEachSideMm != null ? fmt(fl.threeDaysEachSideMm, 1) + ' mm' : null],
+            ['river', !r ? '<span class="muted">the flood model could not be read</span>' : !r.river ? '<span class="muted">' + esc(r.note) + '</span>'
+                : fmt(r.cumecs, 1) + ' m³/s <span class="muted">' + (r.ratioToMean != null ? r.ratioToMean + '× its ' + r.meanOverDays + '-day mean · ' : '') + esc(r.trend || '') + (r.peakCumecs != null ? ' · peak ' + fmt(r.peakCumecs, 1) + ' on ' + esc(r.peakOn) : '') + '</span>']
+        ]);
+        if (fl.outlook && fl.outlook.length) {
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">rain mm</th><th class="num">chance</th><th class="num">river m³/s</th></tr></thead><tbody>';
+            fl.outlook.forEach(function (o) { html += '<tr><td class="mono">' + esc(o.date) + '</td><td class="num">' + fmt(o.rainMm, 1) + '</td><td class="num">' + (o.chancePct != null ? o.chancePct + ' %' : '—') + '</td><td class="num">' + fmt(o.riverCumecs, 1) + '</td></tr>'; });
+            html += '</tbody></table>';
+        }
+        return html;
     }
     function fireBanSection(fb) {
         var html = '<h2>Fire ban district <span class="muted">what the CFS has published</span></h2>';
@@ -688,6 +708,7 @@
             html += warningsSection(s.warnings);
             html += fireBanSection(s.fireBan);
             html += forecastSection(s.forecast);
+            html += floodSection(s.flood);
             html += reachSection(s);
             html += droughtSection(s);
             if (s.recent && s.recent.length > 1) {

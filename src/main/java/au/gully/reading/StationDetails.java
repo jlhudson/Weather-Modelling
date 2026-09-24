@@ -28,6 +28,8 @@ public class StationDetails {
     private final au.gully.cfs.FireBan fireBan;
     private final au.gully.cfs.Curing curing;
     private final au.gully.bureau.Warnings warnings;
+    private final au.gully.record.Record record;
+    private final Rivers rivers;
 
     public Optional<Map<String, Object>> of(String id) {
         return stations.station(id).flatMap(s -> feed.detail(id).map(d -> {
@@ -47,7 +49,11 @@ public class StationDetails {
             String district = ban == null ? null : (String) ban.get("district");
             au.gully.record.Drought dry = droughts.of(s, now).orElse(null);
             Forecasts.FireInputs in = new Forecasts.FireInputs(dry, dry == null ? null : s, district, district == null ? null : curing.of(district).orElse(null));
-            d.put("forecast", forecasts.of(s, now, false).map(f -> Forecasts.view(f, s, 0.0, now, in)).orElse(null));
+            au.gully.upstreams.Forecast f = forecasts.of(s, now, false).orElse(null);
+            d.put("forecast", f == null ? null : Forecasts.view(f, s, 0.0, now, in));
+            java.time.ZoneId zone = au.gully.record.Record.zoneOf(s);
+            d.put("flood", Flood.block(s, record.days(s.id()), record.rainSoFar(s, now), au.gully.record.Record.dayOf(now, zone), f, now,
+                    rivers.at(s.lat(), s.lon(), now, now.atZone(zone).toLocalDate()).orElse(null)));
             return d;
         }));
     }

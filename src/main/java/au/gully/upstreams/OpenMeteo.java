@@ -35,6 +35,10 @@ public class OpenMeteo implements Upstream {
     public static final String ID = "open-meteo";
     public static final String FORECAST = "https://api.open-meteo.com/v1/forecast";
     public static final String ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
+    /**
+     * GloFAS river discharge (W-26): the modelled flow of the largest river within about 5 km, daily.
+     */
+    public static final String FLOOD = "https://flood-api.open-meteo.com/v1/flood";
 
     public static final int FORECAST_DAYS = 7;
     public static final int FORECAST_HOURS = 72;
@@ -357,6 +361,69 @@ public class OpenMeteo implements Upstream {
      * One day of history: the Bureau's rain day - the 24 hours from 9 am local on the date - its rain
      * and its maximum.
      */
+    /**
+     * The modelled discharge at a point, day by day: the past window for a baseline, the days ahead for a trend. Null
+     * days where GloFAS models no river here - an answer, not a failure.
+     */
+    public List<DischargeRow> discharge(double lat, double lon, int pastDays, int forecastDays) throws UpstreamException {
+        return series(read(floodUrl(fixed(lat), fixed(lon), pastDays, forecastDays)));
+    }
+
+    /**
+     * The discharge of several cells in one call, each as {@code {lat, lon, cumecs of the first day}}: how the river
+     * near a point is found - GloFAS's cell nearest the point is often beside the channel, not on it.
+     */
+    public List<double[]> dischargeAt(double[] lats, double[] lons) throws UpstreamException {
+        StringBuilder la = new StringBuilder(), lo = new StringBuilder();
+        for (int i = 0; i < lats.length; i++) {
+            la.append(i == 0 ? "" : ",").append(fixed(lats[i]));
+            lo.append(i == 0 ? "" : ",").append(fixed(lons[i]));
+        }
+        JsonNode root = read(floodUrl(la.toString(), lo.toString(), 1, 1));
+        List<double[]> out = new ArrayList<>();
+        List<JsonNode> each = new ArrayList<>();
+        if (root.isArray()) {
+            root.forEach(each::add);
+        } else {
+            each.add(root);
+        }
+        for (JsonNode one : each) {
+            List<DischargeRow> rows = series(one);
+            Double q = rows.isEmpty() ? null : rows.getFirst().cumecs();
+            out.add(new double[]{Nodes.dbl(one, "latitude"), Nodes.dbl(one, "longitude"), q == null ? 0 : q});
+        }
+        return out;
+    }
+
+    private static String floodUrl(String lats, String lons, int pastDays, int forecastDays) {
+        return FLOOD + "?latitude=" + lats + "&longitude=" + lons + "&daily=river_discharge"
+                + "&past_days=" + Math.min(92, Math.max(0, pastDays)) + "&forecast_days=" + Math.min(30, Math.max(1, forecastDays)) + "&timezone=auto";
+    }
+
+    /**
+     * What a discharge call costs: Open-Meteo counts a location's every fortnight of days as a call.
+     */
+    public static double dischargeUnits(int locations, int days) {
+        return locations * Math.ceil(days / 14.0);
+    }
+
+    private static List<DischargeRow> series(JsonNode root) {
+        JsonNode daily = Nodes.at(root, "daily");
+        JsonNode times = Nodes.at(daily, "time");
+        List<DischargeRow> out = new ArrayList<>();
+        if (times == null || !times.isArray()) {
+            return out;
+        }
+        for (int i = 0; i < times.size(); i++) {
+            String day = times.get(i).asString();
+            out.add(new DischargeRow(LocalDate.parse(day.length() > 10 ? day.substring(0, 10) : day), Nodes.element(daily, "river_discharge", i)));
+        }
+        return out;
+    }
+
+    public record DischargeRow(LocalDate date, Double cumecs) {
+    }
+
     public record DailyRow(LocalDate date, double rainMm, double maxTemperatureC) {
     }
 }

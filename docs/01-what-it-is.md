@@ -225,6 +225,15 @@ other warning in force in the state is listed beside it by title, so a flood war
 is never dropped for want of a district to match. The map's side panel carries a banner while any is in
 force; `/api/v1/warnings` lists them.
 
+**Flood weather** (W-26). A reading carries the rain already down at the forecast station - today so far and
+the last three, seven and thirty Bureau days from its own record - the rain coming in the next twenty-four
+and seventy-two hours with the highest chance of it, the two three-day totals added, and the river: GloFAS's
+modelled discharge through Open-Meteo's flood API, today's flow against its own 92-day mean, rising or
+falling over three days, and its peak in the week ahead. GloFAS's 0.05° cell nearest a point is often beside
+the channel - at Renmark the Murray is the next cell west - so the river is the largest flow in the
+three-by-three block around the point, found once in one call (nine units) and remembered; the chosen
+cell's series (eight units) is held twelve hours. A block with no flow is no river, which is said.
+
 ## 5. The probe
 
 Click anywhere on the map, or ask `/api/v1/stations/at?lat=&lon=` with a key, and the answer is the
