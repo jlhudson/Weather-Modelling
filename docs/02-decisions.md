@@ -424,3 +424,17 @@ counter of the retired drought memo, CSS for classes nothing renders.
 
 **Why.** James: "Please perform a round of bug check and redundant code, and implement fixes for the lot."
 — James, 23 September 2026.
+
+### W-22 · The fire outlook: every forecast hour's index, each day's worst hour
+
+**The decision.** The forecast carries the forest fire danger index for every hour, from that hour's own
+values, and each day's figure is its worst hour with the values of that hour. The drought is carried
+forward day by day as the Bureau's turns, at 9 am: the deficit stepped through each forecast day's rain and
+heat, the factor recomputed against it and the rain window moved on. It is drawn from the forecast
+station's own drought, or the nearest station in reach that holds one; without one, no index.
+
+**Why.** James: "Implement the lot. Especially those forecasted indices." The pre-W-1 outlook put the
+day's maximum temperature, least humidity and strongest wind into one index - an hour that seldom happens,
+so the day read worse than it was. An index per hour costs nothing more and is the honest figure; the
+worst hour is what a day is remembered by.
+— James, 25 September 2026.

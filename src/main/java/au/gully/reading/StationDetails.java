@@ -31,7 +31,8 @@ public class StationDetails {
             Instant now = Instant.now();
             d.putAll(reaches.detail(id));
             d.putAll(droughts.detail(s));
-            d.put("forecast", forecasts.of(s, now, false).map(f -> Forecasts.view(f, s, 0.0, now)).orElse(null));
+            au.gully.record.Drought dry = droughts.of(s, now).orElse(null);
+            d.put("forecast", forecasts.of(s, now, false).map(f -> Forecasts.view(f, s, 0.0, now, dry, dry == null ? null : s)).orElse(null));
             return d;
         }));
     }

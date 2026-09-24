@@ -506,6 +506,12 @@
         return html + '</tbody></table>';
     }
 
+    // An index in its band's colour: the six pre-2022 bands the FFDI was drawn against.
+    var FFDI_COLOURS = {'LOW-MODERATE': '#22c55e', 'HIGH': '#3b82f6', 'VERY HIGH': '#eab308', 'SEVERE': '#f97316', 'EXTREME': '#ef4444', 'CATASTROPHIC': '#991b1b'};
+    function ffdiCell(v, rating) {
+        if (v == null) return '—';
+        return '<span class="ffdi" style="--r:' + (FFDI_COLOURS[rating] || NONE) + '" title="' + esc(String(rating || '').toLowerCase()) + '">' + fmt(v, 0) + '</span>';
+    }
     // ---- the forecast (W-20): the next twelve hours and three days, from the nearest station in reach or the point of ours
     function forecastSection(fc) {
         var html = '<h2>Forecast <span class="muted">the next ' + 12 + ' hours and 3 days</span></h2>';
@@ -514,20 +520,22 @@
         html += '<p class="muted mb-1">For ' + esc(st.name || st.id) + (st.km ? ', ' + fmt(st.km, 1) + ' km away' : '') + ' · ' + esc(fc.upstream) + ' · fetched ' + esc(ago(fc.fetchedAt))
             + (fc.stale ? ' · <span class="model-tag">old</span> the upstreams could not refresh it' : ' · fetched again after 3 hours') + '</p>';
         if (fc.hourly && fc.hourly.length) {
-            html += '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th>sky</th></tr></thead><tbody>';
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="McArthur forest fire danger index, from the hour\x27s own values and the day\x27s drought factor">FFDI</th><th>sky</th></tr></thead><tbody>';
             fc.hourly.forEach(function (h) {
-                html += '<tr><td class="mono">' + clock(h.at) + '</td><td class="num">' + fmt(h.temperatureC, 1) + '</td><td class="num">' + fmt(h.humidityPct) + '</td><td class="mono">' + (h.windSpeedKmh != null ? dirWord(h.windDirectionDeg) + ' ' + Math.round(h.windSpeedKmh) : '—') + '</td><td class="num">' + (h.windGustKmh != null ? Math.round(h.windGustKmh) : '—') + '</td><td class="num">' + fmt(h.precipitationMm, 1) + '</td><td class="num">' + (h.precipitationProbabilityPct != null ? h.precipitationProbabilityPct + ' %' : '—') + '</td><td class="muted">' + esc(h.condition || '') + '</td></tr>';
+                html += '<tr><td class="mono">' + clock(h.at) + '</td><td class="num">' + fmt(h.temperatureC, 1) + '</td><td class="num">' + fmt(h.humidityPct) + '</td><td class="mono">' + (h.windSpeedKmh != null ? dirWord(h.windDirectionDeg) + ' ' + Math.round(h.windSpeedKmh) : '—') + '</td><td class="num">' + (h.windGustKmh != null ? Math.round(h.windGustKmh) : '—') + '</td><td class="num">' + fmt(h.precipitationMm, 1) + '</td><td class="num">' + (h.precipitationProbabilityPct != null ? h.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + ffdiCell(h.ffdi, h.ffdiRating) + '</td><td class="muted">' + esc(h.condition || '') + '</td></tr>';
             });
             html += '</tbody></table>';
         }
         if (fc.daily && fc.daily.length) {
-            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th>sky</th></tr></thead><tbody>';
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="the day\x27s worst hour of the forest fire danger index">FFDI peak</th><th>sky</th></tr></thead><tbody>';
             fc.daily.forEach(function (d) {
                 var day = new Date(d.date + 'T12:00:00');
-                html += '<tr><td class="mono">' + (isNaN(day) ? esc(d.date) : day.toLocaleDateString(undefined, {weekday: 'short', day: '2-digit', month: 'short'})) + '</td><td class="num">' + fmt(d.minTemperatureC, 0) + ' · ' + fmt(d.maxTemperatureC, 0) + '</td><td class="num">' + (d.minHumidityPct != null ? d.minHumidityPct + ' %' : '—') + '</td><td class="mono">' + (d.maxWindKmh != null ? dirWord(d.windDirectionDeg) + ' ' + Math.round(d.maxWindKmh) + ' · ' + (d.maxGustKmh != null ? Math.round(d.maxGustKmh) : '—') : '—') + '</td><td class="num">' + fmt(d.precipitationMm, 1) + '</td><td class="num">' + (d.precipitationProbabilityPct != null ? d.precipitationProbabilityPct + ' %' : '—') + '</td><td class="muted">' + esc(d.condition || '') + '</td></tr>';
+                html += '<tr><td class="mono">' + (isNaN(day) ? esc(d.date) : day.toLocaleDateString(undefined, {weekday: 'short', day: '2-digit', month: 'short'})) + '</td><td class="num">' + fmt(d.minTemperatureC, 0) + ' · ' + fmt(d.maxTemperatureC, 0) + '</td><td class="num">' + (d.minHumidityPct != null ? d.minHumidityPct + ' %' : '—') + '</td><td class="mono">' + (d.maxWindKmh != null ? dirWord(d.windDirectionDeg) + ' ' + Math.round(d.maxWindKmh) + ' · ' + (d.maxGustKmh != null ? Math.round(d.maxGustKmh) : '—') : '—') + '</td><td class="num">' + fmt(d.precipitationMm, 1) + '</td><td class="num">' + (d.precipitationProbabilityPct != null ? d.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + (d.fire ? ffdiCell(d.fire.ffdiMax, d.fire.ffdiRating) + (d.fire.peakAt ? ' <span class="muted">' + clock(d.fire.peakAt) + '</span>' : '') : '—') + '</td><td class="muted">' + esc(d.condition || '') + '</td></tr>';
             });
             html += '</tbody></table>';
         }
+        var ff = fc.fireFrom || {};
+        html += '<p class="muted control-note">' + (ff.station ? 'The fire danger is McArthur\x27s forest index for each hour on its own values, with the drought carried forward from ' + esc(ff.station) + ' (KBDI ' + fmt(ff.kbdiMm, 0) + ' mm, drought factor ' + fmt(ff.droughtFactor, 1) + ' today) through the forecast\x27s rain and heat; a day\x27s figure is its worst hour.' : 'No fire danger: no station here holds a drought to carry forward.') + '</p>';
         return html + '<p class="muted control-note">' + esc(fc.attribution || '') + '</p>';
     }
 

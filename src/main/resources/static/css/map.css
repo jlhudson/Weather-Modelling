@@ -217,3 +217,6 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .model-tag { display: inline-block; font-size: .66rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #f59e0b; border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent); border-radius: 4px; padding: 0 .3rem; line-height: 1.35; vertical-align: .08em; }
 .drawer .grabbed.model { color: #f59e0b; }
 .drawer .forecast td, .drawer .forecast th { white-space: nowrap; padding: .1rem .3rem; }
+
+/* ---- the fire outlook (W-22): an index in its band's colour */
+.ffdi { font-family: var(--g-mono); font-weight: 600; padding: 0 .3rem; border-radius: 4px; background: color-mix(in srgb, var(--r) 22%, transparent); border-left: 3px solid var(--r); }

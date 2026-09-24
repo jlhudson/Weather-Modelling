@@ -185,6 +185,15 @@ ask that finds one missing or older than three hours fetches it again - a forced
 age; nothing fetches on a clock, and rows older than a day are pruned. Clicking a station is an ask
 for its forecast too. A point of ours' current and its forecast are one fetch.
 
+**The fire outlook** (W-22). Every forecast hour carries McArthur's forest fire danger index from that
+hour's own temperature, humidity and wind - never the day's maximum, minimum and maximum put together,
+which are rarely one hour and overstate the day - and each day carries its worst hour, with that hour's
+values. The drought factor turns at 9 am as the Bureau's does: the hours of the day now running take the
+station's drought as it stands; each later day takes the deficit stepped through the day before with the
+forecast's rain and heat, and the factor recomputed with the rain window moved on, so a wet day ahead
+lowers the next day's index. The drought is the forecast station's own, or the nearest station in reach
+that holds one, and the answer names it; without one there is no index.
+
 **When the Bureau goes quiet.** A station in reach whose latest reading is older than seventy
 minutes - its file down - has the model's now fetched for it (the same forecast, fetched again when
 its now is over an hour old), and that stands in: blended into the reading and drawn on the map with

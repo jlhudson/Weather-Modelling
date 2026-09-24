@@ -3,6 +3,8 @@ package au.gully.reading;
 import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
 import au.gully.bureau.StationsFeed;
+import au.gully.fire.Outlook;
+import au.gully.record.Drought;
 import au.gully.platform.Json;
 import au.gully.platform.Status;
 import au.gully.record.Record;
@@ -181,6 +183,22 @@ public class Forecasts {
     /**
      * The rows older than {@link #KEEP}, gone.
      */
+    /**
+     * A day's fire block: its worst hour and the values of that hour, and the drought it was drawn with.
+     */
+    static Map<String, Object> fire(Outlook.Day d) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ffdiMax", d.ffdiMax());
+        m.put("ffdiRating", d.rating());
+        m.put("peakAt", d.peakAt() == null ? null : d.peakAt().toString());
+        m.put("temperatureC", d.temperatureC());
+        m.put("humidityPct", d.humidityPct());
+        m.put("windSpeedKmh", d.windSpeedKmh());
+        m.put("droughtFactor", d.droughtFactor());
+        m.put("kbdiMm", d.kbdiMm());
+        return m;
+    }
+
     public int prune(Instant now) {
         Instant before = now.minus(KEEP);
         held.values().removeIf(f -> f.fetchedAt() == null || f.fetchedAt().isBefore(before));
@@ -192,6 +210,24 @@ public class Forecasts {
      * now running, and {@link #DAYS} days from today.
      */
     public static Map<String, Object> view(Forecast f, Station from, Double km, Instant now) {
+        return view(f, from, km, now, null, null);
+    }
+
+    /**
+     * The same, with the fire outlook (W-22) drawn from a drought: every hour's forest index, and each day's worst
+     * hour. Without a drought, no index - never one drawn from a guessed factor.
+     *
+     * @param drought     the drought the outlook is carried forward from, or null
+     * @param droughtFrom the station that drought is, named in the answer
+     */
+    public static Map<String, Object> view(Forecast f, Station from, Double km, Instant now, Drought drought, Station droughtFrom) {
+        ZoneId zone = Record.zoneOf(from);
+        List<Outlook.Hour> fireHours = drought == null ? List.of()
+                : Outlook.hours(f.hourly(), drought.kbdiMm(), drought.meanAnnualRainMm(), drought.recentRainMm(), now, zone, Record.DAY_TURNS_AT);
+        Map<Instant, Outlook.Hour> fireAt = new LinkedHashMap<>();
+        fireHours.forEach(h -> fireAt.put(h.at(), h));
+        Map<LocalDate, Outlook.Day> fireDay = new LinkedHashMap<>();
+        Outlook.days(fireHours, f.hourly(), zone).forEach(d -> fireDay.put(d.date(), d));
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, Object> who = new LinkedHashMap<>();
         who.put("id", from.id());
@@ -220,11 +256,14 @@ public class Forecasts {
                 h.put("precipitationProbabilityPct", c.precipitationProbabilityPct());
                 h.put("cloudCoverPct", c.cloudCoverPct());
                 h.put("condition", c.condition());
+                Outlook.Hour fh = fireAt.get(c.at());
+                h.put("ffdi", fh == null ? null : fh.ffdi());
+                h.put("ffdiRating", fh == null ? null : fh.rating());
+                h.put("droughtFactor", fh == null ? null : fh.droughtFactor());
                 hours.add(h);
             }
         }
         out.put("hourly", hours);
-        ZoneId zone = Record.zoneOf(from);
         LocalDate today = now.atZone(zone).toLocalDate();
         List<Map<String, Object>> days = new ArrayList<>();
         for (DayOutlook d : f.daily()) {
@@ -240,10 +279,18 @@ public class Forecasts {
                 m.put("precipitationMm", d.precipitationMm());
                 m.put("precipitationProbabilityPct", d.precipitationProbabilityPct());
                 m.put("condition", d.condition());
+                Outlook.Day fd = fireDay.get(d.date());
+                m.put("fire", fd == null ? null : fire(fd));
                 days.add(m);
             }
         }
         out.put("daily", days);
+        Map<String, Object> basis = new LinkedHashMap<>();
+        basis.put("station", droughtFrom == null ? null : droughtFrom.id());
+        basis.put("kbdiMm", drought == null ? null : drought.kbdiMm());
+        basis.put("droughtFactor", drought == null ? null : drought.droughtFactor());
+        basis.put("computedFor", drought == null ? null : drought.computedFor().toString());
+        out.put("fireFrom", basis);
         return out;
     }
 }

@@ -158,7 +158,11 @@ public class Readings {
         // Forced, it is fetched again - unless this ask already did (a point's current, a quiet station's now).
         boolean again = force && nearest != null && forecasts.held(nearest.station().id()).map(f -> f.fetchedAt() == null || f.fetchedAt().isBefore(now)).orElse(true);
         Forecast forecast = nearest == null ? null : forecasts.of(nearest.station(), now, again).orElse(null);
-        out.put("forecast", forecast == null ? null : Forecasts.view(forecast, nearest.station(), nearest.km(), now));
+        // The outlook is carried forward from a drought: the forecast station's own, or the nearest in reach that holds one.
+        Member dry = nearest != null && nearest.drought().isPresent() ? nearest
+                : members.stream().filter(m -> m.drought().isPresent()).findFirst().orElse(null);
+        out.put("forecast", forecast == null ? null : Forecasts.view(forecast, nearest.station(), nearest.km(), now,
+                dry == null ? null : dry.drought().get(), dry == null ? null : dry.station()));
         out.put("modelNow", members.stream().filter(m -> m.model() && !m.station().isPoint()).map(m -> m.station().id()).toList());
         List<Map<String, Object>> listed = new ArrayList<>();
         for (Member m : members) {
