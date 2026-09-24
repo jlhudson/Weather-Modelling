@@ -509,3 +509,14 @@ it was. That was the pre-W-1 history per hexagon; now it is per reference, which
 about, and the fallback reads the stations' record, which the service keeps anyway. A window is summarised as its
 mean temperature, least humidity and mean wind - the fire-weather reading of six hours - and says so.
 — James, 25 September 2026.
+
+### W-28 · A quiet Bureau shown, not hidden; the usage routes
+
+**The decision.** A station whose reading is older than seventy minutes keeps its colour on the map, faded and
+dashed, and is counted in the histogram with its share shaded; the side panel says since when the Bureau's file
+has not changed. The API gains `/api/v1/upstreams`, `…/{id}/spend` and `…/{id}/spend/daily`.
+
+**Why.** The evening the Bureau stopped for two hours every value vanished from the map, and the popup - which
+showed the last reading - was the only place it could be found. What a station last said, faded and dated, is
+information; nothing is not. The usage routes are what a consumer's usage page reads, over the same ledger.
+— James, 25 September 2026.

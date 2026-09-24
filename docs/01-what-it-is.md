@@ -277,10 +277,19 @@ allowance table, the spend chart, the breaker history, the Bureau's file and the
 startup record. API keys issues and revokes keys with a scope. Admin (W-18, for testing) deletes every station,
 reading, window, day and terrain and starts again from the Bureau's file.
 
+**A quiet Bureau on the map** (W-28). A station that has not reported inside seventy minutes still shows what it
+last said, faded and dashed, its label greyed; the histogram counts it, its share of a bar shaded apart, and the
+count says how many are stale. While the Bureau's file has not changed for over seventy minutes the side panel says
+since when. The map also carries the fire ban districts on a toggle (W-23) and a banner of the warnings in force (W-25).
+
 ## 8. The API
 
 `/api/v1/stations.geojson` and `/api/v1/reach.geojson` are what the map draws; `/api/v1/stations/{id}`
 is what a click on a station opens and `/api/v1/stations/at?lat=&lon=` what a click anywhere else opens; `/api/diagnostics` is the shape The Hub's morning agent reads. Every route needs a key.
+
+**Usage** (W-28). `/api/v1/upstreams` is every upstream's allowance and spend; `/api/v1/upstreams/{id}/spend?since=`
+its units since a moment; `/api/v1/upstreams/{id}/spend/daily?from=&to=` its spend day by day, at most 93 days -
+the ledger the Upstreams page draws, for a consumer's own usage page.
 
 ## 9. Storage
 

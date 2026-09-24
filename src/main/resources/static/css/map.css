@@ -228,3 +228,9 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .side-warn.hidden { display: none; }
 .warn-pill { border-left: 3px solid var(--r); background: color-mix(in srgb, var(--r) 18%, transparent); border-radius: 4px; padding: 0 .35rem; }
 .drawer .warn { border-left: 3px solid var(--r); background: color-mix(in srgb, var(--r) 10%, transparent); border-radius: 6px; padding: .35rem .55rem; margin: .25rem 0 .4rem; font-size: .78rem; }
+
+/* ---- a quiet Bureau (W-28): the last readings faded, counted apart, and said */
+.hist .bar.stale { fill: var(--p-bg-solid); opacity: .55; }
+.st-label.stale { opacity: .55; font-style: italic; }
+.side-stale { border-top: 1px solid var(--p-line); padding: .4rem .6rem; font-size: .74rem; color: #f59e0b; }
+.side-stale.hidden { display: none; }

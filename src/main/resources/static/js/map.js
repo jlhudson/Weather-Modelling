@@ -74,11 +74,16 @@
         for (var i = 0; i < VARS.length; i++) if (VARS[i].id === state.id) return VARS[i];
         return VARS[0];
     }
-    // The value a station is coloured by: what it last said, if it is fresh; a station's own facts whenever.
+    // The value a station is coloured by: what it last said, fresh or not (W-28) - a stale one is drawn faded and counted
+    // apart, so a quiet Bureau leaves the map saying what it last heard rather than nothing.
     function valueOf(p, v) {
         v = v || current();
-        if (!v.always && !p.fresh) return null;
-        return p[v.id];
+        var x = p[v.id];
+        return x == null ? null : x;
+    }
+    function stale(p, v) {
+        v = v || current();
+        return !v.always && !p.fresh && valueOf(p, v) != null;
     }
     function colourOf(p, v) {
         v = v || current();
@@ -127,13 +132,15 @@
     function legend() {
         var v = current(), props = legendProps();
         var vals = props.map(function (p) { return valueOf(p, v); }).filter(function (x) { return x != null; });
+        var staleVals = props.filter(function (p) { return stale(p, v); }).map(function (p) { return valueOf(p, v); });
         $('legendTitle').textContent = v.name + (v.unit ? ' · ' + v.unit : '');
-        $('legendCount').textContent = vals.length + ' of ' + props.length + (inView ? ' in view' : ' stations');
+        $('legendCount').textContent = vals.length + ' of ' + props.length + (inView ? ' in view' : ' stations') + (staleVals.length ? ' 00b7 ' + staleVals.length + ' stale' : '');
         var lo = v.range[0], hi = v.range[1];
         var mean = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
         var min = vals.length ? Math.min.apply(null, vals) : null, max = vals.length ? Math.max.apply(null, vals) : null;
-        var hist = new Array(BINS).fill(0);
+        var hist = new Array(BINS).fill(0), staleHist = new Array(BINS).fill(0);
         vals.forEach(function (x) { hist[binOf(x, v)]++; });
+        staleVals.forEach(function (x) { staleHist[binOf(x, v)]++; });
         var top = Math.max.apply(null, hist.concat([1]));
         // Each bin a bar in its colour on the ramp, under a full-height strip that takes the hover, so an empty bin can be pointed at too.
         var svg = '<svg class="hist" viewBox="0 0 ' + BINS * 10 + ' 34" preserveAspectRatio="none">';
@@ -141,7 +148,8 @@
             var h = n ? Math.max(2, n / top * 32) : 0, t = (i + .5) / BINS;
             svg += '<g data-bin="' + i + '"' + (i === state.bin ? ' class="hot"' : '') + '><rect class="hit" x="' + i * 10 + '" y="0" width="10" height="34"/>'
                 + '<rect class="bar" x="' + (i * 10 + 1) + '" y="' + (34 - h) + '" width="8" height="' + h + '" style="fill:' + ramp(v.reverse ? 1 - t : t) + '"/>'
-                + '<title>' + esc(binRange(i, v)) + ': ' + n + ' station' + (n === 1 ? '' : 's') + '</title></g>';
+                + (staleHist[i] ? '<rect class="bar stale" x="' + (i * 10 + 1) + '" y="' + (34 - h) + '" width="8" height="' + (staleHist[i] / n * h) + '"/>' : '')
+                + '<title>' + esc(binRange(i, v)) + ': ' + n + ' station' + (n === 1 ? '' : 's') + (staleHist[i] ? ', ' + staleHist[i] + ' of them stale' : '') + '</title></g>';
         });
         svg += '</svg>';
         $('legendBody').innerHTML = svg + '<div class="ramp" style="background:linear-gradient(to right,' + [0, .25, .5, .75, 1].map(function (t) { return ramp(v.reverse ? 1 - t : t); }).join(',') + ')"></div>'
@@ -198,15 +206,22 @@
             stations();
             legend();
             tiles();
+            staleNote();
             if (togs.all) drawReach();
         }).catch(function (e) { note('stations failed: ' + e); });
+    }
+    // When the Bureau's file has not changed for over an hour (W-28), say so: the stations show what they last said, faded.
+    function staleNote() {
+        var el = $('staleNote'), u = lastStations && lastStations.updatedAt, quiet = u && (Date.now() - Date.parse(u)) > 70 * 60000;
+        el.classList.toggle('hidden', !quiet);
+        el.innerHTML = quiet ? 'The Bureau\x27s file has not changed since ' + esc(clock(u)) + ' (' + esc(ago(u)) + '): stations show their last reading, faded, and the model\x27s now where a reading has asked for it.' : '';
     }
     function dirWord(deg) { return deg == null ? '—' : ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(deg / 22.5) % 16]; }
     function windWords(deg, kmh, gust) { return deg == null && kmh == null ? '—' : (deg != null ? dirWord(deg) + ' ' + deg + '°' : '—') + ' ' + (kmh != null ? Math.round(kmh) : '—') + ' km/h' + (gust != null ? ' <span class="muted">gust ' + Math.round(gust) + '</span>' : ''); }
     function tip(p) {
         return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours, from the model' : '') + (p.from === 'model' && p.kind !== 'point' ? ' · the model\x27s now: the Bureau\x27s last ' + (p.bureauAt ? ago(p.bureauAt) : 'never') : '') + (p.heightM != null ? ' · ' + Math.round(p.heightM) + ' m' : '') + '</span><br>'
             + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.pressureMslHpa != null ? ' · ' + fmt(p.pressureMslHpa, 1) + ' hPa' : '') + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + windTrend(p) + '<br><span class="muted">' + when(p.at) + '</span>'
-                : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) : 'nothing reported yet') + '</span>');
+                : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) + (p.temperatureC != null ? ': ' + esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) : '') : 'nothing reported yet') + '</span>');
     }
     function stations() {
         stationLayer.clearLayers();
@@ -232,9 +247,9 @@
             if (p.kind === 'point') {
                 // A point of ours (W-7): a diamond in the model's amber, its fill the value, so it is never taken for a station.
                 var d = on ? r * 1.6 : r * 1.25;
-                mark = diamond(ll, d, {color: on ? REACH : MODEL, weight: on ? 2 : 1.3, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0});
+                mark = diamond(ll, d, {color: on ? REACH : MODEL, weight: on ? 2 : 1.3, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : stale(p, v) ? .3 : 0});
             } else {
-                mark = L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : c, weight: on ? 2 : p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : 0});
+                mark = L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : c, weight: on ? 2 : p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : stale(p, v) ? .3 : 0, dashArray: stale(p, v) ? '2 2' : null});
             }
             mark.bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
@@ -242,7 +257,7 @@
                 .on('mouseout', function () { if (state.bin == null) markBar(null); })
                 .addTo(stationLayer);
             if (togs.labels && z >= 8 && x != null) {
-                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, -r - 1]}), interactive: false, keyboard: false}).addTo(labelLayer);
+                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label' + (stale(p, v) ? ' stale' : '') + '">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, -r - 1]}), interactive: false, keyboard: false}).addTo(labelLayer);
             }
             // The wind (W-9, W-11): when the colour is the wind or the gust, every reporting station wears its direction - the
             // latest as a solid arrow the way it blows, its length the speed coloured by; from zoom 8 the mean of the last five behind it in grey.
