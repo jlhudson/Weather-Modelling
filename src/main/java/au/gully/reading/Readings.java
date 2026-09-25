@@ -455,6 +455,22 @@ public class Readings {
         return d;
     }
 
+    /**
+     * The forest block (W-33): the AFDRS dry forest model's figures, and what they rest on.
+     */
+    static Map<String, Object> forest(au.gully.fire.DryForest.Result r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("fbi", r.fbi());
+        m.put("rating", r.rating());
+        m.put("rateOfSpreadKmh", Math.round(r.rateOfSpreadMh() / 100) / 10.0);
+        m.put("flameHeightM", r.flameHeightM());
+        m.put("intensityKwm", r.intensityKwm());
+        m.put("moisturePct", r.moisturePct());
+        m.put("model", "AFDRS dry forest (Cheney et al. 2012), as the AFDRS Fire Behaviour Index Technical Guide - Forest v2024.6.0 gives it");
+        m.put("fuel", au.gully.fire.DryForest.Fuel.PROVISIONAL.basis());
+        return m;
+    }
+
     private static Map<String, Object> fire(Map<String, Object> current, Map<String, Object> drought) {
         Map<String, Object> f = new LinkedHashMap<>();
         Double ffdi = FireDanger.of((Double) current.get("temperatureC"), (Double) current.get("humidityPct"),
@@ -463,6 +479,12 @@ public class Readings {
         f.put("ffdiRating", ffdi == null ? null : FireDanger.rating(ffdi));
         f.put("inputs", Map.of("temperatureC", current.get("temperatureC") != null, "humidityPct", current.get("humidityPct") != null,
                 "windSpeedKmh", current.get("windSpeedKmh") != null, "droughtFactor", drought.get("droughtFactor") != null));
+        // The AFDRS dry forest index on the same weather (W-33), at the local time the weather is for.
+        Instant at = current.get("at") == null ? Instant.now() : Instant.parse((String) current.get("at"));
+        au.gully.fire.DryForest.Result r = au.gully.fire.DryForest.of((Double) current.get("temperatureC"), (Double) current.get("humidityPct"),
+                (Double) current.get("windSpeedKmh"), (Double) drought.get("droughtFactor"), java.time.LocalDateTime.ofInstant(at, java.time.ZoneId.of("Australia/Adelaide")),
+                au.gully.fire.DryForest.Fuel.PROVISIONAL);
+        f.put("forest", r == null ? null : forest(r));
         return f;
     }
 

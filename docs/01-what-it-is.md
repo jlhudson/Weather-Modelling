@@ -277,6 +277,15 @@ allowance table, the spend chart, the breaker history, the Bureau's file and the
 startup record. API keys issues and revokes keys with a scope. Admin (W-18, for testing) deletes every station,
 reading, window, day and terrain and starts again from the Bureau's file.
 
+**The AFDRS forest index** (W-33). Every reading and every forecast hour carries the AFDRS dry forest Fire
+Behaviour Index and rating - the Dry Eucalypt Forest Fire Model (Cheney et al. 2012) exactly as the AFDRS Fire
+Behaviour Index Technical Guide - Forest v2024.6.0 gives it: dead fuel moisture by the hour and the season, fuel
+availability from the drought factor, spread, flame height, the fuel that burns, Byram's intensity and the index
+interpolated between the published anchors - and each forecast day its worst hour. The fuel is provisional: the
+AFDRS's own default table is not published openly, so it is the public reimplementation's dry forest set, long
+unburnt, and every answer says so. It is what a long-unburnt dry eucalypt forest would do in this weather, as the
+FFDI is; which fuel is on the ground at a point is the fuel map's question, not answered here.
+
 **Warnings and the fire outlook on the map** (W-30, W-31). A fire weather warning shades and outlines its fire
 ban district - the CFS's feed gives each district its Bureau fire weather code - and a warning for a public forecast
 district, whose shapes the Bureau does not publish openly, rings the stations in it; both on the Warnings toggle,

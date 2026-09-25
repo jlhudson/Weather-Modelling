@@ -48,9 +48,9 @@ class ForecastsTest {
         au.gully.cfs.Curing.Entry cured = new au.gully.cfs.Curing.Entry("Adelaide Metropolitan", 80, 4.5, LocalDate.parse("2026-09-20"), null, null, null);
         Map<String, Object> fire = Forecasts.view(f, ADELAIDE, 3.2, now, new Forecasts.FireInputs(d, ADELAIDE, "Adelaide Metropolitan", cured));
         List<Map<String, Object>> fh = (List<Map<String, Object>>) fire.get("hourly");
-        assertThat(fh.getFirst()).containsKey("ffdi").containsKey("gfdi").containsKey("fbi");
+        assertThat(fh.getFirst()).containsKey("ffdi").containsKey("gfdi").containsKey("fbi").containsKey("forestFbi").containsKey("forestRating");
         Map<String, Object> today = (Map<String, Object>) ((List<Map<String, Object>>) fire.get("daily")).getFirst().get("fire");
-        assertThat(today).containsKeys("ffdiMax", "gfdiMax", "fbiMax", "afdrsRating");
+        assertThat(today).containsKeys("ffdiMax", "gfdiMax", "fbiMax", "afdrsRating", "forestFbiMax", "forestRating");
         assertThat((Map<String, Object>) fire.get("fireFrom")).containsEntry("station", "023000").containsEntry("district", "Adelaide Metropolitan");
         // Three hours on, it is old: an ask fetches it again.
         assertThat(Forecasts.view(f, ADELAIDE, 3.2, fetched.plus(Forecasts.LIFE))).containsEntry("stale", true);

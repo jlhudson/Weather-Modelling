@@ -187,6 +187,30 @@ public class Forecasts {
      * A day's worst hour of each grass index, from the hours now running on: McArthur's and the AFDRS's may peak at
      * different hours, and each is its own worst.
      */
+    /**
+     * A day's worst hour of the AFDRS dry forest index (W-33), each hour on its own weather, local time and drought factor.
+     */
+    static Map<String, Object> forestPeak(List<au.gully.upstreams.Conditions> hourly, List<Outlook.Hour> fireHours, java.time.LocalDate date, ZoneId zone) {
+        Map<Instant, au.gully.upstreams.Conditions> byAt = new LinkedHashMap<>();
+        hourly.forEach(c -> { if (c.at() != null) byAt.put(c.at(), c); });
+        Integer best = null;
+        for (Outlook.Hour h : fireHours) {
+            au.gully.upstreams.Conditions c = byAt.get(h.at());
+            if (c == null || !h.at().atZone(zone).toLocalDate().equals(date)) {
+                continue;
+            }
+            au.gully.fire.DryForest.Result r = au.gully.fire.DryForest.of(c.temperatureC(), c.humidityPct() == null ? null : c.humidityPct().doubleValue(),
+                    c.windSpeedKmh(), h.droughtFactor(), java.time.LocalDateTime.ofInstant(h.at(), zone), au.gully.fire.DryForest.Fuel.PROVISIONAL);
+            if (r != null && (best == null || r.fbi() > best)) {
+                best = r.fbi();
+            }
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("forestFbiMax", best);
+        m.put("forestRating", best == null ? null : au.gully.fire.CsiroGrassland.afdrs(best));
+        return m;
+    }
+
     static Map<String, Object> grassPeak(List<au.gully.upstreams.Conditions> hourly, java.time.LocalDate date, ZoneId zone, Instant now, FireInputs in, java.time.LocalDate today) {
         Double gfdi = null, fbi = null;
         for (au.gully.upstreams.Conditions c : hourly) {
@@ -295,6 +319,10 @@ public class Forecasts {
                 h.put("ffdi", fh == null ? null : fh.ffdi());
                 h.put("ffdiRating", fh == null ? null : fh.rating());
                 h.put("droughtFactor", fh == null ? null : fh.droughtFactor());
+                au.gully.fire.DryForest.Result fr = fh == null ? null : au.gully.fire.DryForest.of(c.temperatureC(), c.humidityPct() == null ? null : c.humidityPct().doubleValue(),
+                        c.windSpeedKmh(), fh.droughtFactor(), java.time.LocalDateTime.ofInstant(c.at(), zone), au.gully.fire.DryForest.Fuel.PROVISIONAL);
+                h.put("forestFbi", fr == null ? null : fr.fbi());
+                h.put("forestRating", fr == null ? null : fr.rating());
                 if (in.curing() != null) {
                     Map<String, Object> g = au.gully.cfs.Grass.block(in.district(), in.curing(), c.temperatureC(), c.humidityPct(), c.windSpeedKmh(), todayLocal);
                     h.put("gfdi", g.get("gfdi"));
@@ -324,6 +352,9 @@ public class Forecasts {
                 Map<String, Object> fb = fd != null ? fire(fd) : in.curing() != null ? new LinkedHashMap<>() : null;
                 if (fb != null && in.curing() != null) {
                     fb.putAll(grassPeak(f.hourly(), d.date(), zone, now, in, todayLocal));
+                }
+                if (fb != null && fd != null) {
+                    fb.putAll(forestPeak(f.hourly(), fireHours, d.date(), zone));
                 }
                 m.put("fire", fb);
                 days.add(m);

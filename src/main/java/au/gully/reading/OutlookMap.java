@@ -88,6 +88,8 @@ public class OutlookMap {
                 day.put("gfdiMax", fire.get("gfdiMax"));
                 day.put("fbiMax", fire.get("fbiMax"));
                 day.put("afdrsRating", fire.get("afdrsRating"));
+                day.put("forestFbiMax", fire.get("forestFbiMax"));
+                day.put("forestRating", fire.get("forestRating"));
                 days.add(day);
             }
             Map<String, Object> one = new LinkedHashMap<>();

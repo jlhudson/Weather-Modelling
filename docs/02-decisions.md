@@ -532,3 +532,17 @@ and the map fills in as they come.
 **Why.** James asked for both. The outlook colour is an ask for every station's forecast - under 250 units - made
 only while someone is looking, which keeps W-15's rule that nothing is fetched on a clock.
 — James, 25 September 2026.
+
+### W-33 · The AFDRS forest index
+
+**The decision.** The AFDRS dry forest model beside McArthur's forest index, on every reading and forecast hour,
+each day's worst hour with it: the equations and constants of the AFDRS Fire Behaviour Index Technical Guide -
+Forest v2024.6.0, checked against rows the official code produced (moisture, spread with no fuel, the index from
+the intensity). The fuel is provisional and said to be.
+
+**Why.** James asked for the AFDRS forest rating. It is not Vesta Mk2, as first assumed: the AFDRS uses the original
+dry forest model, with Mk2 only in the wet forest's fuel availability. The equations are published; the default fuel
+table is not - it sits in the official code package, which was not downloaded - so the public reimplementation's
+dry forest set stands in, in one place, until that table can be read. A point's actual fuel type needs a fuel map;
+until then this is the forest answer for the weather, as the FFDI has always been.
+— James, 25 September 2026.
