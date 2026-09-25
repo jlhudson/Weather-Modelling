@@ -2,7 +2,8 @@
 
 Every fire danger figure the service gives, in one place: what it is, what it is computed from, where its
 equations come from, how it was checked, and what it cannot tell you. The mechanism in full is in
-[01-what-it-is.md](01-what-it-is.md); why each piece is the way it is, in [02-decisions.md](02-decisions.md).
+[01-what-it-is.md](01-what-it-is.md); why each piece is the way it is, in [02-decisions.md](02-decisions.md); where each input comes from and what was found building on it, in
+[04-sources-and-findings.md](04-sources-and-findings.md).
 
 ## The short version
 

@@ -575,3 +575,15 @@ equations but not the fuel: its default table (the Bureau's IDZ10163) is not in 
 forest fuel stays provisional and says so. The land cover is the honest fuel map the service can reach; where it names a
 fuel the AFDRS rates with a model not computed here, the place gets no rating rather than another fuel's.
 — James, 25 September 2026.
+
+### W-39 · What was found, written down
+
+**The decision.** A page of the sources and what building on them taught - `04-sources-and-findings.md`: every outside
+source with what is taken, when, what it costs and how it fails, the findings dated (the UTC-tagged station, the lost
+file behind a kept ETag, the CFS's out-of-season May, the river one cell west, the half-hour hours, the fuel table no one
+can download), the cost of each kind of ask, and the lessons. The mechanism page's upstreams and storage brought up to
+date (fifteen tables), and the pages linked to each other.
+
+**Why.** James: "update the documents with a bunch of our findings and information". Most of what was learnt lived only
+in commit messages and a conversation; the next person to touch a source should find its traps before they fall in.
+— James, 25 September 2026.

@@ -2,7 +2,8 @@
 
 Gully holds South Australia's Bureau stations and, for each, the ground it speaks for. This page is
 the mechanism as it stands; the decisions behind it are in [02-decisions.md](02-decisions.md), and every fire
-danger figure in one place - what it rests on, how it was checked - in [03-fire-danger.md](03-fire-danger.md).
+danger figure in one place - what it rests on, how it was checked - in [03-fire-danger.md](03-fire-danger.md), and every
+outside source with what was found building on it in [04-sources-and-findings.md](04-sources-and-findings.md).
 
 ## 1. The stations
 
@@ -263,6 +264,12 @@ names the window that ran out) and a pacer (the real per-minute limit). Every ca
 Open-Meteo's forecast costs three units; a point of ours fetches one when asked, and the archive
 and the recent days when its record is missing them.
 
+Beside the forecast upstreams, read when asked and held for a stated life, never on a clock: the Bureau's warnings (ten
+minutes), the CFS's fire ban districts (a day) and fire danger ratings (an hour), GloFAS river discharge through
+Open-Meteo's flood API (the river cell for the process's life, the series twelve hours), Digital Earth Australia's land
+cover (once per ~200 m, kept), and the AWS terrain tiles (once a station). Each is a row in the ledger, the free ones at
+no units. What each takes, costs and has been found to do is in [04-sources-and-findings.md](04-sources-and-findings.md).
+
 ## 7. The console
 
 One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
@@ -275,7 +282,7 @@ to the consumer `console` with the readings scope, carried on the map page, list
 the API keys page like any other, issued again on the next map page if revoked - so the flow the
 operator watches is the flow a consumer gets, rate, access log and all. The Upstreams page is the
 allowance table, the spend chart, the breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
-startup record. API keys issues and revokes keys with a scope. Admin (W-18, for testing) deletes every station,
+startup record. API keys issues and revokes keys with a scope. Curing (W-24) holds each fire ban district's grass curing and fuel load. Admin (W-18, for testing) deletes every station,
 reading, window, day and terrain and starts again from the Bureau's file.
 
 **The AFDRS rating here** (W-38). Every reading carries `afdrs`: the fuel its land cover says the place carries -
@@ -327,8 +334,11 @@ the ledger the Upstreams page draws, for a consumer's own usage page.
 
 ## 9. Storage
 
-Twelve tables: `api_key`, `console_user`, `api_access_log` (kept thirty days), `log_event`, `setting`
+Fifteen tables: `api_key`, `console_user`, `api_access_log` (kept thirty days), `log_event`, `setting`
 (what the console sets and a restart must keep), `upstream_call`, `station` (`V1`), `terrain` (`V2`;
-`inland_km` since `V6`), `station_hour6` and `station_day` (`V3`), `station_reading` (`V5`) and
-`station_forecast` (`V7`). Held in memory as well, and read back at start: the stations with their
-latest readings, their terrain, their days and their forecasts.
+`inland_km` since `V6`), `station_hour6` and `station_day` (`V3`), `station_reading` (`V5`),
+`station_forecast` (`V7`, a day), `grass_curing` (`V8`, the operator's entries), `reading_snapshot` (`V9`, 548 days)
+and `land_cover` (`V10`, kept). Held in memory as well, and read back at start: the stations with their latest
+readings, their terrain, their days, their forecasts, the curing and the land cover. The admin reset empties the
+weather - stations, readings, windows, days, forecasts, kept readings, terrain - and keeps the rest, curing and land
+cover among it.
