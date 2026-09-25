@@ -9,8 +9,9 @@
 # The service and container names are `weather-*` and the database volume `weather-pgdata`, so The
 # Hub's HUB_WEATHER_URL keeps working.
 #
-# No bind mounts of repository files, and `pull_policy: build` so every `up` rebuilds the image from
-# the checkout. The edge is a profile: COMPOSE_PROFILES=edge starts the connector.
+# No bind mounts of repository files. The images are the ones CI tested and pushed to ghcr.io
+# (IMAGE_TAG, main by default; a commit to roll back); compose.override.yaml builds them from the
+# checkout on a development machine instead. The edge is a profile: COMPOSE_PROFILES=edge starts the connector.
 services:
   db:
     image: postgis/postgis:18-3.6
@@ -37,9 +38,8 @@ services:
     restart: unless-stopped
 
   app:
-    build: .
-    image: weather-app
-    pull_policy: build
+    image: ghcr.io/jlhudson/weather-app:${IMAGE_TAG:-main}
+    pull_policy: always
     container_name: weather-app
     logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     depends_on:
@@ -77,9 +77,8 @@ services:
   # (Cloudflare R2 or S3 through the RCLONE_CONFIG_R2_* lines), and restored into a scratch database
   # on the first of each month to prove it restores. `docker logs weather-backup` says how each run went.
   backup:
-    build: docker/backup
-    image: weather-backup
-    pull_policy: build
+    image: ghcr.io/jlhudson/weather-backup:${IMAGE_TAG:-main}
+    pull_policy: always
     container_name: weather-backup
     logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     depends_on:

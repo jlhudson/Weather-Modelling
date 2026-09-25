@@ -1,0 +1,10 @@
+# A development machine builds from this checkout instead of pulling what CI pushed to the registry.
+# `docker compose` reads this file beside compose.yaml by itself; Portainer deploys compose.yaml alone
+# (its compose path), so a server pulls the image CI tested and pushed.
+services:
+  app:
+    build: .
+    pull_policy: build
+  backup:
+    build: docker/backup
+    pull_policy: build
