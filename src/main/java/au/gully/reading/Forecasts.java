@@ -283,10 +283,15 @@ public class Forecasts {
 
     /**
      * What the fire outlook is drawn from: a drought to carry forward and the station it is, and the district's grass
-     * curing and fuel load (W-24). Any may be missing, and then so is what rests on it.
+     * curing and fuel load (W-24), and the fuel the place carries (W-38), which says whose index is its rating. Any may be
+     * missing, and then so is what rests on it.
      */
-    public record FireInputs(Drought drought, Station droughtFrom, String district, au.gully.cfs.Curing.Entry curing) {
-        public static final FireInputs NONE = new FireInputs(null, null, null, null);
+    public record FireInputs(Drought drought, Station droughtFrom, String district, au.gully.cfs.Curing.Entry curing, au.gully.fuel.Fuel.Kind fuel) {
+        public static final FireInputs NONE = new FireInputs(null, null, null, null, null);
+
+        public FireInputs(Drought drought, Station droughtFrom, String district, au.gully.cfs.Curing.Entry curing) {
+            this(drought, droughtFrom, district, curing, null);
+        }
     }
 
     /**
@@ -373,6 +378,12 @@ public class Forecasts {
                 }
                 if (fb != null && fd != null) {
                     fb.putAll(forestPeak(f.hourly(), fireHours, d.date(), zone));
+                }
+                if (fb != null && in.fuel() != null) {
+                    Object[] p = au.gully.fuel.PointRating.day(in.fuel(), fb);
+                    fb.put("pointFbiMax", p[0]);
+                    fb.put("pointRating", p[1]);
+                    fb.put("fuel", in.fuel().word);
                 }
                 m.put("fire", fb);
                 days.add(m);

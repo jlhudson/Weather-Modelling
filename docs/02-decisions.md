@@ -558,3 +558,20 @@ hours until the next.
 wind was already held. A vector mean alone cannot place a full reversal - it swings 180° an hour early as much as on
 the hour - so the hour is the one where the hours either side agree with their own side.
 — James, 25 September 2026.
+
+### W-38 · The AFDRS rating of the fuel on the ground; the forest model made the official one
+
+**The decision.** Every reading's `afdrs` block is the rating of the fuel its land cover says the place carries: Digital
+Earth Australia's Collection 3 land cover, read once per ~200 m and kept, decides forest (natural woody cover of 15 % or
+more), grass (grass, crop, pasture, grassy woodland), not burnable (water, built-up) or not modelled here (wetland,
+orchard and vineyard, arid shrubland). Each forecast day carries that fuel's worst hour, and the map can be coloured by it.
+The forest model was read line by line against the official AFDRS code (`fdrs_calcs` 2024.6.0, downloaded with James's
+leave for the purpose) and three differences from the public reimplementation corrected: the accumulation since fire is
+not rounded, the canopy load is held at its steady state, and each fuel layer has its own accumulation rate. A page,
+03-fire-danger.md, gathers every fire danger figure: its source, its checks, its limits.
+
+**Why.** James asked for the real AFDRS rating at a point and a page that sums it up. The official code settled the
+equations but not the fuel: its default table (the Bureau's IDZ10163) is not in the package and not public, so the
+forest fuel stays provisional and says so. The land cover is the honest fuel map the service can reach; where it names a
+fuel the AFDRS rates with a model not computed here, the place gets no rating rather than another fuel's.
+— James, 25 September 2026.

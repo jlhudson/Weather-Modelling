@@ -34,7 +34,11 @@
         {id: 'outlook1', name: 'FFDI tomorrow', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 1},
         {id: 'outlook2', name: 'FFDI day 3', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 2},
         // The wind change (W-37): hours until each station's next change in the forecast, soonest reddest; grey is none in 48 hours.
-        {id: 'windChange', name: 'Wind change', hint: 'hours until the next', unit: 'h', icon: 'wind', range: [0, 48], reverse: true, always: true, change: true}
+        {id: 'windChange', name: 'Wind change', hint: 'hours until the next', unit: 'h', icon: 'wind', range: [0, 48], reverse: true, always: true, change: true},
+        // The AFDRS rating of each station's own fuel (W-38): the forecast day's worst hour of the forest or the grass index.
+        {id: 'afdrs0', name: 'AFDRS today', hint: 'its own fuel', icon: 'drought', range: [0, 100], always: true, outlook: 0, point: true},
+        {id: 'afdrs1', name: 'AFDRS tomorrow', hint: 'its own fuel', icon: 'drought', range: [0, 100], always: true, outlook: 1, point: true},
+        {id: 'afdrs2', name: 'AFDRS day 3', hint: 'its own fuel', icon: 'drought', range: [0, 100], always: true, outlook: 2, point: true}
     ];
     var NONE = '#6b7280', SEA = '#0ea5e9', MODEL = '#f59e0b';
     // A diamond of a size in pixels at a place, as a polygon in the map's own units: it keeps its size across zoom.
@@ -92,6 +96,7 @@
         }
         if (v.outlook != null) {
             var o = lastOutlook && lastOutlook.stations[p.id], d = o && o.days[v.outlook];
+            if (v.point) return d && d.pointFbiMax != null ? d.pointFbiMax : null;
             return d && d.ffdiMax != null ? d.ffdiMax : null;
         }
         var x = p[v.id];
@@ -517,6 +522,7 @@
                 + tile(fmt(d.kbdiMm, 0) + '<small>mm' + (d.band ? ' · ' + esc(String(d.band).toLowerCase()) : '') + '</small>', 'KBDI', d.from, 'drought')
                 + tile(fmt(d.droughtFactor, 1) + '<small>of 10' + (d.complete === false ? ' · spin-up short' : '') + '</small>', 'drought factor', d.from, 'drought')
                 + tile(f.ffdi != null ? fmt(f.ffdi, 0) + '<small>' + esc(String(f.ffdiRating).toLowerCase()) + '</small>' : '—', 'FFDI', f.ffdi != null ? null : Object.keys(f.inputs).filter(function (k) { return !f.inputs[k]; }), 'fire')
+                + (o.afdrs ? tile(o.afdrs.fbi != null ? fmt(o.afdrs.fbi, 0) + '<small>' + esc(o.afdrs.rating) + '</small>' : '—', 'AFDRS here', [(o.afdrs.fuel.type || '') + (o.afdrs.fbi == null && o.afdrs.note ? ': ' + o.afdrs.note : '')], 'fire') : '')
                 + grassTiles(f.grass)
                 + (f.forest ? tile(fmt(f.forest.fbi, 0) + '<small>' + esc(f.forest.rating) + ' 00b7 ' + fmt(f.forest.rateOfSpreadKmh, 2) + ' km/h</small>', 'forest FBI (AFDRS)', ['provisional fuel'], 'fire') : '')
                 + tile(c.dewPointC != null ? fmt(c.dewPointC, 1) + ' °C' : '—', 'dew point', c.from.dewPointC, 'ground')
@@ -716,10 +722,10 @@
             html += '</tbody></table>';
         }
         if (fc.daily && fc.daily.length) {
-            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="the day\x27s worst hour of the forest fire danger index">FFDI peak</th><th class="num" title="the day\x27s worst hour of each grass index">grass peak</th><th class="num" title="the day\x27s worst hour of the AFDRS dry forest index">forest peak</th><th>sky</th></tr></thead><tbody>';
+            html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="the day\x27s worst hour of the forest fire danger index">FFDI peak</th><th class="num" title="the day\x27s worst hour of each grass index">grass peak</th><th class="num" title="the day\x27s worst hour of the AFDRS dry forest index">forest peak</th><th class="num" title="the day\x27s worst hour of the index of the fuel here, by its land cover">here</th><th>sky</th></tr></thead><tbody>';
             fc.daily.forEach(function (d) {
                 var day = new Date(d.date + 'T12:00:00');
-                html += '<tr><td class="mono">' + (isNaN(day) ? esc(d.date) : day.toLocaleDateString(undefined, {weekday: 'short', day: '2-digit', month: 'short'})) + '</td><td class="num">' + fmt(d.minTemperatureC, 0) + ' · ' + fmt(d.maxTemperatureC, 0) + '</td><td class="num">' + (d.minHumidityPct != null ? d.minHumidityPct + ' %' : '—') + '</td><td class="mono">' + (d.maxWindKmh != null ? dirWord(d.windDirectionDeg) + ' ' + Math.round(d.maxWindKmh) + ' · ' + (d.maxGustKmh != null ? Math.round(d.maxGustKmh) : '—') : '—') + '</td><td class="num">' + fmt(d.precipitationMm, 1) + '</td><td class="num">' + (d.precipitationProbabilityPct != null ? d.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + (d.fire ? ffdiCell(d.fire.ffdiMax, d.fire.ffdiRating) + (d.fire.peakAt ? ' <span class="muted">' + clock(d.fire.peakAt) + '</span>' : '') : '—') + '</td><td class="num">' + (d.fire ? grassCell(d.fire.gfdiMax, d.fire.fbiMax, d.fire.afdrsRating) : '—') + '</td><td class="num">' + (d.fire ? afdrsNumber(d.fire.forestFbiMax, d.fire.forestRating) : '—') + '</td><td class="muted">' + esc(d.condition || '') + '</td></tr>';
+                html += '<tr><td class="mono">' + (isNaN(day) ? esc(d.date) : day.toLocaleDateString(undefined, {weekday: 'short', day: '2-digit', month: 'short'})) + '</td><td class="num">' + fmt(d.minTemperatureC, 0) + ' · ' + fmt(d.maxTemperatureC, 0) + '</td><td class="num">' + (d.minHumidityPct != null ? d.minHumidityPct + ' %' : '—') + '</td><td class="mono">' + (d.maxWindKmh != null ? dirWord(d.windDirectionDeg) + ' ' + Math.round(d.maxWindKmh) + ' · ' + (d.maxGustKmh != null ? Math.round(d.maxGustKmh) : '—') : '—') + '</td><td class="num">' + fmt(d.precipitationMm, 1) + '</td><td class="num">' + (d.precipitationProbabilityPct != null ? d.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + (d.fire ? ffdiCell(d.fire.ffdiMax, d.fire.ffdiRating) + (d.fire.peakAt ? ' <span class="muted">' + clock(d.fire.peakAt) + '</span>' : '') : '—') + '</td><td class="num">' + (d.fire ? grassCell(d.fire.gfdiMax, d.fire.fbiMax, d.fire.afdrsRating) : '—') + '</td><td class="num">' + (d.fire ? afdrsNumber(d.fire.forestFbiMax, d.fire.forestRating) : '—') + '</td><td class="num">' + (d.fire ? afdrsNumber(d.fire.pointFbiMax, d.fire.pointRating) : '—') + '</td><td class="muted">' + esc(d.condition || '') + '</td></tr>';
             });
             html += '</tbody></table>';
         }
@@ -774,7 +780,8 @@
                 ['position', fmt(s.lat, 4) + ', ' + fmt(s.lon, 4)],
                 ['height', s.heightM != null ? s.heightM + ' m' : null],
                 ['district', esc(s.district)],
-                ['zone', esc(s.zone)]
+                ['zone', esc(s.zone)],
+                ['fuel', s.fuel ? esc(s.fuel.type) + ' <span class="muted">' + esc(s.fuel.landCover || s.fuel.why) + (s.fuel.year ? ', ' + s.fuel.year : '') + '</span>' : null]
             ]);
             html += '<h2>Latest ' + (s.at ? '<span class="muted">' + esc(when(s.at)) + ' · ' + esc(ago(s.at)) + (s.from === 'model' && s.kind !== 'point' ? ' · <span class="model-tag">model</span> the Bureau\'s last ' + (s.bureauAt ? esc(ago(s.bureauAt)) : 'never') : s.fresh ? '' : ' · not reporting') + '</span>' : '') + '</h2>';
             if (s.at) {

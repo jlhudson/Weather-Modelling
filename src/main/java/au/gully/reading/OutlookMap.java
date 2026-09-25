@@ -40,17 +40,20 @@ public class OutlookMap {
     private final FireDistricts districts;
     private final au.gully.cfs.FireBan fireBan;
     private final Curing curing;
+    private final au.gully.fuel.LandCover landCover;
     private final Set<String> fetching = ConcurrentHashMap.newKeySet();
     private final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
     private final Semaphore gate = new Semaphore(AT_ONCE);
 
-    public OutlookMap(StationRegistry stations, Forecasts forecasts, Droughts droughts, FireDistricts districts, au.gully.cfs.FireBan fireBan, Curing curing) {
+    public OutlookMap(StationRegistry stations, Forecasts forecasts, Droughts droughts, FireDistricts districts, au.gully.cfs.FireBan fireBan, Curing curing,
+                      au.gully.fuel.LandCover landCover) {
         this.stations = stations;
         this.forecasts = forecasts;
         this.droughts = droughts;
         this.districts = districts;
         this.fireBan = fireBan;
         this.curing = curing;
+        this.landCover = landCover;
     }
 
     /**
@@ -72,7 +75,9 @@ public class OutlookMap {
             }
             held++;
             String district = districts.of(s.lat(), s.lon()).map(fireBan::name).orElse(null);
-            Forecasts.FireInputs in = new Forecasts.FireInputs(droughts.of(s, now).orElse(null), s, district, district == null ? null : curing.of(district).orElse(null));
+            au.gully.fuel.LandCover.Cover cover = landCover.at(s.lat(), s.lon()).orElse(null);
+            Forecasts.FireInputs in = new Forecasts.FireInputs(droughts.of(s, now).orElse(null), s, district, district == null ? null : curing.of(district).orElse(null),
+                    cover == null ? null : cover.fuel());
             Map<String, Object> v = Forecasts.view(f, s, 0.0, now, in);
             List<Map<String, Object>> days = new ArrayList<>();
             for (Map<String, Object> d : (List<Map<String, Object>>) v.get("daily")) {
@@ -90,11 +95,14 @@ public class OutlookMap {
                 day.put("afdrsRating", fire.get("afdrsRating"));
                 day.put("forestFbiMax", fire.get("forestFbiMax"));
                 day.put("forestRating", fire.get("forestRating"));
+                day.put("pointFbiMax", fire.get("pointFbiMax"));
+                day.put("pointRating", fire.get("pointRating"));
                 days.add(day);
             }
             Map<String, Object> one = new LinkedHashMap<>();
             one.put("fetchedAt", v.get("fetchedAt"));
             one.put("stale", old);
+            one.put("fuel", cover == null ? null : cover.fuel().word);
             one.put("days", days);
             List<?> changes = (List<?>) v.get("windChanges");
             one.put("windChange", changes == null || changes.isEmpty() ? null : changes.getFirst());

@@ -49,11 +49,11 @@ class DryForestTest {
     @Test
     void aBadSummerAfternoonInLongUnburntForest() {
         // Computed from the guide's equations on the provisional fuel, not an official figure: 35 °C, 10 %, 40 km/h,
-        // drought factor 10, a sunny afternoon - Extreme. The accumulated scores are rounded to the tenth, as the reimplementation
-        // tested against the AFDRS code rounds them (unrounded, the spread is 1504.7 m/h; the index is the same).
+        // drought factor 10, a sunny afternoon - Extreme. The accumulation is unrounded and the canopy held at its steady state,
+        // as the official code (fdrs_calcs 2024.6.0) computes them.
         DryForest.Result r = DryForest.of(35.0, 10.0, 40.0, 10.0, LocalDateTime.parse("2026-01-15T15:00"), DryForest.Fuel.PROVISIONAL);
         assertThat(r.moisturePct()).isCloseTo(3.35, within(0.01));
-        assertThat(r.rateOfSpreadMh()).isCloseTo(1506.5, within(0.1));
+        assertThat(r.rateOfSpreadMh()).isCloseTo(1504.7, within(0.1));
         assertThat(r.flameHeightM()).isCloseTo(14.73, within(0.05));
         assertThat(r.fbi()).isEqualTo(56);
         assertThat(r.rating()).isEqualTo("Extreme");

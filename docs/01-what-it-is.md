@@ -1,7 +1,8 @@
 # What it is
 
 Gully holds South Australia's Bureau stations and, for each, the ground it speaks for. This page is
-the mechanism as it stands; the decisions behind it are in [02-decisions.md](02-decisions.md).
+the mechanism as it stands; the decisions behind it are in [02-decisions.md](02-decisions.md), and every fire
+danger figure in one place - what it rests on, how it was checked - in [03-fire-danger.md](03-fire-danger.md).
 
 ## 1. The stations
 
@@ -276,6 +277,15 @@ operator watches is the flow a consumer gets, rate, access log and all. The Upst
 allowance table, the spend chart, the breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
 startup record. API keys issues and revokes keys with a scope. Admin (W-18, for testing) deletes every station,
 reading, window, day and terrain and starts again from the Bureau's file.
+
+**The AFDRS rating here** (W-38). Every reading carries `afdrs`: the fuel its land cover says the place carries -
+Digital Earth Australia's Landsat land cover, Collection 3, read once per ~200 m and kept in `land_cover` - and the
+index of that fuel's model: the forest's where natural woody cover is 15 % or more, the grassland's where grass, crop,
+pasture or grassy woodland grows; water and built-up land burn in no model; wetlands, orchards, vineyards and arid
+shrubland are AFDRS fuels this service does not model, and say so. Each forecast day carries the place's own worst hour
+(`pointFbiMax`), and the map can be coloured by it. The forest model was checked line by line against the official AFDRS
+code (`fdrs_calcs` 2024.6.0): the accumulation since fire unrounded, the canopy held at its steady state. See
+[03-fire-danger.md](03-fire-danger.md).
 
 **The wind change** (W-37). Every forecast carries the wind changes of its next forty-eight hours: at each hour the
 speed-weighted mean direction of the three hours before is set against that of the hour and the two after; a swing of

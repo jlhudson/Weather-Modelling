@@ -68,3 +68,4 @@ in `.env.example`.
 
 - [docs/01-what-it-is.md](docs/01-what-it-is.md) — the stations, the reach, the upstreams, the console
 - [docs/02-decisions.md](docs/02-decisions.md) — the decisions, one W-number each
+- [docs/03-fire-danger.md](docs/03-fire-danger.md) — every fire danger figure: what it rests on, how it was checked, what it cannot tell you

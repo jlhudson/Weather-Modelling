@@ -6,7 +6,8 @@ import java.time.LocalDateTime;
  * The AFDRS dry forest model (W-33): the Dry Eucalypt Forest Fire Model ("Vesta", Cheney et al. 2012) as the AFDRS
  * computes it, and the Fire Behaviour Index and rating drawn from it. Every equation and constant is from the
  * <em>AFDRS Fire Behaviour Index Technical Guide – Forest</em>, version 2024.6.0 (NSW RFS, June 2024), which documents
- * the official AFDRS code of that version; equation numbers below are the guide's. Pure arithmetic, no state.
+ * the official AFDRS code of that version; equation numbers below are the guide's. Checked line by line against that
+ * code, {@code fdrs_calcs.spread_models.dry_forest} 2024.6.0 (W-38). Pure arithmetic, no state.
  * <p>
  * <strong>The fuel.</strong> The model needs fuel hazard scores, heights, loads and the time since fire, which no weather
  * service observes. The AFDRS's own default table is not published openly; {@link Fuel#PROVISIONAL} is the dry forest
@@ -22,7 +23,8 @@ public final class DryForest {
     /**
      * The fuel a forest carries. Loads in t/ha, near-surface height in cm, elevated and overstorey heights in m.
      *
-     * @param k              the accumulation rate per year, every layer alike here
+     * @param k              the accumulation rate per year of the surface, near-surface, elevated and bark fuels and the
+     *                       near-surface height - the official code takes one per layer; the provisional set gives them alike
      * @param wrf            the wind reduction factor from 10 m to the fuel, 3 for forest
      * @param yearsSinceFire the time since the fuel last burnt
      */
@@ -77,10 +79,11 @@ public final class DryForest {
     }
 
     /**
-     * A quantity grown since the last fire (eq 1), {@code X(t) = Xmax (1 - e^(-k t))}, to the tenth.
+     * A quantity grown since the last fire (eq 1), {@code X(t) = Xmax (1 - e^(-k t))} - unrounded, as the official code
+     * computes it (the public reimplementation rounds to the tenth; the official does not).
      */
     static double accumulated(double max, double k, double years) {
-        return Math.round(max * (1 - Math.exp(-k * years)) * 10) / 10.0;
+        return max * (1 - Math.exp(-k * years));
     }
 
     /**
@@ -107,8 +110,9 @@ public final class DryForest {
 
     /**
      * The fuel that burns, t/ha: the surface (at most 10) and the near-surface always, the elevated fuel where the
-     * flames stand over a metre, half the overstorey where they reach two thirds of its height; each grown since the
-     * fire and times the availability.
+     * flames stand over a metre, half the overstorey where they reach two thirds of its height; each times the
+     * availability, and each but the overstorey grown since the fire - the official code holds the canopy at its steady
+     * state.
      */
     public static double fuelLoad(double flameHeightM, double availability, Fuel f) {
         double k = f.k(), t = f.yearsSinceFire();
@@ -117,7 +121,7 @@ public final class DryForest {
             load += accumulated(f.loadElevated(), k, t) * availability;
         }
         if (flameHeightM > 0.66 * f.heightOverstoreyM()) {
-            load += 0.5 * accumulated(f.loadOverstorey(), k, t) * availability;
+            load += 0.5 * f.loadOverstorey() * availability;
         }
         return load;
     }

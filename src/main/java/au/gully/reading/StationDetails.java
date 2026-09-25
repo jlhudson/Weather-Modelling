@@ -30,6 +30,7 @@ public class StationDetails {
     private final au.gully.bureau.Warnings warnings;
     private final au.gully.record.Record record;
     private final Rivers rivers;
+    private final au.gully.fuel.LandCover landCover;
 
     public Optional<Map<String, Object>> of(String id) {
         return stations.station(id).flatMap(s -> feed.detail(id).map(d -> {
@@ -48,7 +49,10 @@ public class StationDetails {
             d.put("warnings", Readings.warningsView(warnings.at(aacs, now), aacs, warnings.readAt()));
             String district = ban == null ? null : (String) ban.get("district");
             au.gully.record.Drought dry = droughts.of(s, now).orElse(null);
-            Forecasts.FireInputs in = new Forecasts.FireInputs(dry, dry == null ? null : s, district, district == null ? null : curing.of(district).orElse(null));
+            au.gully.fuel.LandCover.Cover cover = landCover.at(s.lat(), s.lon()).orElse(null);
+            d.put("fuel", au.gully.fuel.PointRating.fuel(cover));
+            Forecasts.FireInputs in = new Forecasts.FireInputs(dry, dry == null ? null : s, district, district == null ? null : curing.of(district).orElse(null),
+                    cover == null ? null : cover.fuel());
             au.gully.upstreams.Forecast f = forecasts.of(s, now, false).orElse(null);
             d.put("forecast", f == null ? null : Forecasts.view(f, s, 0.0, now, in));
             java.time.ZoneId zone = au.gully.record.Record.zoneOf(s);

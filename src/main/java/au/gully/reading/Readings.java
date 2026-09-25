@@ -71,6 +71,7 @@ public class Readings {
     private final au.gully.record.Record record;
     private final Rivers rivers;
     private final Snapshots snapshots;
+    private final au.gully.fuel.LandCover landCover;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -278,6 +279,9 @@ public class Readings {
             fire.put("grass", au.gully.cfs.Grass.block(district, cured, (Double) current.get("temperatureC"), rh == null ? null : (int) Math.round(rh),
                     (Double) current.get("windSpeedKmh"), now.atZone(java.time.ZoneId.of("Australia/Adelaide")).toLocalDate()));
         }
+        // The place's own AFDRS rating (W-38): the index of the fuel its land cover says it carries.
+        au.gully.fuel.LandCover.Cover cover = landCover.at(lat, lon).orElse(null);
+        out.put("afdrs", au.gully.fuel.PointRating.block(cover, forestOf(fire), grassOf(fire)));
         out.put("fire", fire);
         out.put("fireBan", ban);
         // The Bureau's warnings in force here (W-25): by the public district of the nearest Bureau station in reach, or the
@@ -301,7 +305,7 @@ public class Readings {
         Member dry = nearest != null && nearest.drought().isPresent() ? nearest
                 : members.stream().filter(m -> m.drought().isPresent()).findFirst().orElse(null);
         out.put("forecast", forecast == null ? null : Forecasts.view(forecast, nearest.station(), nearest.km(), now,
-                new Forecasts.FireInputs(dry == null ? null : dry.drought().get(), dry == null ? null : dry.station(), district, cured)));
+                new Forecasts.FireInputs(dry == null ? null : dry.drought().get(), dry == null ? null : dry.station(), district, cured, cover == null ? null : cover.fuel())));
         // Flood weather (W-26): the rain down at the forecast station, the rain coming, and the river at the point.
         if (nearest != null) {
             java.time.ZoneId zone = au.gully.record.Record.zoneOf(nearest.station());
@@ -469,6 +473,16 @@ public class Readings {
         m.put("model", "AFDRS dry forest (Cheney et al. 2012), as the AFDRS Fire Behaviour Index Technical Guide - Forest v2024.6.0 gives it");
         m.put("fuel", au.gully.fire.DryForest.Fuel.PROVISIONAL.basis());
         return m;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> forestOf(Map<String, Object> fire) {
+        return fire.get("forest") instanceof Map<?, ?> m ? (Map<String, Object>) m : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> grassOf(Map<String, Object> fire) {
+        return fire.get("grass") instanceof Map<?, ?> m ? (Map<String, Object>) m : null;
     }
 
     private static Map<String, Object> fire(Map<String, Object> current, Map<String, Object> drought) {
