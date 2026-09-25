@@ -47,6 +47,8 @@ services:
         condition: service_healthy
     environment:
       TZ: UTC
+      # prod on a server: refuses to start on a blank or default secret, and logs as JSON.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-weather}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-weather}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}

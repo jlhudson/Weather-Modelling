@@ -1,0 +1,7 @@
+# The production profile: SPRING_PROFILES_ACTIVE=prod in the deployment's .env. Only what differs
+# from a development run lives here; every machine-specific value is still an environment variable.
+# ProductionGuard refuses to start while a secret is blank or left at its default.
+logging:
+  structured:
+    format:
+      console: ecs
