@@ -72,6 +72,40 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # The nightly backup (docker/backup, as Operations'): pg_dump at BACKUP_AT, kept BACKUP_KEEP_DAYS on
+  # the weather-backups volume, copied off the box when BACKUP_RCLONE_REMOTE names an rclone remote
+  # (Cloudflare R2 or S3 through the RCLONE_CONFIG_R2_* lines), and restored into a scratch database
+  # on the first of each month to prove it restores. `docker logs weather-backup` says how each run went.
+  backup:
+    build: docker/backup
+    image: weather-backup
+    pull_policy: build
+    container_name: weather-backup
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: UTC
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-weather}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      PGDATABASE: ${POSTGRES_DB:-weather}
+      BACKUP_NAME: weather
+      BACKUP_AT: ${BACKUP_AT:-03:00}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_RUN_NOW: ${BACKUP_RUN_NOW:-1}
+      BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}
+      RCLONE_CONFIG_R2_TYPE: ${RCLONE_CONFIG_R2_TYPE:-}
+      RCLONE_CONFIG_R2_PROVIDER: ${RCLONE_CONFIG_R2_PROVIDER:-}
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${RCLONE_CONFIG_R2_SECRET_ACCESS_KEY:-}
+      RCLONE_CONFIG_R2_ENDPOINT: ${RCLONE_CONFIG_R2_ENDPOINT:-}
+      RCLONE_CONFIG_R2_ACL: private
+    volumes:
+      - weather-backups:/backups
+    restart: unless-stopped
+
   # The edge: the connector dials out to Cloudflare over QUIC and forwards to the application on this
   # network. Which hostname reaches it is set on the tunnel in the Cloudflare dashboard: one published
   # application route, type HTTP, URL app:8082, path empty (.env.example).
@@ -91,3 +125,4 @@ services:
 
 volumes:
   weather-pgdata:
+  weather-backups:
