@@ -47,7 +47,7 @@ public class FireBan {
     /**
      * A district's name as the ratings feed writes it (the shapes file shouts it), or in title case.
      */
-    String name(String raw) {
+    public String name(String raw) {
         return ratings.of(raw).map(FireRatings.DistrictRating::district).orElseGet(() -> titleCase(raw));
     }
 

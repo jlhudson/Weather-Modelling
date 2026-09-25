@@ -433,7 +433,7 @@ class EndToEndTest {
             }
         }
         for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&inlandPct=15",
-                "/console/upstreams/spend.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+                "/console/upstreams/spend.json", "/console/map/outlook.json", "/console/map/warnings.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }

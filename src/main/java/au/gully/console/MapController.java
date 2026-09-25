@@ -46,6 +46,7 @@ public class MapController {
     private final au.gully.reading.StationDetails details;
     private final au.gully.cfs.FireBan fireBan;
     private final au.gully.bureau.Warnings warnings;
+    private final au.gully.reading.OutlookMap outlook;
 
     @GetMapping
     public String page(Model model) {
@@ -63,6 +64,15 @@ public class MapController {
         // The map asks through the API with the console's own key (W-14), so a click is an ask from outside.
         model.addAttribute("apiKey", consoleKey.current());
         return "map";
+    }
+
+    /**
+     * Every station's worst forecast hour for three days (W-31); forecasts missing or old are fetched behind it.
+     */
+    @GetMapping(value = "/outlook.json", produces = "application/json")
+    @ResponseBody
+    public Map<String, Object> outlook() {
+        return outlook.view(Instant.now());
     }
 
     @GetMapping(value = "/warnings.json", produces = "application/json")

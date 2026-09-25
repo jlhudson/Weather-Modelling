@@ -28,7 +28,11 @@
         {id: 'kbdiMm', name: 'KBDI', hint: 'soil moisture deficit', unit: 'mm', icon: 'drought', range: [0, 203], always: true},
         {id: 'droughtFactor', name: 'Drought factor', hint: '0 to 10', icon: 'drought', range: [0, 10], always: true, d: 1},
         {id: 'heightM', name: 'Height', hint: 'of the station', unit: 'm', icon: 'elevation', range: [0, 800], always: true},
-        {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true}
+        {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true},
+        // The fire outlook (W-31): each station's worst forecast hour of the forest index, today and the next two days.
+        {id: 'outlook0', name: 'FFDI today', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 0},
+        {id: 'outlook1', name: 'FFDI tomorrow', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 1},
+        {id: 'outlook2', name: 'FFDI day 3', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 2}
     ];
     var NONE = '#6b7280', SEA = '#0ea5e9', MODEL = '#f59e0b';
     // A diamond of a size in pixels at a place, as a polygon in the map's own units: it keeps its size across zoom.
@@ -65,8 +69,10 @@
     // The fire ban districts under everything else (W-23).
     map.createPane('districts').style.zIndex = 330;
     var districtLayer = L.layerGroup().addTo(map), lastDistricts = null;
+    // The warnings over the districts and the stations (W-30).
+    var warnLayer = L.layerGroup().addTo(map), lastWarnings = [];
     var state = {id: 'temperatureC', selected: null, probe: null, bin: null};
-    var togs = {labels: true, reach: true, all: false, districts: false};
+    var togs = {labels: true, reach: true, all: false, districts: false, warnings: true};
     var lastStations = null, lastReach = null;
     var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
 
@@ -78,6 +84,10 @@
     // apart, so a quiet Bureau leaves the map saying what it last heard rather than nothing.
     function valueOf(p, v) {
         v = v || current();
+        if (v.outlook != null) {
+            var o = lastOutlook && lastOutlook.stations[p.id], d = o && o.days[v.outlook];
+            return d && d.ffdiMax != null ? d.ffdiMax : null;
+        }
         var x = p[v.id];
         return x == null ? null : x;
     }
@@ -103,7 +113,7 @@
             b.className = 'chip' + (x.id === state.id ? ' on' : '');
             b.innerHTML = icon(x.icon) + '<span>' + esc(x.name) + (x.hint ? '<small>' + esc(x.hint) + '</small>' : '') + '</span>';
             b.title = x.name + (x.unit ? ' in ' + x.unit : '');
-            b.addEventListener('click', function () { state.id = x.id; state.bin = null; buildSide(); stations(); legend(); if (togs.all) drawReach(); });
+            b.addEventListener('click', function () { state.id = x.id; state.bin = null; buildSide(); stations(); legend(); if (togs.all) drawReach(); if (x.outlook != null) loadOutlook(); });
             chips.appendChild(b);
         });
         Object.keys(togs).forEach(function (k) { var b = document.querySelector('.tog[data-tog=' + k + ']'); if (b) b.classList.toggle('on', togs[k]); });
@@ -133,7 +143,8 @@
         var v = current(), props = legendProps();
         var vals = props.map(function (p) { return valueOf(p, v); }).filter(function (x) { return x != null; });
         var staleVals = props.filter(function (p) { return stale(p, v); }).map(function (p) { return valueOf(p, v); });
-        $('legendTitle').textContent = v.name + (v.unit ? ' · ' + v.unit : '');
+        var outlookDate = v.outlook != null && lastOutlook && lastOutlook.dates ? lastOutlook.dates[v.outlook] : null;
+        $('legendTitle').textContent = v.name + (v.unit ? ' · ' + v.unit : '') + (outlookDate ? ' · ' + outlookDate : '');
         $('legendCount').textContent = vals.length + ' of ' + props.length + (inView ? ' in view' : ' stations') + (staleVals.length ? ' 00b7 ' + staleVals.length + ' stale' : '');
         var lo = v.range[0], hi = v.range[1];
         var mean = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
@@ -195,6 +206,19 @@
         $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '"><div class="v">' + esc(x.v) + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
     }
 
+    // ---- the fire outlook on the map (W-31): what is held at once, the rest as it is fetched
+    var lastOutlook = null, outlookTimer = null;
+    function loadOutlook() {
+        clearTimeout(outlookTimer);
+        fetch('/console/map/outlook.json').then(json).then(function (o) {
+            lastOutlook = o;
+            if (current().outlook != null) {
+                stations(); legend(); if (togs.all) drawReach();
+                if (o.pending && !document.hidden) { note(o.pending + ' forecasts being fetched'); outlookTimer = setTimeout(loadOutlook, 5000); }
+            }
+        }).catch(function (e) { note('outlook failed: ' + e); });
+    }
+
     // ---- the stations
     // Loads race (the minute's timer, a new point, read now): only the newest answer is drawn.
     var loadSeq = 0;
@@ -207,6 +231,7 @@
             legend();
             tiles();
             staleNote();
+            drawWarnings();
             if (togs.all) drawReach();
         }).catch(function (e) { note('stations failed: ' + e); });
     }
@@ -221,7 +246,13 @@
     function tip(p) {
         return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours, from the model' : '') + (p.from === 'model' && p.kind !== 'point' ? ' · the model\x27s now: the Bureau\x27s last ' + (p.bureauAt ? ago(p.bureauAt) : 'never') : '') + (p.heightM != null ? ' · ' + Math.round(p.heightM) + ' m' : '') + '</span><br>'
             + (p.fresh ? esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) + (p.pressureMslHpa != null ? ' · ' + fmt(p.pressureMslHpa, 1) + ' hPa' : '') + (p.rainSince9amMm != null ? ' · ' + p.rainSince9amMm + ' mm since 9 am' : '') + windTrend(p) + '<br><span class="muted">' + when(p.at) + '</span>'
-                : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) + (p.temperatureC != null ? ': ' + esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) : '') : 'nothing reported yet') + '</span>');
+                : '<span class="muted">' + (p.at ? 'last reported ' + ago(p.at) + (p.temperatureC != null ? ': ' + esc(fmt(p.temperatureC, 1)) + ' °C · ' + esc(fmt(p.humidityPct)) + ' % · ' + windWords(p.windDirectionDeg, p.windSpeedKmh, p.windGustKmh) : '') : 'nothing reported yet') + '</span>') + outlookTip(p);
+    }
+    // The fire outlook in a station's tooltip, when the map has it (W-31).
+    function outlookTip(p) {
+        var o = lastOutlook && lastOutlook.stations[p.id];
+        if (!o) return '';
+        return '<br><span class="muted">FFDI peak: ' + o.days.map(function (d, i) { return ['today', 'tomorrow', 'day 3'][i] + ' ' + fmt(d.ffdiMax, 0) + (d.peakAt ? ' at ' + clock(d.peakAt) : ''); }).join(' · ') + (o.stale ? ' (being refreshed)' : '') + '</span>';
     }
     function stations() {
         stationLayer.clearLayers();
@@ -542,6 +573,33 @@
             return {color: c, weight: 1.5, opacity: .8, fillColor: c, fillOpacity: t && t.rating !== 'No Rating' ? .12 : .02, dashArray: t ? null : '4 4'};
         }, onEachFeature: function (f, l) { l.bindTooltip(function () { return districtTip(f.properties); }, {sticky: true, className: 'hx-tip'}); }}).addTo(districtLayer);
     }
+    // The warnings on the map (W-30): a fire weather warning names a fire weather district, which is a CFS district by its
+    // code, so the district is shaded; a warning for a public forecast district - whose shapes the Bureau does not publish
+    // openly - rings the stations in it.
+    function drawWarnings() {
+        warnLayer.clearLayers();
+        if (!togs.warnings || !lastWarnings.length) return;
+        var byAac = {};
+        lastWarnings.forEach(function (w) { (w.areas || []).forEach(function (a) { (byAac[a.aac] = byAac[a.aac] || []).push(w); }); });
+        var wantsShapes = Object.keys(byAac).some(function (a) { return a.indexOf('_FW') > 0; });
+        if (wantsShapes && !lastDistricts) {
+            fetch('/console/map/districts.geojson').then(json).then(function (fc) { lastDistricts = fc; drawWarnings(); }).catch(function () { });
+        }
+        if (lastDistricts) {
+            L.geoJSON(lastDistricts, {pane: 'districts', filter: function (f) { return !!byAac[f.properties.aac]; }, style: function (f) {
+                var c = WARN_COLOURS[byAac[f.properties.aac][0].kind] || NONE;
+                return {color: c, weight: 3, opacity: .95, fillColor: c, fillOpacity: .2, dashArray: '8 5'};
+            }, onEachFeature: function (f, l) { l.bindTooltip(function () { return '<b>' + esc(f.properties.district) + '</b><br>' + byAac[f.properties.aac].map(function (w) { return esc(w.title); }).join('<br>'); }, {sticky: true, className: 'hx-tip'}); }}).addTo(warnLayer);
+        }
+        if (lastStations) {
+            var r = Math.max(2.5, Math.min(5, map.getZoom() * .6));
+            lastStations.features.forEach(function (f) {
+                var ws = byAac[f.properties.district];
+                if (!ws) return;
+                L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {renderer: canvas, radius: r * 2.6, color: WARN_COLOURS[ws[0].kind] || NONE, weight: 2.2, opacity: .95, fill: false, dashArray: '3 3', interactive: false}).addTo(warnLayer);
+            });
+        }
+    }
     function districtTip(p) {
         var t = p.today;
         return '<b>' + esc(p.district) + '</b> <span class="muted">fire ban district ' + esc(p.number) + '</span><br>'
@@ -563,6 +621,8 @@
     }
     function warnBanner() {
         fetch('/console/map/warnings.json').then(json).then(function (o) {
+            lastWarnings = o.warnings || [];
+            drawWarnings();
             var el = $('warnBanner'), n = (o.warnings || []).length;
             el.classList.toggle('hidden', n === 0);
             el.innerHTML = n ? '<b>' + n + ' warning' + (n === 1 ? '' : 's') + ' in force</b> ' + o.warnings.map(function (x) { return '<span class="warn-pill" style="--r:' + (WARN_COLOURS[x.kind] || NONE) + '">' + esc(x.title) + '</span>'; }).join(' ') : '';
@@ -765,7 +825,7 @@
 
     // ---- wiring
     document.querySelectorAll('.tog[data-tog]').forEach(function (b) {
-        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else if (k === 'districts') drawDistricts(); else drawReach(); });
+        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else if (k === 'districts') drawDistricts(); else if (k === 'warnings') drawWarnings(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
     ['reachKm', 'inlandPct', 'kmPer100m', 'descentShare'].forEach(function (id) {

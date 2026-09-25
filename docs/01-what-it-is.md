@@ -277,6 +277,13 @@ allowance table, the spend chart, the breaker history, the Bureau's file and the
 startup record. API keys issues and revokes keys with a scope. Admin (W-18, for testing) deletes every station,
 reading, window, day and terrain and starts again from the Bureau's file.
 
+**Warnings and the fire outlook on the map** (W-30, W-31). A fire weather warning shades and outlines its fire
+ban district - the CFS's feed gives each district its Bureau fire weather code - and a warning for a public forecast
+district, whose shapes the Bureau does not publish openly, rings the stations in it; both on the Warnings toggle,
+on by default. Colour by *FFDI today*, *tomorrow* or *day 3* colours every station by its forecast's worst hour of
+the forest index that day: what is held shows at once, and any station whose forecast is missing or older than
+three hours is fetched behind it, four at a time, while someone is looking - about three units a station.
+
 **A quiet Bureau on the map** (W-28). A station that has not reported inside seventy minutes still shows what it
 last said, faded and dashed, its label greyed; the histogram counts it, its share of a bar shaded apart, and the
 count says how many are stale. While the Bureau's file has not changed for over seventy minutes the side panel says

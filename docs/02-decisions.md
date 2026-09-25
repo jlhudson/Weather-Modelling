@@ -520,3 +520,15 @@ has not changed. The API gains `/api/v1/upstreams`, `…/{id}/spend` and `…/{i
 showed the last reading - was the only place it could be found. What a station last said, faded and dated, is
 information; nothing is not. The usage routes are what a consumer's usage page reads, over the same ledger.
 — James, 25 September 2026.
+
+### W-30, W-31 · Warnings on the map; the fire outlook as a colour
+
+**The decision.** A fire weather warning shades its CFS fire ban district (the district's Bureau code from the
+CFS feed); a public-district warning rings the stations in that district, since the Bureau does not publish those
+districts' shapes openly. The map can be coloured by each station's forecast peak FFDI for today, tomorrow and the
+day after; choosing it fetches the forecasts missing or older than three hours in the background, four at a time,
+and the map fills in as they come.
+
+**Why.** James asked for both. The outlook colour is an ask for every station's forecast - under 250 units - made
+only while someone is looking, which keeps W-15's rule that nothing is fetched on a clock.
+— James, 25 September 2026.
