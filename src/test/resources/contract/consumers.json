@@ -1,0 +1,25 @@
+{
+  "readMe": "The fields the other applications read off this service, by answer. A path is a key that must be present (its value may be null); a[] is every element of the list a. The Hub passes the reading through untouched, so its readers and IncidentWatch's pages read these names directly: renaming or removing one breaks them. Change them together - IncidentWatch's iw-incidents.js, iw-outages.js and agency.html; the Hub's WeatherPanel, FireBuddyPackage, MetricsManager, WeatherManager and layer-renderers.js - then this file.",
+  "reading": [
+    "at", "from", "point", "stations",
+    "current.at", "current.temperatureC", "current.apparentTemperatureC", "current.humidityPct",
+    "current.windSpeedKmh", "current.windGustKmh", "current.windDirectionDeg", "current.pressureMslHpa",
+    "drought", "fire", "fire.ffdi", "fire.ffdiRating", "forecast"
+  ],
+  "forecast": [
+    "upstream", "model", "fetchedAt", "station",
+    "hourly[].at", "hourly[].temperatureC", "hourly[].humidityPct", "hourly[].windSpeedKmh",
+    "hourly[].windDirectionDeg", "hourly[].windGustKmh", "hourly[].precipitationMm", "hourly[].condition",
+    "daily[].date", "daily[].condition", "daily[].minTemperatureC", "daily[].maxTemperatureC", "daily[].minHumidityPct",
+    "daily[].maxWindKmh", "daily[].maxGustKmh", "daily[].precipitationMm", "daily[].precipitationProbabilityPct"
+  ],
+  "stations.geojson": [
+    "features[].properties.id", "features[].properties.name", "features[].properties.at", "features[].properties.ageMinutes",
+    "features[].properties.fresh", "features[].properties.temperatureC", "features[].properties.humidityPct",
+    "features[].properties.windSpeedKmh", "features[].properties.windDirection", "features[].properties.windGustKmh",
+    "features[].properties.rainSince9amMm", "features[].properties.droughtFactor"
+  ],
+  "reach.geojson": [
+    "features[].properties.name", "features[].properties.reachKm", "features[].properties.areaKm2"
+  ]
+}

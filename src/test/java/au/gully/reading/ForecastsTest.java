@@ -36,6 +36,8 @@ class ForecastsTest {
         Map<String, Object> v = Forecasts.view(f, ADELAIDE, 3.2, now);
         List<Map<String, Object>> hours = (List<Map<String, Object>>) v.get("hourly");
         assertThat(hours).hasSize(Forecasts.HOURS);
+        // Every field the Hub and IncidentWatch read off a forecast is there (contract/consumers.json).
+        assertThat(au.gully.ConsumerContract.missing(v, "forecast")).isEmpty();
         assertThat(hours.getFirst()).containsEntry("at", "2026-09-23T02:00:00Z").containsEntry("temperatureC", 21.0);
         assertThat(hours.getLast()).containsEntry("at", "2026-09-23T13:00:00Z");
         List<Map<String, Object>> days = (List<Map<String, Object>>) v.get("daily");

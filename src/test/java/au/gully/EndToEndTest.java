@@ -122,6 +122,7 @@ class EndToEndTest {
         ResponseEntity<Map> r = client().get().uri("/api/v1/stations.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(r.getBody()).containsEntry("type", "FeatureCollection").containsEntry("stations", 3);
+        assertThat(ConsumerContract.missing(r.getBody(), "stations.geojson")).isEmpty();
         assertThat(r.getHeaders().getFirst(HttpHeaders.ETAG)).as("fingerprinted").isNotNull();
 
         ResponseEntity<Map> one = client().get().uri("/api/v1/stations/023000").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
@@ -165,6 +166,7 @@ class EndToEndTest {
         plantFlatTerrain("023000", -34.9257, 138.5832, 29);
         ResponseEntity<Map> one = client().get().uri("/api/v1/reach.geojson").header("X-Api-Key", HUB_KEY).retrieve().toEntity(Map.class);
         assertThat(one.getBody()).containsEntry("sampled", 1);
+        assertThat(ConsumerContract.missing(one.getBody(), "reach.geojson")).isEmpty();
         List<Map<String, Object>> features = (List<Map<String, Object>>) one.getBody().get("features");
         Map<String, Object> props = (Map<String, Object>) features.getFirst().get("properties");
         assertThat(props).containsEntry("id", "023000").containsEntry("minKm", ReachRule.DEFAULT_KM).containsEntry("maxKm", ReachRule.DEFAULT_KM).containsEntry("reachKm", ReachRule.DEFAULT_KM).containsKey("inlandKm");
@@ -316,6 +318,8 @@ class EndToEndTest {
 
         double[] north = au.gully.reach.Geo.destination(-34.9257, 138.5832, 0, 10);
         Map<String, Object> r = client().get().uri("/api/v1/reading?lat=" + north[0] + "&lon=" + north[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        // Every field the Hub and IncidentWatch read off a reading is there (contract/consumers.json).
+        assertThat(ConsumerContract.missing(r, "reading")).isEmpty();
         assertThat(r).containsEntry("from", "stations").containsKey("forecast").containsEntry("modelNow", List.of());
         Map<String, Object> current = (Map<String, Object>) r.get("current");
         // Adelaide says 15.0 at 29 m; the point's height is unknown (no tiles in the test), so no lapse correction.
