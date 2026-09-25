@@ -96,6 +96,8 @@ public class OutlookMap {
             one.put("fetchedAt", v.get("fetchedAt"));
             one.put("stale", old);
             one.put("days", days);
+            List<?> changes = (List<?>) v.get("windChanges");
+            one.put("windChange", changes == null || changes.isEmpty() ? null : changes.getFirst());
             byStation.put(s.id(), one);
         }
         Map<String, Object> out = new LinkedHashMap<>();

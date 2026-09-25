@@ -546,3 +546,15 @@ table is not - it sits in the official code package, which was not downloaded - 
 dry forest set stands in, in one place, until that table can be read. A point's actual fuel type needs a fuel map;
 until then this is the forest answer for the weather, as the FFDI has always been.
 — James, 25 September 2026.
+
+### W-37 · The wind change
+
+**The decision.** The forecast finds its wind changes: a swing of 45° or more between the three hours before and the
+hour with the two after, with 15 km/h or more after it, placed at the hour it is cleanest; called a cool change where
+it cools 3 °C or more into the south or west. Every reading and station carries them; the map colours stations by the
+hours until the next.
+
+**Why.** James asked for it first: the most dangerous hour on a fire ground is usually the change, and the hourly
+wind was already held. A vector mean alone cannot place a full reversal - it swings 180° an hour early as much as on
+the hour - so the hour is the one where the hours either side agree with their own side.
+— James, 25 September 2026.

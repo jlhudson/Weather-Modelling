@@ -32,7 +32,9 @@
         // The fire outlook (W-31): each station's worst forecast hour of the forest index, today and the next two days.
         {id: 'outlook0', name: 'FFDI today', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 0},
         {id: 'outlook1', name: 'FFDI tomorrow', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 1},
-        {id: 'outlook2', name: 'FFDI day 3', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 2}
+        {id: 'outlook2', name: 'FFDI day 3', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 2},
+        // The wind change (W-37): hours until each station's next change in the forecast, soonest reddest; grey is none in 48 hours.
+        {id: 'windChange', name: 'Wind change', hint: 'hours until the next', unit: 'h', icon: 'wind', range: [0, 48], reverse: true, always: true, change: true}
     ];
     var NONE = '#6b7280', SEA = '#0ea5e9', MODEL = '#f59e0b';
     // A diamond of a size in pixels at a place, as a polygon in the map's own units: it keeps its size across zoom.
@@ -84,6 +86,10 @@
     // apart, so a quiet Bureau leaves the map saying what it last heard rather than nothing.
     function valueOf(p, v) {
         v = v || current();
+        if (v.change) {
+            var w = lastOutlook && lastOutlook.stations[p.id] && lastOutlook.stations[p.id].windChange;
+            return w ? w.hoursAway : null;
+        }
         if (v.outlook != null) {
             var o = lastOutlook && lastOutlook.stations[p.id], d = o && o.days[v.outlook];
             return d && d.ffdiMax != null ? d.ffdiMax : null;
@@ -113,7 +119,7 @@
             b.className = 'chip' + (x.id === state.id ? ' on' : '');
             b.innerHTML = icon(x.icon) + '<span>' + esc(x.name) + (x.hint ? '<small>' + esc(x.hint) + '</small>' : '') + '</span>';
             b.title = x.name + (x.unit ? ' in ' + x.unit : '');
-            b.addEventListener('click', function () { state.id = x.id; state.bin = null; buildSide(); stations(); legend(); if (togs.all) drawReach(); if (x.outlook != null) loadOutlook(); });
+            b.addEventListener('click', function () { state.id = x.id; state.bin = null; buildSide(); stations(); legend(); if (togs.all) drawReach(); if (x.outlook != null || x.change) loadOutlook(); });
             chips.appendChild(b);
         });
         Object.keys(togs).forEach(function (k) { var b = document.querySelector('.tog[data-tog=' + k + ']'); if (b) b.classList.toggle('on', togs[k]); });
@@ -212,7 +218,7 @@
         clearTimeout(outlookTimer);
         fetch('/console/map/outlook.json').then(json).then(function (o) {
             lastOutlook = o;
-            if (current().outlook != null) {
+            if (current().outlook != null || current().change) {
                 stations(); legend(); if (togs.all) drawReach();
                 if (o.pending && !document.hidden) { note(o.pending + ' forecasts being fetched'); outlookTimer = setTimeout(loadOutlook, 5000); }
             }
@@ -252,7 +258,8 @@
     function outlookTip(p) {
         var o = lastOutlook && lastOutlook.stations[p.id];
         if (!o) return '';
-        return '<br><span class="muted">FFDI peak: ' + o.days.map(function (d, i) { return ['today', 'tomorrow', 'day 3'][i] + ' ' + fmt(d.ffdiMax, 0) + (d.peakAt ? ' at ' + clock(d.peakAt) : ''); }).join(' · ') + (o.stale ? ' (being refreshed)' : '') + '</span>';
+        var wc = o.windChange ? '<br><b>' + esc(o.windChange.kind) + '</b> in ' + fmt(o.windChange.hoursAway, 1) + ' h at ' + clock(o.windChange.at) + ': ' + dirWord(o.windChange.fromDeg) + ' → ' + dirWord(o.windChange.toDeg) + ', ' + fmt(o.windChange.speedAfterKmh, 0) + ' km/h' + (o.windChange.gustAfterKmh != null ? ' gust ' + fmt(o.windChange.gustAfterKmh, 0) : '') + (o.windChange.coolsC != null ? ', ' + fmt(o.windChange.coolsC, 1) + ' °C cooler' : '') : '';
+        return wc + '<br><span class="muted">FFDI peak: ' + o.days.map(function (d, i) { return ['today', 'tomorrow', 'day 3'][i] + ' ' + fmt(d.ffdiMax, 0) + (d.peakAt ? ' at ' + clock(d.peakAt) : ''); }).join(' · ') + (o.stale ? ' (being refreshed)' : '') + '</span>';
     }
     function stations() {
         stationLayer.clearLayers();
@@ -697,6 +704,10 @@
         var st = fc.station || {};
         html += '<p class="muted mb-1">For ' + esc(st.name || st.id) + (st.km ? ', ' + fmt(st.km, 1) + ' km away' : '') + ' · ' + esc(fc.upstream) + ' · fetched ' + esc(ago(fc.fetchedAt))
             + (fc.stale ? ' · <span class="model-tag">old</span> the upstreams could not refresh it' : ' · fetched again after 3 hours') + '</p>';
+        (fc.windChanges || []).forEach(function (c) {
+            html += '<div class="warn" style="--r:' + (c.kind === 'cool change' ? '#0ea5e9' : '#eab308') + '"><b>' + esc(c.kind) + ' in ' + fmt(c.hoursAway, 1) + ' h</b>, ' + esc(when(c.at)) + ': ' + dirWord(c.fromDeg) + ' ' + fmt(c.speedBeforeKmh, 0) + ' → ' + dirWord(c.toDeg) + ' ' + fmt(c.speedAfterKmh, 0) + ' km/h'
+                + (c.gustAfterKmh != null ? ', gusts ' + fmt(c.gustAfterKmh, 0) : '') + (c.coolsC != null ? ', ' + (c.coolsC >= 0 ? fmt(c.coolsC, 1) + ' °C cooler' : fmt(-c.coolsC, 1) + ' °C warmer') : '') + ' <span class="muted">(a ' + c.swingDeg + '° swing)</span></div>';
+        });
         if (fc.hourly && fc.hourly.length) {
             html += '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="McArthur forest fire danger index, from the hour\x27s own values and the day\x27s drought factor">FFDI</th><th class="num" title="McArthur\x27s grassland index and the AFDRS grass Fire Behaviour Index, on the district\x27s curing">grass</th><th class="num" title="the AFDRS dry forest Fire Behaviour Index, on provisional long-unburnt fuel">forest</th><th>sky</th></tr></thead><tbody>';
             fc.hourly.forEach(function (h) {

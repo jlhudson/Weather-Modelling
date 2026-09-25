@@ -234,6 +234,24 @@ public class Forecasts {
     }
 
     /**
+     * One wind change as an answer carries it.
+     */
+    static Map<String, Object> change(au.gully.fire.WindChange.Change c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("at", c.at().toString());
+        m.put("hoursAway", c.hoursAway());
+        m.put("kind", c.cool() ? "cool change" : "wind change");
+        m.put("fromDeg", c.fromDeg());
+        m.put("toDeg", c.toDeg());
+        m.put("swingDeg", c.swingDeg());
+        m.put("speedBeforeKmh", c.speedBeforeKmh());
+        m.put("speedAfterKmh", c.speedAfterKmh());
+        m.put("gustAfterKmh", c.gustAfterKmh());
+        m.put("coolsC", c.coolsC());
+        return m;
+    }
+
+    /**
      * A day's fire block: its worst hour and the values of that hour, and the drought it was drawn with.
      */
     static Map<String, Object> fire(Outlook.Day d) {
@@ -369,6 +387,8 @@ public class Forecasts {
         basis.put("district", in.district());
         basis.put("curing", in.curing() == null ? null : au.gully.cfs.Grass.block(in.district(), in.curing(), null, null, null, todayLocal));
         out.put("fireFrom", basis);
+        // The wind changes in the next two days (W-37): the hour, the swing, and whether it cools.
+        out.put("windChanges", au.gully.fire.WindChange.find(f.hourly(), now).stream().map(Forecasts::change).toList());
         return out;
     }
 }

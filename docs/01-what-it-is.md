@@ -277,6 +277,14 @@ allowance table, the spend chart, the breaker history, the Bureau's file and the
 startup record. API keys issues and revokes keys with a scope. Admin (W-18, for testing) deletes every station,
 reading, window, day and terrain and starts again from the Bureau's file.
 
+**The wind change** (W-37). Every forecast carries the wind changes of its next forty-eight hours: at each hour the
+speed-weighted mean direction of the three hours before is set against that of the hour and the two after; a swing of
+45° or more with 15 km/h or more behind it is a change, and of a run of hours that qualify the change's hour is the one
+where the hours after have all come round and those before have not begun to. It is a *cool change* where the air after
+is 3 °C or more cooler and the wind comes into the south or west - the south-westerly change that turns a flank into a
+head fire. Each gives the hour, the swing from and to, the speeds either side, the gust after and how much it cools.
+The map can be coloured by the hours until each station's next change.
+
 **The AFDRS forest index** (W-33). Every reading and every forecast hour carries the AFDRS dry forest Fire
 Behaviour Index and rating - the Dry Eucalypt Forest Fire Model (Cheney et al. 2012) exactly as the AFDRS Fire
 Behaviour Index Technical Guide - Forest v2024.6.0 gives it: dead fuel moisture by the hour and the season, fuel

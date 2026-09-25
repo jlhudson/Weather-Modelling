@@ -53,6 +53,7 @@ class ForecastsTest {
         assertThat(fh.getFirst()).containsKey("ffdi").containsKey("gfdi").containsKey("fbi").containsKey("forestFbi").containsKey("forestRating");
         Map<String, Object> today = (Map<String, Object>) ((List<Map<String, Object>>) fire.get("daily")).getFirst().get("fire");
         assertThat(today).containsKeys("ffdiMax", "gfdiMax", "fbiMax", "afdrsRating", "forestFbiMax", "forestRating");
+        assertThat(fire).containsKey("windChanges");
         assertThat((Map<String, Object>) fire.get("fireFrom")).containsEntry("station", "023000").containsEntry("district", "Adelaide Metropolitan");
         // Three hours on, it is old: an ask fetches it again.
         assertThat(Forecasts.view(f, ADELAIDE, 3.2, fetched.plus(Forecasts.LIFE))).containsEntry("stale", true);
