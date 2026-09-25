@@ -511,7 +511,7 @@
                 + tile(fmt(d.droughtFactor, 1) + '<small>of 10' + (d.complete === false ? ' · spin-up short' : '') + '</small>', 'drought factor', d.from, 'drought')
                 + tile(f.ffdi != null ? fmt(f.ffdi, 0) + '<small>' + esc(String(f.ffdiRating).toLowerCase()) + '</small>' : '—', 'FFDI', f.ffdi != null ? null : Object.keys(f.inputs).filter(function (k) { return !f.inputs[k]; }), 'fire')
                 + grassTiles(f.grass)
-                + (f.forest ? tile(fmt(f.forest.fbi, 0) + '<small>' + esc(f.forest.rating) + ' 00b7 ' + fmt(f.forest.rateOfSpreadKmh, 1) + ' km/h</small>', 'forest FBI (AFDRS)', ['provisional fuel'], 'fire') : '')
+                + (f.forest ? tile(fmt(f.forest.fbi, 0) + '<small>' + esc(f.forest.rating) + ' 00b7 ' + fmt(f.forest.rateOfSpreadKmh, 2) + ' km/h</small>', 'forest FBI (AFDRS)', ['provisional fuel'], 'fire') : '')
                 + tile(c.dewPointC != null ? fmt(c.dewPointC, 1) + ' °C' : '—', 'dew point', c.from.dewPointC, 'ground')
                 + '</div>';
             html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';

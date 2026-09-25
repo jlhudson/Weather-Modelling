@@ -462,7 +462,7 @@ public class Readings {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("fbi", r.fbi());
         m.put("rating", r.rating());
-        m.put("rateOfSpreadKmh", Math.round(r.rateOfSpreadMh() / 100) / 10.0);
+        m.put("rateOfSpreadKmh", Math.round(r.rateOfSpreadMh() / 10) / 100.0);
         m.put("flameHeightM", r.flameHeightM());
         m.put("intensityKwm", r.intensityKwm());
         m.put("moisturePct", r.moisturePct());
