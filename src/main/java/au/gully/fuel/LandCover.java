@@ -33,8 +33,6 @@ public class LandCover {
     public static final String ID = "dea-landcover";
     public static final String LAYER = "ga_ls_landcover_c3";
     public static final double CELL_DEG = 0.002;
-    /** The level 3 class that is water. */
-    public static final int WATER = 220;
     public static final Duration RETRY = Duration.ofMinutes(10);
 
     private final JdbcClient db;
@@ -59,6 +57,10 @@ public class LandCover {
 
         public Fuel.Kind fuel() {
             return Fuel.of(level3, label);
+        }
+
+        public boolean water() {
+            return level3 != null && level3 == Fuel.WATER;
         }
     }
 

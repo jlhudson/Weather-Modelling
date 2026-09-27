@@ -282,7 +282,7 @@ no units. What each takes, costs and has been found to do is in [04-sources-and-
 
 One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
 where it is, filled when it is reporting and hollow when it is not, coloured by what it last said
-and rimmed in the theme's ink so every colour stands off the tiles (W-43) - except by *Age*, where
+and, filled, rimmed in the theme's ink so every colour stands off the tiles (W-43) - except by *Age*, where
 every station is filled, its age being the point; from zoom 8 its value sits just above it;
 a click opens everything held for it. The legend under the side panel is the colour's scale with
 the stations' distribution on it as bars, over the stations in view or every one held (W-17); hover

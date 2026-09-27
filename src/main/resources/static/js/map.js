@@ -81,10 +81,16 @@
     var state = {id: 'temperatureC', selected: null, probe: null, bin: null};
     var togs = {labels: true, reach: true, all: false, districts: false, warnings: true};
     var lastStations = null, lastReach = null;
-    var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
-    // The ink every dot is outlined in (W-43): the theme's text colour - light on the dark map, dark on the light - so a dot
-    // stands off the tiles whatever colour it is, the ramp's dark ends on the dark map and its pale middle on the light.
-    var INK = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-fg').trim() || '#e7e9ee';
+    // The theme's colours, read at the start and again when the theme changes: the reach's cyan, and the ink a filled dot is
+    // rimmed in (W-43) - the text colour, light on the dark map and dark on the light, so a dot stands off the tiles whatever
+    // colour it is, the ramp's dark ends on the dark map and its pale middle on the light.
+    var REACH, INK;
+    function themeColours() {
+        var s = getComputedStyle(document.querySelector('.map-page'));
+        REACH = s.getPropertyValue('--p-reach').trim() || '#22d3ee';
+        INK = s.getPropertyValue('--p-fg').trim() || '#e7e9ee';
+    }
+    themeColours();
     // A station's dot at a zoom: 5.25 px at the opening view, to 7 close in.
     function dotRadius(z) { return Math.max(3.5, Math.min(7, z * .75)); }
 
@@ -296,13 +302,15 @@
             if (p.from === 'model' && p.kind !== 'point') L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: MODEL, weight: 1.2, opacity: .9, fill: false, interactive: false, dashArray: '3 2'}).addTo(stationLayer);
             // An island (W-12) wears a dashed ring in the sea's blue: the water ends none of its rays.
             if (rf && rf.properties.island) L.circleMarker(ll, {renderer: canvas, radius: r * 1.9, color: SEA, weight: 1, opacity: .8, fill: false, interactive: false, dashArray: '2 2'}).addTo(stationLayer);
-            var mark;
+            // Filled while it reports (or always, by Age), faint when what it shows is stale, hollow otherwise; a filled dot is
+            // rimmed in the ink, a hollow one keeps its colour in the ring, the only place it has it.
+            var st = stale(p, v), fill = p.fresh || v.solid ? .95 : st ? .3 : 0, mark;
             if (p.kind === 'point') {
                 // A point of ours (W-7): a diamond in the model's amber, its fill the value, so it is never taken for a station.
                 var d = on ? r * 1.6 : r * 1.25;
-                mark = diamond(ll, d, {color: on ? REACH : MODEL, weight: on ? 2 : 1.3, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh || v.solid ? .95 : stale(p, v) ? .3 : 0});
+                mark = diamond(ll, d, {color: on ? REACH : MODEL, weight: on ? 2 : 1.3, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: fill});
             } else {
-                mark = L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : INK, weight: on ? 2 : 1.1, opacity: on ? 1 : p.fresh || !stale(p, v) ? .85 : .55, fillColor: c, fillOpacity: p.fresh || v.solid ? .95 : stale(p, v) ? .3 : 0, dashArray: stale(p, v) ? '2 2' : null});
+                mark = L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : fill ? INK : c, weight: on ? 2 : 1.1, opacity: on ? 1 : st ? .55 : .85, fillColor: c, fillOpacity: fill, dashArray: st ? '2 2' : null});
             }
             mark.bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
@@ -310,7 +318,7 @@
                 .on('mouseout', function () { if (state.bin == null) markBar(null); })
                 .addTo(stationLayer);
             if (togs.labels && z >= 8 && x != null) {
-                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label' + (stale(p, v) ? ' stale' : '') + '">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, r + 2]}), interactive: false, keyboard: false}).addTo(labelLayer);
+                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label' + (st ? ' stale' : '') + '">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, r + 2]}), interactive: false, keyboard: false}).addTo(labelLayer);
             }
             // The wind (W-9, W-11): when the colour is the wind or the gust, every reporting station wears its direction - the
             // latest as a solid arrow the way it blows, its length the speed coloured by; from zoom 8 the mean of the last five behind it in grey.
@@ -490,7 +498,39 @@
     // stations that fed it with their shares, and the nearest outside with why (the probe, W-5).
     // One question at a time: a reading or a station asked for later wins, and an answer to an earlier one is dropped.
     var askSeq = 0;
-    function clearProbe() { state.probe = null; spokes = {}; back = null; probeLayer.clearLayers(); }
+    function clearProbe() { state.probe = null; spokes = {}; back = null; hoverRing = null; probeLayer.clearLayers(); }
+    // A new question for the drawer - a reading, the list, or none at all: what the last one lit is cleared, and an answer
+    // still coming to it is dropped.
+    function afresh() {
+        state.selected = null;
+        clearProbe();
+        stations();
+        drawReach();
+        return ++askSeq;
+    }
+    // The drawer's head - the way back when there is one, the title, what else it offers, close - and the drawer shown.
+    function head(title, extra) {
+        return '<div class="drawer-head">' + backLine() + '<h3>' + title + '</h3>' + (extra || '') + '<button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+    }
+    function show(html, wide) {
+        var el = $('detail');
+        el.innerHTML = html;
+        el.classList.toggle('wide', wide);
+        el.classList.remove('hidden');
+        $('close').addEventListener('click', closeDetail);
+        if ($('back')) $('back').addEventListener('click', goBack);
+        return el;
+    }
+    // A table whose rows are stations: pointed at, a row is lit on the map - once as the pointer enters it, not at every
+    // cell - and clicked, it opens.
+    function wireRows(t, open, point) {
+        var at = null;
+        t.addEventListener('click', function (e) { var row = e.target.closest('tr[data-station]'); if (row) { e.preventDefault(); open(row.dataset.station); } });
+        t.addEventListener('mouseover', function (e) { var row = e.target.closest('tr[data-station]'), id = row ? row.dataset.station : null; if (id !== at) point(at = id); });
+        t.addEventListener('mouseleave', function () { if (at != null) point(at = null); });
+    }
+    // A place into the clear between the side panel and the drawer.
+    function panClear(ll) { map.panInside(ll, {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [$('detail').offsetWidth + 24, 24]}); }
     // The drawer's way back (W-41): a station opened from a reading's list keeps the reading behind it - the pin and the
     // spokes on the map, the answer held - and back draws the reading again from what it held, without asking again. A
     // click on the map starts afresh. {kind: 'reading', lat, lon, o, outside, scroll}
@@ -516,11 +556,7 @@
     // The reading at a point; forced (W-13), the upstreams are asked first - the Bureau's file now, the days the stations
     // in reach are missing, a point of ours' current again - and the drawer says what came.
     function probe(lat, lon, force) {
-        var my = ++askSeq;
-        state.selected = null;
-        clearProbe();
-        stations();
-        drawReach();
+        var my = afresh();
         probeLayer.addLayer(L.marker([lat, lon], {icon: L.divIcon({className: 'probe-mark', html: '<i></i>', iconSize: [18, 18], iconAnchor: [9, 9]}), interactive: false, keyboard: false}));
         note(force ? 'grabbing…' : 'asking…');
         var q = 'lat=' + lat.toFixed(5) + '&lon=' + lon.toFixed(5);
@@ -536,10 +572,9 @@
             var r = {kind: 'reading', lat: lat, lon: lon, o: o, outside: outside, scroll: 0};
             reading(r);
             $('note').classList.add('hidden');
-            // The point, and the nearest station in reach, into the clear between the panel and the drawer.
-            var el = $('detail'), pad = {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [el.offsetWidth + 24, 24]};
-            map.panInside([lat, lon], pad);
-            if (o.stations.length) map.panInside([o.stations[0].lat, o.stations[0].lon], pad);
+            // The point, and the nearest station in reach, into the clear.
+            panClear([lat, lon]);
+            if (o.stations.length) panClear([o.stations[0].lat, o.stations[0].lon]);
         }).catch(function (e) { note('reading failed: ' + e); });
     }
     function spoke(lat, lon, s, style) {
@@ -549,8 +584,9 @@
     // The reading's drawer, from the answer held: drawn when it comes, and again on back.
     function reading(r) {
         var o = r.o, lat = r.lat, lon = r.lon, outside = r.outside;
-        var el = $('detail'), c = o.current, d = o.drought, f = o.fire;
-        var html = '<div class="drawer-head"><h3>' + (o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span></h3><button class="pill" id="grab" title="Ask the upstreams now, whatever the timers say: the Bureau\'s file, the days the stations in reach are missing, a point of ours\' current" type="button">' + icon('refresh') + ' force grab</button><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+        var c = o.current, d = o.drought, f = o.fire;
+        var html = head((o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span>',
+            '<button class="pill" id="grab" title="Ask the upstreams now, whatever the timers say: the Bureau\'s file, the days the stations in reach are missing, a point of ours\' current" type="button">' + icon('refresh') + ' force grab</button>');
         // The point of ours that answered, deletable from here (W-40): the undo for a click that landed in the sea.
         var ours = o.from !== 'stations' ? o.stations.filter(function (s) { return s.kind === 'point'; })[0] : null;
         html += '<div class="point-line"><p class="muted mb-1">' + (o.from === 'stations' ? 'From the Bureau\'s stations whose reach contains this point' : o.from === 'point' ? 'From a point of ours whose reach contains this place: the model\'s current, its own year of record' : 'Nobody\'s reach contained this place: a point of ours dropped here just now, with the model\'s current and a year of the archive') + '.</p>'
@@ -578,26 +614,13 @@
         html += forecastSection(o.forecast);
         html += floodSection(o.flood);
         if (outside.length) html += '<h2>Not in reach <span class="muted">the nearest ' + outside.length + ', and why</span></h2>' + stationRows(outside, false);
-        el.innerHTML = html;
-        el.classList.add('wide');
-        el.classList.remove('hidden');
+        var el = show(html, true);
         el.scrollTop = r.scroll;
-        shownId = null;
-        $('close').addEventListener('click', closeDetail);
         $('grab').addEventListener('click', function () { probe(lat, lon, true); });
         wireDelete(el);
         // A row is the station: pointed at, its spoke is lit; clicked, it opens with the reading kept to go back to.
         el.querySelectorAll('table.probe').forEach(function (t) {
-            t.addEventListener('click', function (e) {
-                var row = e.target.closest('tr[data-station]');
-                if (!row) return;
-                e.preventDefault();
-                r.scroll = el.scrollTop;
-                back = r;
-                detail(row.dataset.station, true);
-            });
-            t.addEventListener('mouseover', function (e) { var row = e.target.closest('tr[data-station]'); lightSpoke(row ? row.dataset.station : null); });
-            t.addEventListener('mouseleave', function () { lightSpoke(null); });
+            wireRows(t, function (id) { r.scroll = el.scrollTop; back = r; detail(id, true); }, lightSpoke);
         });
     }
     // Back from a station to the reading it was opened from: nothing asked, the map as the reading left it.
@@ -832,18 +855,14 @@
 
     // A station's drawer. Kept (W-41), whatever the drawer came from stays behind it - the reading, its pin and spokes -
     // with a way back; otherwise it starts afresh, as a click on a station on the map does.
-    var shownId = null;
     function backLine() {
         if (!back) return '';
         var to = back.kind === 'points' ? 'the points of ours' : 'the reading <span class="muted">' + fmt(back.lat, 4) + ', ' + fmt(back.lon, 4) + '</span>';
         return '<button class="back" id="back" title="Back (Esc)" type="button">‹ back to ' + to + '</button>';
     }
-    function wireHead() {
-        $('close').addEventListener('click', closeDetail);
-        if ($('back')) $('back').addEventListener('click', goBack);
-    }
     function detail(id, keep) {
-        var my = ++askSeq;
+        // The same station drawn again (a new rule, its terrain sampled) keeps its scroll; another opens at the top.
+        var my = ++askSeq, same = state.selected === id;
         state.selected = id;
         if (!keep) clearProbe();
         lightSpoke(id);
@@ -851,11 +870,8 @@
         drawReach();
         fetch('/console/map/station/' + encodeURIComponent(id)).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
             if (my !== askSeq) return;
-            var el = $('detail');
-            if (id !== shownId) el.scrollTop = 0;
-            shownId = id;
-            if (!s) { el.innerHTML = '<div class="drawer-head">' + backLine() + '<h3>' + esc(id) + '</h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div><p class="muted">not held</p>'; el.classList.remove('wide'); el.classList.remove('hidden'); wireHead(); return; }
-            var html = '<div class="drawer-head">' + backLine() + '<h3>' + esc(s.name) + ' <span class="muted">' + esc(s.id) + (s.wmoId ? ' · WMO ' + esc(s.wmoId) : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            if (!s) { show(head(esc(id)) + '<p class="muted">not held</p>', false); return; }
+            var html = head(esc(s.name) + ' <span class="muted">' + esc(s.id) + (s.wmoId ? ' · WMO ' + esc(s.wmoId) : '') + '</span>');
             if (s.kind === 'point') html += '<div class="point-line"><p class="muted mb-1">A point of ours, dropped where no station reached: the model\x27s current and a year of the archive.</p>' + deleteControl(s.id, s.name) + '</div>';
             html += '<h2>Station</h2>' + kv([
                 ['position', fmt(s.lat, 4) + ', ' + fmt(s.lon, 4)],
@@ -894,15 +910,13 @@
                 s.recent.forEach(function (x) { html += '<tr><td class="mono">' + clock(x.at) + '</td><td class="num">' + fmt(x.temperatureC, 1) + '</td><td class="num">' + fmt(x.humidityPct) + '</td><td class="num">' + fmt(x.windSpeedKmh) + '</td><td class="dir">' + (x.windDirectionDeg != null ? '<span class="arrow" style="transform:rotate(' + ((x.windDirectionDeg + 180) % 360) + 'deg)">↑</span> ' + x.windDirectionDeg + '°' : '—') + '</td><td class="num">' + fmt(x.windGustKmh) + '</td><td class="num">' + fmt(x.rainSince9amMm, 1) + '</td></tr>'; });
                 html += '</tbody></table>';
             }
-            el.innerHTML = html;
-            el.classList.remove('wide');
-            el.classList.remove('hidden');
-            wireHead();
+            var el = show(html, false);
+            if (!same) el.scrollTop = 0;
             if ($('sampleNow')) $('sampleNow').addEventListener('click', function () { sampleTerrain(id); });
             wireDelete(el);
         }).catch(function (e) { note('station failed: ' + e); });
     }
-    function closeDetail() { askSeq++; $('detail').classList.add('hidden'); state.selected = null; clearProbe(); stations(); drawReach(); }
+    function closeDetail() { afresh(); $('detail').classList.add('hidden'); }
 
     // ---- deleting a point of ours (W-40): a click in the wrong place - the sea, say - undone, in two steps in the drawer.
     // Only a point has the button; the server refuses a Bureau station anyway.
@@ -940,47 +954,33 @@
         if (p) hoverRing = L.circleMarker([p.lat, p.lon], {renderer: canvas, radius: 13, color: REACH, weight: 2.2, opacity: .95, fill: false, interactive: false}).addTo(probeLayer);
     }
     function pointsList(scroll) {
-        var my = ++askSeq;
-        state.selected = null;
-        clearProbe();
-        hoverRing = null;
-        stations();
-        drawReach();
+        var my = afresh();
         fetch('/console/map/points.json').then(json).then(function (o) {
             if (my !== askSeq) return;
-            var el = $('detail'), list = o.points || [], byId = {}, wet = list.filter(function (p) { return p.water; }).length;
+            var list = o.points || [], byId = {}, wet = list.filter(function (p) { return p.water; }).length;
             list.forEach(function (p) { byId[p.id] = p; });
-            var html = '<div class="drawer-head"><h3>Points of ours <span class="muted">' + list.length + (wet ? ' · ' + wet + ' on the water' : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            var html = head('Points of ours <span class="muted">' + list.length + (wet ? ' · ' + wet + ' on the water' : '') + '</span>');
             html += '<p class="muted mb-1">Places nobody\x27s reach contained when asked, each dropped as a station of ours with the model\x27s current and a year of the archive; newest first. One on the water - at or below sea level, or water by its land cover - is likelier a click in the wrong place than a place anyone asks about. Open one to see it, and delete it there.</p>';
             if (!list.length) html += '<p class="muted">None held.</p>';
             else {
                 html += '<table class="table table-sm probe points"><thead><tr><th>point</th><th class="num">m</th><th>fuel</th><th>dropped</th><th>last asked</th><th class="num" title="days of record held">days</th></tr></thead><tbody>';
                 list.forEach(function (p) {
-                    html += '<tr data-station="' + esc(p.id) + '"' + (p.water ? ' class="water"' : '') + '><td><a href="#">' + esc(String(p.name).replace(/^Point /, '')) + '</a>' + (p.water ? ' <span class="water-tag" title="' + esc(p.waterWhy) + '">water</span>' : '') + '</td>'
+                    html += '<tr data-station="' + esc(p.id) + '"' + (p.water ? ' class="water"' : '') + '><td><a href="#">' + esc(String(p.name).replace(/^Point /, '')) + '</a>' + (p.water ? ' <span class="model-tag water" title="' + esc(p.waterWhy) + '">water</span>' : '') + '</td>'
                         + '<td class="num">' + fmt(p.heightM, 0) + '</td><td class="muted" title="' + esc(p.landCover || 'the land cover is not held yet') + '">' + esc(p.fuel || '—') + '</td>'
                         + '<td class="muted" title="' + esc(when(p.droppedAt)) + '">' + ago(p.droppedAt) + '</td><td class="muted" title="' + esc(when(p.lastAskedAt)) + '">' + ago(p.lastAskedAt) + '</td><td class="num">' + fmt(p.recordDays) + '</td></tr>';
                 });
                 html += '</tbody></table>';
             }
-            el.innerHTML = html;
-            el.classList.add('wide');
-            el.classList.remove('hidden');
+            var el = show(html, true);
             el.scrollTop = scroll || 0;
-            shownId = null;
-            wireHead();
             var t = el.querySelector('table.points');
-            if (!t) return;
-            t.addEventListener('click', function (e) {
-                var row = e.target.closest('tr[data-station]'), p = row && byId[row.dataset.station];
-                if (!p) return;
-                e.preventDefault();
+            if (t) wireRows(t, function (id) {
+                var p = byId[id];
                 back = {kind: 'points', scroll: el.scrollTop};
                 ringPoint(p);
-                detail(p.id, true);
-                map.panInside([p.lat, p.lon], {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [el.offsetWidth + 24, 24]});
-            });
-            t.addEventListener('mouseover', function (e) { var row = e.target.closest('tr[data-station]'); ringPoint(row ? byId[row.dataset.station] : null); });
-            t.addEventListener('mouseleave', function () { ringPoint(null); });
+                detail(id, true);
+                panClear([p.lat, p.lon]);
+            }, function (id) { ringPoint(id == null ? null : byId[id]); });
         }).catch(function (e) { note('points failed: ' + e); });
     }
 
@@ -1026,7 +1026,7 @@
     map.on('zoomend', stations);
     map.on('moveend', function () { if (inView) legend(); });
     map.on('click', function (e) { probe(e.latlng.lat, e.latlng.lng); });
-    document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; INK = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-fg').trim() || INK; probeLayer.eachLayer(function (l) { if (l.setStyle && l.options.color !== NONE) l.setStyle({color: REACH}); }); stations(); drawReach(); });
+    document.addEventListener('gully:theme', function () { themeColours(); probeLayer.eachLayer(function (l) { if (l.setStyle && l.options.color !== NONE) l.setStyle({color: REACH}); }); stations(); drawReach(); });
     document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); loadReach(true); } });
 
     buildSide();

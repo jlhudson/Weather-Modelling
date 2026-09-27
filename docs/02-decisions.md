@@ -641,8 +641,9 @@ water - the same three by height and by land cover. — James, 27 September 2026
 
 **The decision.** Three things, each of which hid a station. The value label from zoom 8 is drawn *above* its dot:
 since the start-over its anchor was inverted, so the number's box, three-quarters opaque, sat on the dot, and a
-station without a fresh reading - no glow around it - showed as its number alone. Every dot is rimmed in the theme's
-ink (its text colour: light on the dark map, dark on the light) instead of in its own colour, and is a size up -
+station without a fresh reading - no glow around it - showed as its number alone. Every filled dot is rimmed in the theme's
+ink (its text colour: light on the dark map, dark on the light) instead of in its own colour - a hollow one keeps its
+colour in the ring, the only place it has it - and every dot is a size up -
 5.25 px at the opening zoom rising to 7, from 4.2 to 5: the ramp's dark red and dark blue ends sat at about 2.4:1 on the
 dark tiles, and its pale middle nearly vanished on the light ones. And coloured by *Age*, every station is filled, not
 faded and dashed when it has not reported in the hour: under Age a station gone quiet is exactly what is being looked

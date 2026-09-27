@@ -10,9 +10,11 @@ import au.gully.reach.TerrainSampler;
 import au.gully.record.Droughts;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -117,19 +119,16 @@ public class MapController {
      */
     @DeleteMapping(value = "/point/{id}", produces = "application/json")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> deletePoint(@PathVariable String id) {
-        au.gully.bureau.Station s = stations.station(id).orElse(null);
-        if (s == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    public Map<String, Object> deletePoint(@PathVariable String id) {
+        au.gully.bureau.Station s = stations.station(id).orElseThrow(() -> problem(HttpStatus.NOT_FOUND, "no station " + id));
+        if (!points.delete(s, ConsoleModel.operatorName())) {
+            throw problem(HttpStatus.CONFLICT, s.name() + " is a Bureau station, not a point of ours");
         }
-        if (!s.isPoint()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title", "Not a point of ours", "detail", s.name() + " is a Bureau station"));
-        }
-        points.delete(id, ConsoleModel.operatorName());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("deleted", id);
-        out.put("name", s.name());
-        return ResponseEntity.ok(out);
+        return Map.of("deleted", id, "name", s.name());
+    }
+
+    private static ErrorResponseException problem(HttpStatus status, String detail) {
+        return new ErrorResponseException(status, ProblemDetail.forStatusAndDetail(status, detail), null);
     }
 
     /**

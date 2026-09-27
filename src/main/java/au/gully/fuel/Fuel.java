@@ -11,6 +11,9 @@ package au.gully.fuel;
  */
 public final class Fuel {
 
+    /** The land cover class (level 3) that is water. */
+    public static final int WATER = 220;
+
     private Fuel() {
     }
 
@@ -38,7 +41,7 @@ public final class Fuel {
         }
         String l = level4Label == null ? "" : level4Label.toLowerCase();
         return switch (level3) {
-            case 215, 220 -> Kind.UNBURNABLE;
+            case 215, WATER -> Kind.UNBURNABLE;
             case 124 -> Kind.NOT_MODELLED;
             case 216 -> Kind.NOT_MODELLED;
             case 111 -> l.contains("woody") ? Kind.NOT_MODELLED : Kind.GRASS;
@@ -55,7 +58,7 @@ public final class Fuel {
             case FOREST -> "natural woody cover of 15 % or more: forest or woodland";
             case GRASS -> level3 != null && level3 == 111 ? "cultivated herbaceous: crop or pasture" : level4Label != null && level4Label.toLowerCase().contains("woody")
                     ? "woody cover under 15 %: grassy woodland" : "herbaceous: grassland";
-            case UNBURNABLE -> level3 != null && level3 == 220 ? "water" : "built-up";
+            case UNBURNABLE -> level3 != null && level3 == WATER ? "water" : "built-up";
             case NOT_MODELLED -> level3 == null ? "" : switch (level3) {
                 case 124 -> "wetland: the AFDRS rates it with a wetland model not computed here";
                 case 111 -> "woody horticulture: the AFDRS rates it with a model not computed here";

@@ -15,11 +15,12 @@
     --p-radius: 12px;
     --p-shadow: 0 8px 28px rgba(0, 0, 0, .38), 0 1px 2px rgba(0, 0, 0, .3);
     --p-font-label: .68rem;
+    --p-danger: #f87171;
     display: flex; flex-direction: column; height: 100%;
 }
 [data-bs-theme=light] .map-page {
     --p-bg: rgba(255, 255, 255, .86); --p-bg-solid: #ffffff; --p-line: rgba(0, 0, 0, .09); --p-line-strong: rgba(0, 0, 0, .2);
-    --p-fg: #1c1f26; --p-muted: #6b7280; --p-reach: #0891b2; --p-shadow: 0 8px 28px rgba(20, 30, 50, .18), 0 1px 2px rgba(0, 0, 0, .08);
+    --p-fg: #1c1f26; --p-muted: #6b7280; --p-reach: #0891b2; --p-danger: #dc2626; --p-shadow: 0 8px 28px rgba(20, 30, 50, .18), 0 1px 2px rgba(0, 0, 0, .08);
 }
 main:has(> .map-page) { padding: 0; overflow: hidden; }
 .map-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
@@ -236,8 +237,6 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .side-stale.hidden { display: none; }
 
 /* ---- deleting a point of ours (W-40): a red pill beside the line that says what the point is, and its two steps */
-.map-page { --p-danger: #f87171; }
-[data-bs-theme=light] .map-page { --p-danger: #dc2626; }
 .drawer .point-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .3rem .6rem; margin: 0 0 .5rem; }
 .drawer .point-line > p { flex: 1 1 16rem; margin: 0; }
 .del { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; font-size: .78rem; }
@@ -255,7 +254,7 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 /* ---- the points of ours, listed (W-42): the tile opens the list; a point on the water is tagged in the sea's blue */
 button.tile.open { background: none; border: 1px solid transparent; border-radius: 8px; color: inherit; text-align: left; padding: .1rem .3rem; margin: -.1rem -.3rem; cursor: pointer; font: inherit; }
 button.tile.open:hover { border-color: var(--p-line-strong); background: rgba(127, 127, 127, .08); }
-.water-tag { display: inline-block; font-size: .64rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #0ea5e9; border: 1px solid color-mix(in srgb, #0ea5e9 55%, transparent); border-radius: 4px; padding: 0 .3rem; line-height: 1.35; vertical-align: .08em; font-family: inherit; }
+.model-tag.water { color: #0ea5e9; border-color: color-mix(in srgb, #0ea5e9 55%, transparent); }
 .drawer .points tr.water td { background: color-mix(in srgb, #0ea5e9 7%, transparent); }
 .drawer .points td a { font-family: var(--g-mono); }
 @media (max-width: 767.98px) { .drawer .points th:nth-child(n+5), .drawer .points td:nth-child(n+5) { display: none; } }

@@ -183,9 +183,9 @@ public class Points {
 
     /**
      * Every point of ours as the map's list gives it (W-42), newest first: where, how high, what the land cover says is
-     * there (only if held - the list never waits on the upstream), when it was dropped and last asked, how many days of
-     * record it holds and when its current is from; {@code water} when it is at or below sea level or the land cover is
-     * water, the likeliest sign of a click that landed in the sea.
+     * there (only if held - the list never waits on the upstream), when it was dropped and last asked, and how many days
+     * of record it holds; {@code water} when it is at or below sea level or the land cover is water, the likeliest sign of
+     * a click that landed in the sea.
      */
     public List<Map<String, Object>> list() {
         Map<String, Instant> dropped = stations.droppedAt();
@@ -194,7 +194,7 @@ public class Points {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Station p : all) {
             LandCover.Cover c = landCover.held(p.lat(), p.lon()).orElse(null);
-            boolean below = p.heightM() != null && p.heightM() <= 0, wet = c != null && c.level3() != null && c.level3() == LandCover.WATER;
+            boolean below = p.heightM() != null && p.heightM() <= 0, wet = c != null && c.water();
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", p.id());
             m.put("name", p.name());
@@ -209,7 +209,6 @@ public class Points {
             m.put("droppedAt", at == null ? null : at.toString());
             m.put("lastAskedAt", asked == null ? null : asked.toString());
             m.put("recordDays", record.days(p.id()).size());
-            m.put("currentAt", stations.latest(p.id()).map(Observation::at).map(Instant::toString).orElse(null));
             out.add(m);
         }
         return out;
@@ -217,15 +216,15 @@ public class Points {
 
     /**
      * A point deleted by hand (W-40) - a click in the wrong place, the sea say, undone: gone as an expired point goes.
-     * A Bureau station is not ours to delete, and is left alone. The readings kept for a reference (W-27) stay.
+     * A Bureau station is not ours to delete: it is left alone, and false said. The readings kept for a reference (W-27) stay.
      */
-    public Optional<Station> delete(String id, String by) {
-        Optional<Station> p = stations.station(id).filter(Station::isPoint);
-        p.ifPresent(x -> {
-            forget(x);
-            log.info("point {} ({}) deleted by {}", x.id(), x.name(), by);
-        });
-        return p;
+    public boolean delete(Station p, String by) {
+        if (!p.isPoint()) {
+            return false;
+        }
+        forget(p);
+        log.info("point {} ({}) deleted by {}", p.id(), p.name(), by);
+        return true;
     }
 
     /**
