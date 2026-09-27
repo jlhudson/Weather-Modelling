@@ -51,6 +51,8 @@ jobs:
 
   # On main, once the tests pass: the images to GitHub's registry, tagged main and the commit, so a
   # server pulls what was tested instead of building it, and a rollback is a tag (IMAGE_TAG in .env).
+  # Nothing is deployed from here: the servers take new images at 19:00 Adelaide time, when the updater
+  # beside Portainer calls each stack's webhook (The-Hub-Database/docs/deployment.md).
   image:
     name: Image ${{ matrix.name }}
     needs: build
@@ -92,18 +94,3 @@ jobs:
           package-name: ${{ matrix.name }}
           package-type: container
           min-versions-to-keep: 10
-
-  # The deployment told to pull: Portainer's stack webhook, a repository secret. Unset, nothing is deployed.
-  redeploy:
-    name: Redeploy
-    needs: image
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Call the Portainer webhook
-        env:
-          WEBHOOK: ${{ secrets.PORTAINER_WEBHOOK_URL }}
-        run: |
-          if [ -z "$WEBHOOK" ]; then echo "PORTAINER_WEBHOOK_URL is not set: the images are pushed, nothing is redeployed"; exit 0; fi
-          curl -fsS -X POST "$WEBHOOK"
