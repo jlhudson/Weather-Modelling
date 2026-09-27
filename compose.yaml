@@ -3,8 +3,9 @@
 # Three containers: Postgres, the application, and the Cloudflare connector that publishes it. Nothing
 # here belongs to a particular machine: what differs from one to the next is an environment variable,
 # read from .env beside this file or from the stack's variables in Portainer. The same file runs on a
-# development machine (`docker compose up -d`) and on a VPS as a Portainer stack deployed from this
-# repository's `main`.
+# development machine (`docker compose up -d`) and still runs alone on a server; production runs Weather
+# in the Hub's core stack instead (The-Hub-Database/docker/core/compose.yaml), from the image CI pushes
+# on `main`.
 #
 # The service and container names are `weather-*` and the database volume `weather-pgdata`, so The
 # Hub's HUB_WEATHER_URL keeps working.
