@@ -188,8 +188,10 @@ its current fetched again however young it is. The reading then carries `grabbed
 Bureau file came, whether the model's current was fetched, how many days of record were filled -
 and the drawer says it in a line. It is the same reading, just fetched first; nothing is guessed.
 
-**The forecast** (W-20). A reading carries the next twelve hours and three days from Open-Meteo
-(Google behind it): the forecast of the nearest station whose reach contains the point, or of the
+**The forecast** (W-20). A reading carries the next seventy-two hours and seven days from Open-Meteo
+(Google behind it) (W-44) - every hour with all it holds (apparent temperature, dew point, pressure, visibility, UV, day
+or night) and its indices, every day with its worst hour's and the sunrise and sunset; the series is fetched seven days of
+hours deep, which Open-Meteo weighs as it did three, so the days past the third have their indices too: the forecast of the nearest station whose reach contains the point, or of the
 point of ours where none does. Forecasts are kept a station at a time in `station_forecast`, and an
 ask that finds one missing or older than three hours fetches it again - a forced ask whatever its
 age; nothing fetches on a clock, and rows older than a day are pruned. Clicking a station is an ask
@@ -237,7 +239,7 @@ force; `/api/v1/warnings` lists them.
 
 **Flood weather** (W-26). A reading carries the rain already down at the forecast station - today so far and
 the last three, seven and thirty Bureau days from its own record - the rain coming in the next twenty-four
-and seventy-two hours with the highest chance of it, the two three-day totals added, and the river: GloFAS's
+and seventy-two hours and the week (W-44) with the highest chance of it, day by day for seven days, the two three-day totals added, and the river: GloFAS's
 modelled discharge through Open-Meteo's flood API, today's flow against its own 92-day mean, rising or
 falling over three days, and its peak in the week ahead. GloFAS's 0.05° cell nearest a point is often beside
 the channel - at Renmark the Murray is the next cell west - so the river is the largest flow in the

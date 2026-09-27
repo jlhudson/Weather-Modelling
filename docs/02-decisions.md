@@ -653,3 +653,21 @@ for. The warnings' rings follow the new size.
 pins can be a smidge bigger." Age puts nearly every station at an end of the scale - on 27 September 2026 the median
 was 7 minutes (dark red) and 33 stations were over two hours (dark blue, faded) - which is where the ramp is darkest.
 — James, 27 September 2026.
+
+### W-44 · The whole forecast to whoever asks: seventy-two hours, seven days, every index
+
+**The decision.** A reading's forecast - and so the Hub's stored `forecast` component - carries the next 72 hours from
+the one running and 7 days from today, where it carried 12 and 3. Every hour now brings all it holds (apparent
+temperature, dew point, pressure, visibility, UV index, day or night, beside what it had) and its indices: FFDI, the
+drought factor, the grass GFDI and FBI, the forest FBI, and the place's own AFDRS index by its fuel (`pointFbi`,
+`pointRating`). Every day brings its apparent maximum, UV maximum, sunrise and sunset, and its worst hour's indices on all
+seven days: Open-Meteo is asked for 168 hours of series instead of 72, which its weighting counts the same (a span to a
+fortnight is one), so days four to seven have hours to find their worst in. Flood weather gains the week's rain coming
+(`next7dMm`) and a seven-day outlook. The map keeps colouring by today, tomorrow and day 3 (its own three), and its drawer
+shows the first twelve hours with the other sixty folded under them.
+
+**Why.** James asked whether the Hub gets "all weather from NOW until the future"; it got twelve hours and three days
+while Weather held seventy-two and seven. "Yes, send the full 72 hours and 7 days, index, and more!" Each stored forecast
+grows from about 6 KB to about 35 KB; the Hub and its readers (IncidentWatch, FireBuddy) take the arrays as they come -
+they pick the nearest hour, list twelve, or show five days. Google, the fallback, still gives its first page of 24 hours.
+— James, 27 September 2026.

@@ -65,12 +65,20 @@ public final class PointRating {
      * Which of a forecast day's worst hours is the place's: the forest's or the grass's, by its fuel.
      */
     public static Object[] day(Fuel.Kind kind, Map<String, Object> dayFire) {
-        if (dayFire == null || kind == null) {
+        return dayFire == null ? new Object[]{null, null}
+                : pick(kind, dayFire.get("forestFbiMax"), dayFire.get("forestRating"), dayFire.get("fbiMax"), dayFire.get("afdrsRating"));
+    }
+
+    /**
+     * The place's index and rating out of the forest's and the grass's, by its fuel: for a forecast hour (W-44) or a day.
+     */
+    public static Object[] pick(Fuel.Kind kind, Object forestFbi, Object forestRating, Object grassFbi, Object grassRating) {
+        if (kind == null) {
             return new Object[]{null, null};
         }
         return switch (kind) {
-            case FOREST -> new Object[]{dayFire.get("forestFbiMax"), dayFire.get("forestRating")};
-            case GRASS -> new Object[]{dayFire.get("fbiMax"), dayFire.get("afdrsRating")};
+            case FOREST -> new Object[]{forestFbi, forestRating};
+            case GRASS -> new Object[]{grassFbi, grassRating};
             default -> new Object[]{null, null};
         };
     }

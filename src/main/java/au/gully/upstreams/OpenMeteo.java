@@ -24,8 +24,9 @@ import java.util.Objects;
  * Open-Meteo, the primary: free, keyless, CC BY 4.0, and generous.
  * <p>
  * <strong>What a fetch costs.</strong> Open-Meteo counts variables multiplied by span, not requests:
- * a forecast here is eleven hourly variables over three days, twelve current ones and eleven daily
- * over seven, which its published weighting puts at about three units. (Its elevation endpoint is
+ * a forecast here is fourteen hourly variables and eleven daily over seven days and twelve current ones, which its
+ * published weighting puts at about three units - a span of up to a fortnight weighs the same, so seven days of hours
+ * (W-44) cost what three did. (Its elevation endpoint is
  * not used: it counts every point as a call, and a station's terrain is two and a half thousand.)
  */
 @Slf4j
@@ -41,7 +42,11 @@ public class OpenMeteo implements Upstream {
     public static final String FLOOD = "https://flood-api.open-meteo.com/v1/flood";
 
     public static final int FORECAST_DAYS = 7;
-    public static final int FORECAST_HOURS = 72;
+    /**
+     * The hours ahead the series carries: the whole seven days (W-44), so every forecast day has its worst hour and its
+     * indices, not only the first three.
+     */
+    public static final int FORECAST_HOURS = 168;
     /**
      * The hours behind now the series carries: enough to reach back to 9 am yesterday from any hour,
      * which is what the day's total to 9 am and the rain since 9 am are summed from.

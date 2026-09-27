@@ -33,6 +33,10 @@ import java.util.concurrent.Semaphore;
 public class OutlookMap {
 
     public static final int AT_ONCE = 4;
+    /**
+     * The days the map colours by: today, tomorrow and day 3 - however many a reading carries (W-44).
+     */
+    public static final int DAYS = 3;
 
     private final StationRegistry stations;
     private final Forecasts forecasts;
@@ -80,8 +84,9 @@ public class OutlookMap {
                     cover == null ? null : cover.fuel());
             Map<String, Object> v = Forecasts.view(f, s, 0.0, now, in);
             List<Map<String, Object>> days = new ArrayList<>();
-            for (Map<String, Object> d : (List<Map<String, Object>>) v.get("daily")) {
-                if (dates.size() < Forecasts.DAYS && !dates.contains((String) d.get("date"))) {
+            List<Map<String, Object>> daily = (List<Map<String, Object>>) v.get("daily");
+            for (Map<String, Object> d : daily.subList(0, Math.min(DAYS, daily.size()))) {
+                if (dates.size() < DAYS && !dates.contains((String) d.get("date"))) {
                     dates.add((String) d.get("date"));
                 }
                 Map<String, Object> fire = d.get("fire") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();

@@ -737,7 +737,7 @@
         var d = fl.fallen || {}, c = fl.coming || {}, r = fl.river;
         html += kv([
             ['rain down', fmt(d.todayMm, 1) + ' mm today · ' + fmt(d.last3DaysMm, 1) + ' in 3 days · ' + fmt(d.last7DaysMm, 1) + ' in 7 · ' + fmt(d.last30DaysMm, 1) + ' in 30' + (d.station ? ' <span class="muted">at ' + esc(d.station) + '</span>' : '')],
-            ['rain coming', fmt(c.next24hMm, 1) + ' mm in 24 h · ' + fmt(c.next72hMm, 1) + ' in 72 h' + (c.maxChancePct != null ? ' <span class="muted">chance up to ' + c.maxChancePct + ' %</span>' : '')],
+            ['rain coming', fmt(c.next24hMm, 1) + ' mm in 24 h · ' + fmt(c.next72hMm, 1) + ' in 72 h' + (c.next7dMm != null ? ' · ' + fmt(c.next7dMm, 1) + ' in 7 days' : '') + (c.maxChancePct != null ? ' <span class="muted">chance up to ' + c.maxChancePct + ' %</span>' : '')],
             ['three days each side', fl.threeDaysEachSideMm != null ? fmt(fl.threeDaysEachSideMm, 1) + ' mm' : null],
             ['river', !r ? '<span class="muted">the flood model could not be read</span>' : !r.river ? '<span class="muted">' + esc(r.note) + '</span>'
                 : fmt(r.cumecs, 1) + ' m³/s <span class="muted">' + (r.ratioToMean != null ? r.ratioToMean + '× its ' + r.meanOverDays + '-day mean · ' : '') + esc(r.trend || '') + (r.peakCumecs != null ? ' · peak ' + fmt(r.peakCumecs, 1) + ' on ' + esc(r.peakOn) : '') + '</span>']
@@ -793,7 +793,7 @@
     }
     // ---- the forecast (W-20): the next twelve hours and three days, from the nearest station in reach or the point of ours
     function forecastSection(fc) {
-        var html = '<h2>Forecast <span class="muted">the next ' + 12 + ' hours and 3 days</span></h2>';
+        var html = '<h2>Forecast <span class="muted">' + (fc ? 'the next ' + (fc.hourly || []).length + ' hours and ' + (fc.daily || []).length + ' days' : 'the hours and days ahead') + '</span></h2>';
         if (!fc) return html + '<p class="muted mb-1">None: the upstreams could not answer, and none was held.</p>';
         var st = fc.station || {};
         html += '<p class="muted mb-1">For ' + esc(st.name || st.id) + (st.km ? ', ' + fmt(st.km, 1) + ' km away' : '') + ' · ' + esc(fc.upstream) + ' · fetched ' + esc(ago(fc.fetchedAt))
@@ -803,11 +803,11 @@
                 + (c.gustAfterKmh != null ? ', gusts ' + fmt(c.gustAfterKmh, 0) : '') + (c.coolsC != null ? ', ' + (c.coolsC >= 0 ? fmt(c.coolsC, 1) + ' °C cooler' : fmt(-c.coolsC, 1) + ' °C warmer') : '') + ' <span class="muted">(a ' + c.swingDeg + '° swing)</span></div>';
         });
         if (fc.hourly && fc.hourly.length) {
-            html += '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="McArthur forest fire danger index, from the hour\x27s own values and the day\x27s drought factor">FFDI</th><th class="num" title="McArthur\x27s grassland index and the AFDRS grass Fire Behaviour Index, on the district\x27s curing">grass</th><th class="num" title="the AFDRS dry forest Fire Behaviour Index, on provisional long-unburnt fuel">forest</th><th>sky</th></tr></thead><tbody>';
-            fc.hourly.forEach(function (h) {
-                html += '<tr><td class="mono">' + clock(h.at) + '</td><td class="num">' + fmt(h.temperatureC, 1) + '</td><td class="num">' + fmt(h.humidityPct) + '</td><td class="mono">' + (h.windSpeedKmh != null ? dirWord(h.windDirectionDeg) + ' ' + Math.round(h.windSpeedKmh) : '—') + '</td><td class="num">' + (h.windGustKmh != null ? Math.round(h.windGustKmh) : '—') + '</td><td class="num">' + fmt(h.precipitationMm, 1) + '</td><td class="num">' + (h.precipitationProbabilityPct != null ? h.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + ffdiCell(h.ffdi, h.ffdiRating) + '</td><td class="num">' + grassCell(h.gfdi, h.fbi, h.afdrsRating) + '</td><td class="num">' + afdrsNumber(h.forestFbi, h.forestRating) + '</td><td class="muted">' + esc(h.condition || '') + '</td></tr>';
-            });
-            html += '</tbody></table>';
+            // The first twelve hours in the open; the rest of the three days (W-44) folded, each hour with its day.
+            var hourHead = '<table class="table table-sm recent forecast"><thead><tr><th>hour</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="McArthur forest fire danger index, from the hour\x27s own values and the day\x27s drought factor">FFDI</th><th class="num" title="McArthur\x27s grassland index and the AFDRS grass Fire Behaviour Index, on the district\x27s curing">grass</th><th class="num" title="the AFDRS dry forest Fire Behaviour Index, on provisional long-unburnt fuel">forest</th><th>sky</th></tr></thead><tbody>', hourRow = function (h, label) { return '<tr><td class="mono">' + label + '</td><td class="num">' + fmt(h.temperatureC, 1) + '</td><td class="num">' + fmt(h.humidityPct) + '</td><td class="mono">' + (h.windSpeedKmh != null ? dirWord(h.windDirectionDeg) + ' ' + Math.round(h.windSpeedKmh) : '—') + '</td><td class="num">' + (h.windGustKmh != null ? Math.round(h.windGustKmh) : '—') + '</td><td class="num">' + fmt(h.precipitationMm, 1) + '</td><td class="num">' + (h.precipitationProbabilityPct != null ? h.precipitationProbabilityPct + ' %' : '—') + '</td><td class="num">' + ffdiCell(h.ffdi, h.ffdiRating) + '</td><td class="num">' + grassCell(h.gfdi, h.fbi, h.afdrsRating) + '</td><td class="num">' + afdrsNumber(h.forestFbi, h.forestRating) + '</td><td class="muted">' + esc(h.condition || '') + '</td></tr>'; };
+            html += hourHead + fc.hourly.slice(0, 12).map(function (h) { return hourRow(h, clock(h.at)); }).join('') + '</tbody></table>';
+            if (fc.hourly.length > 12) html += '<details class="rec"><summary class="muted">the ' + (fc.hourly.length - 12) + ' hours after</summary>' + hourHead
+                + fc.hourly.slice(12).map(function (h) { return hourRow(h, esc(when(h.at))); }).join('') + '</tbody></table></details>';
         }
         if (fc.daily && fc.daily.length) {
             html += '<table class="table table-sm recent forecast"><thead><tr><th>day</th><th class="num">min · max °C</th><th class="num">driest</th><th>wind · gust</th><th class="num">mm</th><th class="num">chance</th><th class="num" title="the day\x27s worst hour of the forest fire danger index">FFDI peak</th><th class="num" title="the day\x27s worst hour of each grass index">grass peak</th><th class="num" title="the day\x27s worst hour of the AFDRS dry forest index">forest peak</th><th class="num" title="the day\x27s worst hour of the index of the fuel here, by its land cover">here</th><th>sky</th></tr></thead><tbody>';

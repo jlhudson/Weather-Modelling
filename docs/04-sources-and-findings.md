@@ -13,7 +13,7 @@ the sources change, so a finding is what was true that day.
 | Bureau warnings `IDZ00057` + products | SA warnings and the areas they cover | when asked, held 10 min | free | memory |
 | CFS fire ban districts | the 15 districts' shapes | when asked, held a day | free (230 KB) | memory |
 | CFS fire danger ratings | AFDRS rating, FBI, total fire ban, 4 days | when asked, held an hour | free (32 KB) | memory |
-| Open-Meteo forecast | now, 72 h hourly, 7 days daily, 48 h behind | when asked, held 3 h (now: 1 h) | 3 units | `station_forecast`, a day |
+| Open-Meteo forecast | now, 7 days hourly and daily (W-44), 48 h behind | when asked, held 3 h (now: 1 h) | 3 units | `station_forecast`, a day |
 | Open-Meteo archive / recent | daily rain and maximum for the drought | housekeeping and asks, missing days only | ~1 unit a fortnight of days | `station_day` |
 | Open-Meteo flood (GloFAS) | river discharge, 92 days back, 7 ahead | when asked | 9 units to find a river, 8 a series | memory: river cell for life, series 12 h |
 | Google Weather | the overflow forecast | only when Open-Meteo cannot | 3 units (1 per endpoint) | as a forecast |

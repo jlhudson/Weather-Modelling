@@ -19,7 +19,8 @@ import java.util.NavigableMap;
  * Flood weather at a place (W-26): the rain already down, the rain still coming, and the river. Antecedent rain is
  * the half people forget - fifty millimetres onto dry ground is a wet afternoon, onto ground that took eighty in the
  * three days before it is a callout - so the station's own record is read back: today so far and the Bureau days
- * before it. What is coming is the forecast's, hour by hour for the next day and three. The river is GloFAS's.
+ * before it. What is coming is the forecast's, hour by hour for the next day, three and seven, and day by day for the week (W-44).
+ * The river is GloFAS's.
  */
 public final class Flood {
 
@@ -49,6 +50,8 @@ public final class Flood {
         Map<String, Object> coming = new LinkedHashMap<>();
         coming.put("next24hMm", ahead(f, now, Duration.ofHours(24)));
         coming.put("next72hMm", ahead(f, now, Duration.ofHours(72)));
+        // The week's (W-44): the series holds seven days of hours.
+        coming.put("next7dMm", ahead(f, now, Duration.ofDays(7)));
         Integer chance = null;
         if (f != null) {
             for (Conditions c : f.hourly()) {

@@ -32,7 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * The forecasts (W-20): the model's latest answer for a station - a Bureau station or a point of ours -
  * held a station at a time, in {@code station_forecast} and in memory. Nothing fetches on a clock: an
  * ask that finds a station's forecast missing or older than {@link #LIFE} fetches it again. What an ask
- * is shown is the next {@link #HOURS} hours and {@link #DAYS} days.
+ * is shown is the next {@link #HOURS} hours and {@link #DAYS} days (W-44): everything held ahead, every hour and day with
+ * its indices, so a consumer - the Hub - is given the whole of it.
  * <p>
  * The same answer carries the model's now. Where a station's own file has gone quiet - its latest
  * reading older than {@link Status#STALE}, the Bureau down - an ask in its reach fetches the model's now
@@ -55,8 +56,15 @@ public class Forecasts {
      * How long a row is kept after it was fetched.
      */
     public static final Duration KEEP = Duration.ofDays(1);
-    public static final int HOURS = 12;
-    public static final int DAYS = 3;
+    /**
+     * The hours an ask is shown, from the one running: three days of them (W-44). The series holds seven days of hours; the
+     * days past these are shown as days, each with its worst hour's indices.
+     */
+    public static final int HOURS = 72;
+    /**
+     * The days an ask is shown, from today: the whole forecast (W-44).
+     */
+    public static final int DAYS = 7;
 
     private final JdbcClient db;
     private final Upstreams upstreams;
@@ -330,13 +338,19 @@ public class Forecasts {
                 Map<String, Object> h = new LinkedHashMap<>();
                 h.put("at", c.at().toString());
                 h.put("temperatureC", c.temperatureC());
+                h.put("apparentTemperatureC", c.apparentTemperatureC());
+                h.put("dewPointC", c.dewPointC());
                 h.put("humidityPct", c.humidityPct());
                 h.put("windSpeedKmh", c.windSpeedKmh());
                 h.put("windDirectionDeg", c.windDirectionDeg());
                 h.put("windGustKmh", c.windGustKmh());
                 h.put("precipitationMm", c.precipitationMm());
                 h.put("precipitationProbabilityPct", c.precipitationProbabilityPct());
+                h.put("pressureMslHpa", c.pressureMslHpa());
                 h.put("cloudCoverPct", c.cloudCoverPct());
+                h.put("visibilityKm", c.visibilityM() == null ? null : Math.round(c.visibilityM() / 100.0) / 10.0);
+                h.put("uvIndex", c.uvIndex());
+                h.put("daytime", c.daytime());
                 h.put("condition", c.condition());
                 Outlook.Hour fh = fireAt.get(c.at());
                 h.put("ffdi", fh == null ? null : fh.ffdi());
@@ -352,6 +366,12 @@ public class Forecasts {
                     h.put("fbi", g.get("fbi"));
                     h.put("afdrsRating", g.get("afdrsRating"));
                 }
+                // The place's own AFDRS index this hour (W-44): the forest's or the grass's, by the fuel its land cover says it carries.
+                if (in.fuel() != null) {
+                    Object[] p = au.gully.fuel.PointRating.pick(in.fuel(), h.get("forestFbi"), h.get("forestRating"), h.get("fbi"), h.get("afdrsRating"));
+                    h.put("pointFbi", p[0]);
+                    h.put("pointRating", p[1]);
+                }
                 hours.add(h);
             }
         }
@@ -364,12 +384,16 @@ public class Forecasts {
                 m.put("date", d.date().toString());
                 m.put("maxTemperatureC", d.maxTemperatureC());
                 m.put("minTemperatureC", d.minTemperatureC());
+                m.put("maxApparentTemperatureC", d.maxApparentTemperatureC());
                 m.put("minHumidityPct", d.minHumidityPct());
                 m.put("maxWindKmh", d.maxWindKmh());
                 m.put("maxGustKmh", d.maxGustKmh());
                 m.put("windDirectionDeg", d.dominantWindDirectionDeg());
                 m.put("precipitationMm", d.precipitationMm());
                 m.put("precipitationProbabilityPct", d.precipitationProbabilityPct());
+                m.put("uvIndexMax", d.uvIndexMax());
+                m.put("sunrise", d.sunrise() == null ? null : d.sunrise().toString());
+                m.put("sunset", d.sunset() == null ? null : d.sunset().toString());
                 m.put("condition", d.condition());
                 Outlook.Day fd = fireDay.get(d.date());
                 Map<String, Object> fb = fd != null ? fire(fd) : in.curing() != null ? new LinkedHashMap<>() : null;
