@@ -28,7 +28,8 @@
         {id: 'kbdiMm', name: 'KBDI', hint: 'soil moisture deficit', unit: 'mm', icon: 'drought', range: [0, 203], always: true},
         {id: 'droughtFactor', name: 'Drought factor', hint: '0 to 10', icon: 'drought', range: [0, 10], always: true, d: 1},
         {id: 'heightM', name: 'Height', hint: 'of the station', unit: 'm', icon: 'elevation', range: [0, 800], always: true},
-        {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true},
+        // Age is drawn solid whatever it is (W-43): a station quiet for hours is what the colour is looking for, not a thing to fade.
+        {id: 'ageMinutes', name: 'Age', hint: 'of the observation', unit: 'min', icon: 'clock', range: [0, 120], reverse: true, always: true, solid: true},
         // The fire outlook (W-31): each station's worst forecast hour of the forest index, today and the next two days.
         {id: 'outlook0', name: 'FFDI today', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 0},
         {id: 'outlook1', name: 'FFDI tomorrow', hint: 'forecast peak', icon: 'drought', range: [0, 100], always: true, outlook: 1},
@@ -81,6 +82,11 @@
     var togs = {labels: true, reach: true, all: false, districts: false, warnings: true};
     var lastStations = null, lastReach = null;
     var REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || '#22d3ee';
+    // The ink every dot is outlined in (W-43): the theme's text colour - light on the dark map, dark on the light - so a dot
+    // stands off the tiles whatever colour it is, the ramp's dark ends on the dark map and its pale middle on the light.
+    var INK = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-fg').trim() || '#e7e9ee';
+    // A station's dot at a zoom: 5.25 px at the opening view, to 7 close in.
+    function dotRadius(z) { return Math.max(3.5, Math.min(7, z * .75)); }
 
     function current() {
         for (var i = 0; i < VARS.length; i++) if (VARS[i].id === state.id) return VARS[i];
@@ -274,7 +280,7 @@
         stationLayer.clearLayers();
         labelLayer.clearLayers();
         if (!lastStations) return;
-        var v = current(), z = map.getZoom(), r = Math.max(2.5, Math.min(5, z * .6));
+        var v = current(), z = map.getZoom(), r = dotRadius(z);
         lastStations.features.forEach(function (f) {
             var p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]], c = colourOf(p, v);
             var on = state.selected === p.id, rf = reachFeature(p.id), x = valueOf(p, v);
@@ -294,9 +300,9 @@
             if (p.kind === 'point') {
                 // A point of ours (W-7): a diamond in the model's amber, its fill the value, so it is never taken for a station.
                 var d = on ? r * 1.6 : r * 1.25;
-                mark = diamond(ll, d, {color: on ? REACH : MODEL, weight: on ? 2 : 1.3, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : stale(p, v) ? .3 : 0});
+                mark = diamond(ll, d, {color: on ? REACH : MODEL, weight: on ? 2 : 1.3, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh || v.solid ? .95 : stale(p, v) ? .3 : 0});
             } else {
-                mark = L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : c, weight: on ? 2 : p.fresh ? 1 : 1.2, opacity: p.fresh ? 1 : .7, fillColor: c, fillOpacity: p.fresh ? .95 : stale(p, v) ? .3 : 0, dashArray: stale(p, v) ? '2 2' : null});
+                mark = L.circleMarker(ll, {renderer: canvas, radius: on ? r * 1.4 : r, color: on ? REACH : INK, weight: on ? 2 : 1.1, opacity: on ? 1 : p.fresh || !stale(p, v) ? .85 : .55, fillColor: c, fillOpacity: p.fresh || v.solid ? .95 : stale(p, v) ? .3 : 0, dashArray: stale(p, v) ? '2 2' : null});
             }
             mark.bindTooltip(function () { return tip(p); }, {sticky: true, className: 'hx-tip'})
                 .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
@@ -304,7 +310,7 @@
                 .on('mouseout', function () { if (state.bin == null) markBar(null); })
                 .addTo(stationLayer);
             if (togs.labels && z >= 8 && x != null) {
-                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label' + (stale(p, v) ? ' stale' : '') + '">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, -r - 1]}), interactive: false, keyboard: false}).addTo(labelLayer);
+                L.marker(ll, {icon: L.divIcon({className: 'st-glyph', html: '<span class="st-label' + (stale(p, v) ? ' stale' : '') + '">' + esc(fmt(x, v.d || 0)) + '</span>', iconSize: [0, 0], iconAnchor: [0, r + 2]}), interactive: false, keyboard: false}).addTo(labelLayer);
             }
             // The wind (W-9, W-11): when the colour is the wind or the gust, every reporting station wears its direction - the
             // latest as a solid arrow the way it blows, its length the speed coloured by; from zoom 8 the mean of the last five behind it in grey.
@@ -665,7 +671,7 @@
             }, onEachFeature: function (f, l) { l.bindTooltip(function () { return '<b>' + esc(f.properties.district) + '</b><br>' + byAac[f.properties.aac].map(function (w) { return esc(w.title); }).join('<br>'); }, {sticky: true, className: 'hx-tip'}); }}).addTo(warnLayer);
         }
         if (lastStations) {
-            var r = Math.max(2.5, Math.min(5, map.getZoom() * .6));
+            var r = dotRadius(map.getZoom());
             lastStations.features.forEach(function (f) {
                 var ws = byAac[f.properties.district];
                 if (!ws) return;
@@ -1020,7 +1026,7 @@
     map.on('zoomend', stations);
     map.on('moveend', function () { if (inView) legend(); });
     map.on('click', function (e) { probe(e.latlng.lat, e.latlng.lng); });
-    document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; probeLayer.eachLayer(function (l) { if (l.setStyle && l.options.color !== NONE) l.setStyle({color: REACH}); }); stations(); drawReach(); });
+    document.addEventListener('gully:theme', function () { REACH = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-reach').trim() || REACH; INK = getComputedStyle(document.querySelector('.map-page')).getPropertyValue('--p-fg').trim() || INK; probeLayer.eachLayer(function (l) { if (l.setStyle && l.options.color !== NONE) l.setStyle({color: REACH}); }); stations(); drawReach(); });
     document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); loadReach(true); } });
 
     buildSide();
