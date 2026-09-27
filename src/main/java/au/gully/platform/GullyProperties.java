@@ -52,9 +52,13 @@ public record GullyProperties(
      * @param requestsPerMinutePerKey the per-minute ceiling on one key, answered with the RateLimit headers
      * @param requestsPerDayPerKey    the daily cap on one key, so a runaway consumer stops at a number
      *                                rather than at the month's allowance
+     * @param hubKey                  the key the Hub presents, made by the Hub's {@code docker/make-env.sh}
+     *                                and held from the first start as if the console had issued it;
+     *                                blank holds nothing
      */
     public record Api(@DefaultValue List<String> corsOrigins,
                       @DefaultValue("600") int requestsPerMinutePerKey,
-                      @DefaultValue("100000") int requestsPerDayPerKey) {
+                      @DefaultValue("100000") int requestsPerDayPerKey,
+                      String hubKey) {
     }
 }

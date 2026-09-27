@@ -85,3 +85,4 @@ gully:
     code: ${WEATHER_CONSOLE_CODE:}
   api:
     cors-origins: ${WEATHER_CORS_ORIGINS:}
+    hub-key: ${HUB_WEATHER_API_KEY:}

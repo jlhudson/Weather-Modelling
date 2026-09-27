@@ -76,6 +76,38 @@ public class ApiKeys {
                 scope.name(), now, createdBy, null, null), plaintext);
     }
 
+    /**
+     * A key the deployment made rather than the console: its hash is stored as an issued key's is, so
+     * the consumer holding the same plaintext is let in from the first start. A key already held is
+     * left as it is, so one revoked on the console stays revoked.
+     *
+     * @return whether a key was added
+     */
+    @Transactional
+    public boolean provision(String consumer, ApiKey.Scope scope, String plaintext) {
+        if (plaintext == null || plaintext.isBlank()) {
+            return false;
+        }
+        String key = plaintext.trim();
+        if (!key.startsWith(PREFIX) || key.length() < 12) {
+            log.error("api key for {} not held: it does not start with {}", consumer, PREFIX);
+            return false;
+        }
+        String hash = Hashing.sha256Hex(key);
+        if (byHash(hash).isPresent()) {
+            return false;
+        }
+        db.sql("""
+                        insert into api_key (consumer, key_prefix, key_hash, scope, created_at, created_by)
+                        values (:consumer, :prefix, :hash, :scope, :at, 'environment')""")
+                .param("consumer", consumer).param("prefix", key.substring(0, 12))
+                .param("hash", hash).param("scope", scope.name()).param("at", Db.ts(Instant.now()))
+                .update();
+        byHash.invalidate(hash);
+        log.info("api key {} held for {} ({}) from the environment", key.substring(0, 12), consumer, scope);
+        return true;
+    }
+
     @Transactional
     public void revoke(long id, String by) {
         find(id).ifPresent(k -> {

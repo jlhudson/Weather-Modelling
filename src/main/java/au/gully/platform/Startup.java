@@ -2,6 +2,8 @@ package au.gully.platform;
 
 import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
+import au.gully.platform.access.ApiKey;
+import au.gully.platform.access.ApiKeys;
 import au.gully.platform.access.ConsoleUsers;
 import au.gully.platform.diagnostics.StartupHistory;
 import au.gully.reach.ReachRule;
@@ -22,7 +24,7 @@ import java.time.Instant;
  * What the start does, in order, each step timed into {@link StartupHistory} so the diagnostics can
  * say what happened:
  * <ol>
- *   <li>the console user;</li>
+ *   <li>the console user, and the Hub's key when the deployment made one;</li>
  *   <li>the registers back into memory from the database;</li>
  *   <li>the two timers (W-15): the Bureau's file every ten minutes, and the housekeeping once a day
  *       at half past nine local - and once a minute after the start, so a fresh deployment is not
@@ -49,11 +51,13 @@ public class Startup implements ApplicationRunner {
     private final StartupHistory history;
     private final TaskScheduler scheduler;
     private final Settings settings;
+    private final ApiKeys apiKeys;
 
     @Override
     public void run(ApplicationArguments args) {
         settings.print();
         step(1, "console user", consoleUsers::ensureUser);
+        step(1, "the Hub's key", () -> apiKeys.provision("hub", ApiKey.Scope.ALL, properties.api().hubKey()));
         step(2, "registers from the database", () -> {
             stations.rehydrate();
             terrain.rehydrate();

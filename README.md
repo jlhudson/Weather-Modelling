@@ -50,7 +50,8 @@ docker compose up -d --build
 The console is at <http://localhost:8082/console/map>, username `operator`, the 8-digit code from
 `.env`. The stack is Postgres, the service, and with `COMPOSE_PROFILES=edge` and a
 `CLOUDFLARE_TUNNEL_TOKEN` the Cloudflare connector that publishes it. The Hub reaches it at
-`HUB_WEATHER_URL` with a key issued on `/console/api-keys` here.
+`HUB_WEATHER_URL` with the key in `HUB_WEATHER_API_KEY`, which this service holds from its first
+start (the Hub's `docker/make-env.sh` makes it), or one issued on `/console/api-keys` here.
 
 **From the IDE.** `au.gully.Application`, with Postgres reachable at `localhost:5435` (this repository's
 compose Postgres, started alone with `docker compose up -d db`). Flyway creates the schema on first boot.

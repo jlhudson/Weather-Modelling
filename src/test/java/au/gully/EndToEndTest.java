@@ -42,7 +42,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @Testcontainers(disabledWithoutDocker = true)
 @org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestPropertySource(properties = {"gully.enabled=false", "gully.console.code=12345678", "spring.flyway.clean-disabled=true"})
+@TestPropertySource(properties = {"gully.enabled=false", "gully.console.code=12345678", "spring.flyway.clean-disabled=true",
+        "gully.api.hub-key=" + EndToEndTest.HUB_KEY})
 class EndToEndTest {
 
     static final String HUB_KEY = "weather_end-to-end-test-key-for-the-hub";
@@ -83,13 +84,12 @@ class EndToEndTest {
     }
 
     /**
-     * A key issued as the console would issue it: the hash in the table, the plaintext with the caller.
+     * The Hub's key, held from the start as the console would have issued it: the hash in the table,
+     * the plaintext only in the environment and with the caller.
      */
     private void issueHubKey() {
-        if (db.sql("select count(*) from api_key where consumer = 'hub'").query(Long.class).single() == 0) {
-            db.sql("insert into api_key (consumer, created_at, created_by, key_hash, key_prefix, scope) values ('hub', now(), 'test', :hash, 'weather_end', 'ALL')")
-                    .param("hash", Hashing.sha256Hex(HUB_KEY)).update();
-        }
+        assertThat(db.sql("select consumer || ' ' || scope || ' ' || created_by from api_key where key_hash = :hash")
+                .param("hash", Hashing.sha256Hex(HUB_KEY)).query(String.class).single()).isEqualTo("hub ALL environment");
     }
 
     private void takeInTheFixture() throws Exception {
