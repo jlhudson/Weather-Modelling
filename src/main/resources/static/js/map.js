@@ -512,7 +512,10 @@
             outside.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: NONE, weight: 1, opacity: .6, dashArray: '4 5', interactive: false}).addTo(probeLayer); });
             var el = $('detail'), c = o.current, d = o.drought, f = o.fire;
             var html = '<div class="drawer-head"><h3>' + (o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span></h3><button class="pill" id="grab" title="Ask the upstreams now, whatever the timers say: the Bureau\'s file, the days the stations in reach are missing, a point of ours\' current" type="button">' + icon('refresh') + ' force grab</button><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
-            html += '<p class="muted mb-1">' + (o.from === 'stations' ? 'From the Bureau\'s stations whose reach contains this point' : o.from === 'point' ? 'From a point of ours whose reach contains this place: the model\'s current, its own year of record' : 'Nobody\'s reach contained this place: a point of ours dropped here just now, with the model\'s current and a year of the archive') + '.</p>';
+            // The point of ours that answered, deletable from here (W-40): the undo for a click that landed in the sea.
+            var ours = o.from !== 'stations' ? o.stations.filter(function (s) { return s.kind === 'point'; })[0] : null;
+            html += '<div class="point-line"><p class="muted mb-1">' + (o.from === 'stations' ? 'From the Bureau\'s stations whose reach contains this point' : o.from === 'point' ? 'From a point of ours whose reach contains this place: the model\'s current, its own year of record' : 'Nobody\'s reach contained this place: a point of ours dropped here just now, with the model\'s current and a year of the archive') + '.</p>'
+                + (ours ? deleteControl(ours.id, ours.name) : '') + '</div>';
             if (o.grabbed) html += '<p class="grabbed">' + icon('refresh') + ' Grabbed just now: ' + esc(grabWords(o.grabbed, o.from)) + '</p>';
             html += '<div class="reading">'
                 + tile(fmt(c.temperatureC, 1) + ' °C', 'temperature', c.from.temperatureC, 'ground')
@@ -545,6 +548,7 @@
             if (o.stations.length) map.panInside([o.stations[0].lat, o.stations[0].lon], pad);
             $('close').addEventListener('click', closeDetail);
             $('grab').addEventListener('click', function () { probe(lat, lon, true); });
+            wireDelete(el);
             el.querySelectorAll('[data-station]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); detail(a.dataset.station); }); });
         }).catch(function (e) { note('reading failed: ' + e); });
     }
@@ -776,6 +780,7 @@
             var el = $('detail');
             if (!s) { el.innerHTML = '<div class="drawer-head"><h3>' + esc(id) + '</h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div><p class="muted">not held</p>'; el.classList.remove('hidden'); $('close').addEventListener('click', closeDetail); return; }
             var html = '<div class="drawer-head"><h3>' + esc(s.name) + ' <span class="muted">' + esc(s.id) + (s.wmoId ? ' · WMO ' + esc(s.wmoId) : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            if (s.kind === 'point') html += '<div class="point-line"><p class="muted mb-1">A point of ours, dropped where no station reached: the model\x27s current and a year of the archive.</p>' + deleteControl(s.id, s.name) + '</div>';
             html += '<h2>Station</h2>' + kv([
                 ['position', fmt(s.lat, 4) + ', ' + fmt(s.lon, 4)],
                 ['height', s.heightM != null ? s.heightM + ' m' : null],
@@ -818,9 +823,36 @@
             el.classList.remove('hidden');
             $('close').addEventListener('click', closeDetail);
             if ($('sampleNow')) $('sampleNow').addEventListener('click', function () { sampleTerrain(id); });
+            wireDelete(el);
         }).catch(function (e) { note('station failed: ' + e); });
     }
     function closeDetail() { askSeq++; $('detail').classList.add('hidden'); state.selected = null; clearProbe(); stations(); drawReach(); }
+
+    // ---- deleting a point of ours (W-40): a click in the wrong place - the sea, say - undone, in two steps in the drawer.
+    // Only a point has the button; the server refuses a Bureau station anyway.
+    function deleteAsk() { return '<button class="pill danger" data-del="ask" type="button">' + icon('close') + ' delete this point</button>'; }
+    function deleteControl(id, name) { return '<span class="del" data-point="' + esc(id) + '" data-name="' + esc(name) + '">' + deleteAsk() + '</span>'; }
+    function wireDelete(el) {
+        el.querySelectorAll('.del[data-point]').forEach(function (d) {
+            d.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-del]');
+                if (!b) return;
+                if (b.dataset.del === 'ask') d.innerHTML = '<span>delete ' + esc(d.dataset.name) + ' and its record?</span><button class="pill danger" data-del="yes" type="button">yes, delete</button><button class="pill" data-del="no" type="button">no</button>';
+                else if (b.dataset.del === 'no') d.innerHTML = deleteAsk();
+                else deletePoint(d);
+            });
+        });
+    }
+    function deletePoint(d) {
+        var headers = window.gullyCsrf ? window.gullyCsrf() : {}, name = d.dataset.name;
+        d.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+        fetch('/console/map/point/' + encodeURIComponent(d.dataset.point), {method: 'DELETE', headers: headers}).then(json).then(function () {
+            closeDetail();
+            note(name + ' deleted');
+            load();
+            loadReach(true);
+        }).catch(function (e) { d.innerHTML = deleteAsk(); note('delete failed: ' + e); });
+    }
 
     // ---- the footer: read now, and live
     var noteTimer = null;

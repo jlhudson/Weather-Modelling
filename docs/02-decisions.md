@@ -587,3 +587,18 @@ date (fifteen tables), and the pages linked to each other.
 **Why.** James: "update the documents with a bunch of our findings and information". Most of what was learnt lived only
 in commit messages and a conversation; the next person to touch a source should find its traps before they fall in.
 — James, 25 September 2026.
+
+### W-40 · A point of ours can be deleted
+
+**The decision.** A point of ours has a *delete this point* pill in its drawer, and in the drawer of a reading it
+answered - the undo for a click that landed in the sea. It asks once more in the same place (*delete … and its
+record? yes, delete · no*), then `DELETE /console/map/point/{id}` removes what expiry removes: the register row and
+its readings, the terrain, the six-hour windows and days, the forecast, and the backfill's rest, so the same place
+asked again is dropped afresh. A Bureau station is refused (409); the readings kept for a reference (W-27) stay, since
+the history is ours. The operator is logged. It is a console action, not an API one: a consumer asks, and never
+deletes.
+
+**Why.** James: "sometimes I click on the map and accidentally generate data for like the ocean … I would like to be
+able to reselect points and delete them (not stations)". On 27 September 2026 three of the 22 points were below sea
+level - one at −36 m in Gulf St Vincent - with no way to remove them short of 548 days or the admin reset. He chose
+the inline two-step over a browser dialog. — James, 27 September 2026.

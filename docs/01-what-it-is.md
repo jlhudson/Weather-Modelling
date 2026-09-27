@@ -169,7 +169,8 @@ its terrain sampled and its reach drawn by the same rule, its current from Open-
 block, with the rain since 9 am and the day's total summed from the 48 hours of series behind it),
 and a year of the archive for its record. The first ask at a new place takes a few seconds; every
 later ask inside its reach is immediate. A point no ask has used for 548 days is dropped again,
-record and all. A point never gets a six-hour ledger: its days come from the archive, not from
+record and all; one dropped in the wrong place - a click that landed in the sea - is deleted the same way from
+its drawer on the map, or from the reading it answered (W-40). A point never gets a six-hour ledger: its days come from the archive, not from
 folding its fetches; and nothing of a point moves on a timer (W-14) - its current and its missing
 days are fetched when an ask lands in its reach, and only then. On the map a point is an amber diamond, filled with its value like a station.
 

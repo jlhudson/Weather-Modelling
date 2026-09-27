@@ -31,7 +31,8 @@ import java.util.Optional;
  * record from the archive - and from then on it is in the register like any station. A later ask
  * inside its reach reuses it: its current is fetched again when it is older than
  * {@link #CURRENT_LIFE}, its record filled for the days missing, nothing else touched. A point no
- * ask has used for {@link #KEEP_UNASKED} is dropped again, record and all.
+ * ask has used for {@link #KEEP_UNASKED} is dropped again, record and all; one dropped in the wrong place is deleted
+ * by hand from the map (W-40).
  */
 @Slf4j
 @Service
@@ -166,14 +167,35 @@ public class Points {
         for (Station p : stations.points()) {
             Instant last = stations.lastAsked(p.id());
             if (last == null || Duration.between(last, now).compareTo(KEEP_UNASKED) > 0) {
-                stations.remove(p.id());
-                terrain.remove(p.id());
-                record.forget(p.id());
-                forecasts.forget(p.id());
+                forget(p);
                 n++;
                 log.info("point {} ({}) expired: last asked {}", p.id(), p.name(), last);
             }
         }
         return n;
+    }
+
+    /**
+     * A point deleted by hand (W-40) - a click in the wrong place, the sea say, undone: gone as an expired point goes.
+     * A Bureau station is not ours to delete, and is left alone. The readings kept for a reference (W-27) stay.
+     */
+    public Optional<Station> delete(String id, String by) {
+        Optional<Station> p = stations.station(id).filter(Station::isPoint);
+        p.ifPresent(x -> {
+            forget(x);
+            log.info("point {} ({}) deleted by {}", x.id(), x.name(), by);
+        });
+        return p;
+    }
+
+    /**
+     * Everything held of a point: the register and its readings, the terrain, the record, the forecast and the backfill's rest.
+     */
+    private void forget(Station p) {
+        stations.remove(p.id());
+        terrain.remove(p.id());
+        record.forget(p.id());
+        forecasts.forget(p.id());
+        backfill.forget(p.id());
     }
 }

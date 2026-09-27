@@ -392,6 +392,7 @@ class EndToEndTest {
      */
     @Test
     @org.junit.jupiter.api.Order(8)
+    @SuppressWarnings("unchecked")
     void theConsoleLogsInAndEveryPageRenders() throws Exception {
         takeInTheFixture();
         ResponseEntity<String> loginPage = client().get().uri("/login").retrieve().toEntity(String.class);
@@ -443,6 +444,31 @@ class EndToEndTest {
         }
         String points = client().get().uri("/console/map/stations.geojson").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
         assertThat(points).contains("\"stations\":3").contains("\"points\":").contains("\"fresh\":");
+
+        // A point of ours deleted by hand (W-40), with the map page's token: gone from memory and every table; a Bureau
+        // station refused and kept; without the token, nothing.
+        issueHubKey();
+        double[] far = au.gully.reach.Geo.destination(-34.9257, 138.5832, 90, 140);
+        Map<String, Object> dropped = client().get().uri("/api/v1/reading?lat=" + far[0] + "&lon=" + far[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        String pointId = (String) ((List<Map<String, Object>>) dropped.get("stations")).stream().filter(s -> "point".equals(s.get("kind"))).findFirst().orElseThrow().get("id");
+        String mapPage = client().get().uri("/console/map").header(HttpHeaders.COOKIE, session).retrieve().body(String.class);
+        java.util.regex.Matcher token = java.util.regex.Pattern.compile("<meta name=\"_csrf\" content=\"([^\"]+)\"").matcher(mapPage);
+        assertThat(token.find()).as("the map page carries a CSRF token").isTrue();
+        assertThat(client().delete().uri("/console/map/point/" + pointId).header(HttpHeaders.COOKIE, session).retrieve().toBodilessEntity().getStatusCode())
+                .as("without the token").isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(client().delete().uri("/console/map/point/023000").header(HttpHeaders.COOKIE, session).header("X-CSRF-TOKEN", token.group(1)).retrieve().toBodilessEntity().getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(stations.station("023000")).isPresent();
+        ResponseEntity<Map> deleted = client().delete().uri("/console/map/point/" + pointId).header(HttpHeaders.COOKIE, session).header("X-CSRF-TOKEN", token.group(1)).retrieve().toEntity(Map.class);
+        assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(deleted.getBody()).containsEntry("deleted", pointId);
+        assertThat(stations.station(pointId)).isEmpty();
+        for (String table : new String[]{"station", "station_reading", "station_hour6", "station_day", "station_forecast", "terrain"}) {
+            assertThat(db.sql("select count(*) from " + table + " where " + (table.equals("station") ? "id" : "station_id") + " = :id").param("id", pointId).query(Long.class).single())
+                    .as(table).isZero();
+        }
+        assertThat(client().delete().uri("/console/map/point/" + pointId).header(HttpHeaders.COOKIE, session).header("X-CSRF-TOKEN", token.group(1)).retrieve().toBodilessEntity().getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
         // Without the cookie, the console is the login page.
         ResponseEntity<Void> anonymous = client().get().uri("/console/map").retrieve().toEntity(Void.class);
         assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);

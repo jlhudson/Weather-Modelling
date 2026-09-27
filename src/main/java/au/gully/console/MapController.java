@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -47,6 +48,7 @@ public class MapController {
     private final au.gully.cfs.FireBan fireBan;
     private final au.gully.bureau.Warnings warnings;
     private final au.gully.reading.OutlookMap outlook;
+    private final au.gully.reading.Points points;
 
     @GetMapping
     public String page(Model model) {
@@ -98,6 +100,27 @@ public class MapController {
     @ResponseBody
     public ResponseEntity<Map<String, Object>> station(@PathVariable String id) {
         return details.of(id).map(ResponseEntity::ok).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+    }
+
+    /**
+     * Delete a point of ours (W-40): a click in the wrong place undone - the register, readings, terrain, record and
+     * forecast, as expiry drops one. A Bureau station is refused; it is the Bureau's.
+     */
+    @DeleteMapping(value = "/point/{id}", produces = "application/json")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> deletePoint(@PathVariable String id) {
+        au.gully.bureau.Station s = stations.station(id).orElse(null);
+        if (s == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        if (!s.isPoint()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title", "Not a point of ours", "detail", s.name() + " is a Bureau station"));
+        }
+        points.delete(id, ConsoleModel.operatorName());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("deleted", id);
+        out.put("name", s.name());
+        return ResponseEntity.ok(out);
     }
 
     /**

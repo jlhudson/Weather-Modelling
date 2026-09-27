@@ -139,6 +139,13 @@ public class Backfill {
     }
 
     /**
+     * One station's rest forgotten: a point of ours gone, so the same place dropped again is filled at once.
+     */
+    public void forget(String stationId) {
+        attempted.remove(stationId);
+    }
+
+    /**
      * The housekeeping's fill: every Bureau station wanting days, one after another.
      *
      * @return how many days were new, over every station
