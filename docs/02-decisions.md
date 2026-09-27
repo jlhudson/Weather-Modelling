@@ -668,6 +668,6 @@ shows the first twelve hours with the other sixty folded under them.
 
 **Why.** James asked whether the Hub gets "all weather from NOW until the future"; it got twelve hours and three days
 while Weather held seventy-two and seven. "Yes, send the full 72 hours and 7 days, index, and more!" Each stored forecast
-grows from about 6 KB to about 35 KB; the Hub and its readers (IncidentWatch, FireBuddy) take the arrays as they come -
+grows from about 6 KB to 38 KB, measured on the first live one (the whole reading 45 KB); the Hub and its readers (IncidentWatch, FireBuddy) take the arrays as they come -
 they pick the nearest hour, list twelve, or show five days. Google, the fallback, still gives its first page of 24 hours.
 — James, 27 September 2026.
