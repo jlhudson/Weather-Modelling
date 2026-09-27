@@ -1,0 +1,12 @@
+# Development only: build the app and its backup from this checkout instead of pulling what CI pushed.
+# `docker compose up -d --build` in this folder merges this file into compose.yaml by itself.
+#
+# Portainer never reads it: a stack deploys only the compose path it is given. Keep every `build:`
+# here, because Portainer builds each one it finds in compose.yaml before it deploys.
+services:
+  app:
+    build: .
+    pull_policy: build
+  backup:
+    build: docker/backup
+    pull_policy: build

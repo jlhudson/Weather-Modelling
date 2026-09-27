@@ -41,16 +41,23 @@ limits in the `RateLimit-*` headers.
 
 ## Running it
 
-**With compose.** Copy `.env.example` to `.env`, set `WEATHER_CONSOLE_CODE` and `POSTGRES_PASSWORD`, then:
+**With compose.** Once per machine, create the network every stack's app joins. Then copy
+`.env.example` to `.env`, set `WEATHER_CONSOLE_CODE` and `POSTGRES_PASSWORD`, and start the stack;
+`compose.override.yaml` builds the image from this checkout:
 
 ```bash
+docker network create apps
 docker compose up -d --build
 ```
 
 The console is at <http://localhost:8082/console/map>, username `operator`, the 8-digit code from
-`.env`. The stack is Postgres, the service, and with `COMPOSE_PROFILES=edge` and a
-`CLOUDFLARE_TUNNEL_TOKEN` the Cloudflare connector that publishes it. The Hub reaches it at
-`HUB_WEATHER_URL` with a key issued on `/console/api-keys` here.
+`.env`. The stack is standalone: Postgres, the service, the nightly backup, and with
+`COMPOSE_PROFILES=edge` and a `CLOUDFLARE_TUNNEL_TOKEN` the Cloudflare connector that publishes it.
+The Hub reaches it at `http://weather-app:8082` on the `apps` network when the two stacks share a
+machine (its `HUB_WEATHER_URL` default), or at `https://weather.cranklyradix.com.au` from another, with
+a key issued on `/console/api-keys` here. On the server the same `compose.yaml` is the `weather`
+Portainer stack from `main`, pulling the image CI pushes; Portainer redeploys it on every merge
+([The Hub's deployment guide](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/deployment.md)).
 
 **From the IDE.** `au.gully.Application`, with Postgres reachable at `localhost:5435` (this repository's
 compose Postgres, started alone with `docker compose up -d db`). Flyway creates the schema on first boot.

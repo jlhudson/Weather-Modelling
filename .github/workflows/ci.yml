@@ -51,8 +51,8 @@ jobs:
 
   # On main, once the tests pass: the images to GitHub's registry, tagged main and the commit, so a
   # server pulls what was tested instead of building it, and a rollback is a tag (IMAGE_TAG in .env).
-  # Nothing is deployed from here: the servers take new images at 19:00 Adelaide time, when the updater
-  # beside Portainer calls each stack's webhook (The-Hub-Database/docs/deployment.md).
+  # Nothing is deployed from here: Portainer redeploys the stack when main gets a new commit, and
+  # Pull and redeploy brings in an image pushed without one (The-Hub-Database/docs/deployment.md).
   image:
     name: Image ${{ matrix.name }}
     needs: build
