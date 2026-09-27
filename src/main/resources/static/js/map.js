@@ -156,7 +156,7 @@
         var staleVals = props.filter(function (p) { return stale(p, v); }).map(function (p) { return valueOf(p, v); });
         var outlookDate = v.outlook != null && lastOutlook && lastOutlook.dates ? lastOutlook.dates[v.outlook] : null;
         $('legendTitle').textContent = v.name + (v.unit ? ' · ' + v.unit : '') + (outlookDate ? ' · ' + outlookDate : '');
-        $('legendCount').textContent = vals.length + ' of ' + props.length + (inView ? ' in view' : ' stations') + (staleVals.length ? ' 00b7 ' + staleVals.length + ' stale' : '');
+        $('legendCount').textContent = vals.length + ' of ' + props.length + (inView ? ' in view' : ' stations') + (staleVals.length ? ' · ' + staleVals.length + ' stale' : '');
         var lo = v.range[0], hi = v.range[1];
         var mean = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
         var min = vals.length ? Math.min.apply(null, vals) : null, max = vals.length ? Math.max.apply(null, vals) : null;
@@ -417,7 +417,7 @@
             reachSaved(o.reachKm, o.kmPer100m, o.inlandPct, Math.round(o.descentShare * 100), o.by, o.since);
             note('reach set: ' + ruleWords(o));
             loadReach(true);
-            if (state.selected) detail(state.selected);
+            if (state.selected) detail(state.selected, true);
         }).catch(function (e) { $('reachSet').disabled = false; note('set failed: ' + e); });
     }
     function sampleTerrain(id) {
@@ -427,8 +427,8 @@
         fetch('/console/map/terrain/' + encodeURIComponent(id), {method: 'POST', headers: headers}).then(json).then(function (o) {
             note(o.sampled ? 'terrain sampled: ' + o.terrain.tiles + ' tiles fetched' : 'sampling failed: ' + (o.failure || ''));
             loadReach(true);
-            if (state.selected === id) detail(id);
-        }).catch(function (e) { note('sampling failed: ' + e); if (state.selected === id) detail(id); });
+            if (state.selected === id) detail(id, true);
+        }).catch(function (e) { note('sampling failed: ' + e); if (state.selected === id) detail(id, true); });
     }
 
     // ---- the drawer: everything held for one station
@@ -480,7 +480,20 @@
     // stations that fed it with their shares, and the nearest outside with why (the probe, W-5).
     // One question at a time: a reading or a station asked for later wins, and an answer to an earlier one is dropped.
     var askSeq = 0;
-    function clearProbe() { state.probe = null; probeLayer.clearLayers(); }
+    function clearProbe() { state.probe = null; spokes = {}; back = null; probeLayer.clearLayers(); }
+    // The drawer's way back (W-41): a station opened from a reading's list keeps the reading behind it - the pin and the
+    // spokes on the map, the answer held - and back draws the reading again from what it held, without asking again. A
+    // click on the map starts afresh. {kind: 'reading', lat, lon, o, outside, scroll}
+    var back = null;
+    // The spokes from the pin, by station: one lit while its row is pointed at or its station is open.
+    var spokes = {};
+    function lightSpoke(id) {
+        Object.keys(spokes).forEach(function (k) {
+            var s = spokes[k];
+            s.line.setStyle(k === id ? {weight: 3.5, opacity: 1} : {weight: s.base.weight, opacity: id == null ? s.base.opacity : s.base.opacity * .45});
+            if (k === id) s.line.bringToFront();
+        });
+    }
     // A click is an ask from outside (W-14): it goes through the API's front door with the console's own key - scope,
     // rate and access log like any consumer's - so what the map shows is what The Hub gets. A refusal is a problem
     // detail, and its title and detail are the note.
@@ -507,50 +520,87 @@
             var ids = o.stations.map(function (s) { return s.id; });
             state.probe = {lat: lat, lon: lon, ids: ids};
             if (o.from !== 'stations') { load(); loadReach(true); } else drawReach();
-            o.stations.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: REACH, weight: 1.5, opacity: .85, interactive: false}).addTo(probeLayer); });
             var outside = pr.outside.filter(function (s) { return ids.indexOf(s.id) < 0; });
-            outside.forEach(function (s) { L.polyline([[lat, lon], [s.lat, s.lon]], {color: NONE, weight: 1, opacity: .6, dashArray: '4 5', interactive: false}).addTo(probeLayer); });
-            var el = $('detail'), c = o.current, d = o.drought, f = o.fire;
-            var html = '<div class="drawer-head"><h3>' + (o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span></h3><button class="pill" id="grab" title="Ask the upstreams now, whatever the timers say: the Bureau\'s file, the days the stations in reach are missing, a point of ours\' current" type="button">' + icon('refresh') + ' force grab</button><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
-            // The point of ours that answered, deletable from here (W-40): the undo for a click that landed in the sea.
-            var ours = o.from !== 'stations' ? o.stations.filter(function (s) { return s.kind === 'point'; })[0] : null;
-            html += '<div class="point-line"><p class="muted mb-1">' + (o.from === 'stations' ? 'From the Bureau\'s stations whose reach contains this point' : o.from === 'point' ? 'From a point of ours whose reach contains this place: the model\'s current, its own year of record' : 'Nobody\'s reach contained this place: a point of ours dropped here just now, with the model\'s current and a year of the archive') + '.</p>'
-                + (ours ? deleteControl(ours.id, ours.name) : '') + '</div>';
-            if (o.grabbed) html += '<p class="grabbed">' + icon('refresh') + ' Grabbed just now: ' + esc(grabWords(o.grabbed, o.from)) + '</p>';
-            html += '<div class="reading">'
-                + tile(fmt(c.temperatureC, 1) + ' °C', 'temperature', c.from.temperatureC, 'ground')
-                + tile(fmt(c.humidityPct, 0) + ' %', 'humidity', c.from.humidityPct, 'ground')
-                + tile(c.windSpeedKmh != null ? dirWord(c.windDirectionDeg) + ' ' + fmt(c.windSpeedKmh, 0) + '<small>km/h' + (c.windGustKmh != null ? ' · gust ' + fmt(c.windGustKmh, 0) : '') + '</small>' : '—', 'wind', c.from.windSpeedKmh, 'ground')
-                + tile(fmt(c.rainSince9amMm, 1) + '<small>mm</small>', 'rain since 9 am', c.from.rainSince9amMm, 'ground')
-                + tile(fmt(d.kbdiMm, 0) + '<small>mm' + (d.band ? ' · ' + esc(String(d.band).toLowerCase()) : '') + '</small>', 'KBDI', d.from, 'drought')
-                + tile(fmt(d.droughtFactor, 1) + '<small>of 10' + (d.complete === false ? ' · spin-up short' : '') + '</small>', 'drought factor', d.from, 'drought')
-                + tile(f.ffdi != null ? fmt(f.ffdi, 0) + '<small>' + esc(String(f.ffdiRating).toLowerCase()) + '</small>' : '—', 'FFDI', f.ffdi != null ? null : Object.keys(f.inputs).filter(function (k) { return !f.inputs[k]; }), 'fire')
-                + (o.afdrs ? tile(o.afdrs.fbi != null ? fmt(o.afdrs.fbi, 0) + '<small>' + esc(o.afdrs.rating) + '</small>' : '—', 'AFDRS here', [(o.afdrs.fuel.type || '') + (o.afdrs.fbi == null && o.afdrs.note ? ': ' + o.afdrs.note : '')], 'fire') : '')
-                + grassTiles(f.grass)
-                + (f.forest ? tile(fmt(f.forest.fbi, 0) + '<small>' + esc(f.forest.rating) + ' 00b7 ' + fmt(f.forest.rateOfSpreadKmh, 2) + ' km/h</small>', 'forest FBI (AFDRS)', ['provisional fuel'], 'fire') : '')
-                + tile(c.dewPointC != null ? fmt(c.dewPointC, 1) + ' °C' : '—', 'dew point', c.from.dewPointC, 'ground')
-                + '</div>';
-            html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';
-            if (o.modelNow && o.modelNow.length) html += '<p class="grabbed model">' + esc(o.modelNow.length) + ' station' + (o.modelNow.length === 1 ? '' : 's') + ' in reach ' + (o.modelNow.length === 1 ? 'has' : 'have') + ' gone quiet, so the model\x27s now stands in for ' + (o.modelNow.length === 1 ? 'it' : 'them') + ': ' + esc(o.modelNow.join(', ')) + '.</p>';
-            html += warningsSection(o.warnings);
-            html += fireBanSection(o.fireBan);
-            html += forecastSection(o.forecast);
-            html += floodSection(o.flood);
-            html += '<h2>The stations <span class="muted">' + o.stations.length + ' in reach · their share of the blend</span></h2>' + stationRows(o.stations, true);
-            if (outside.length) html += '<h2>Not in reach <span class="muted">the nearest ' + outside.length + ', and why</span></h2>' + stationRows(outside, false);
-            el.innerHTML = html;
-            el.classList.add('wide');
-            el.classList.remove('hidden');
+            o.stations.forEach(function (s) { spoke(lat, lon, s, {color: REACH, weight: 1.5, opacity: .85}); });
+            outside.forEach(function (s) { spoke(lat, lon, s, {color: NONE, weight: 1, opacity: .6, dashArray: '4 5'}); });
+            var r = {kind: 'reading', lat: lat, lon: lon, o: o, outside: outside, scroll: 0};
+            reading(r);
             $('note').classList.add('hidden');
             // The point, and the nearest station in reach, into the clear between the panel and the drawer.
-            var pad = {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [el.offsetWidth + 24, 24]};
+            var el = $('detail'), pad = {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [el.offsetWidth + 24, 24]};
             map.panInside([lat, lon], pad);
             if (o.stations.length) map.panInside([o.stations[0].lat, o.stations[0].lon], pad);
-            $('close').addEventListener('click', closeDetail);
-            $('grab').addEventListener('click', function () { probe(lat, lon, true); });
-            wireDelete(el);
-            el.querySelectorAll('[data-station]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); detail(a.dataset.station); }); });
         }).catch(function (e) { note('reading failed: ' + e); });
+    }
+    function spoke(lat, lon, s, style) {
+        style.interactive = false;
+        spokes[s.id] = {line: L.polyline([[lat, lon], [s.lat, s.lon]], style).addTo(probeLayer), base: {weight: style.weight, opacity: style.opacity}};
+    }
+    // The reading's drawer, from the answer held: drawn when it comes, and again on back.
+    function reading(r) {
+        var o = r.o, lat = r.lat, lon = r.lon, outside = r.outside;
+        var el = $('detail'), c = o.current, d = o.drought, f = o.fire;
+        var html = '<div class="drawer-head"><h3>' + (o.point.water ? 'A reading on the water' : 'A reading') + ' <span class="muted">' + fmt(lat, 4) + ', ' + fmt(lon, 4) + (o.point.heightM != null ? ' · ' + fmt(o.point.heightM, 0) + ' m' : '') + '</span></h3><button class="pill" id="grab" title="Ask the upstreams now, whatever the timers say: the Bureau\'s file, the days the stations in reach are missing, a point of ours\' current" type="button">' + icon('refresh') + ' force grab</button><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+        // The point of ours that answered, deletable from here (W-40): the undo for a click that landed in the sea.
+        var ours = o.from !== 'stations' ? o.stations.filter(function (s) { return s.kind === 'point'; })[0] : null;
+        html += '<div class="point-line"><p class="muted mb-1">' + (o.from === 'stations' ? 'From the Bureau\'s stations whose reach contains this point' : o.from === 'point' ? 'From a point of ours whose reach contains this place: the model\'s current, its own year of record' : 'Nobody\'s reach contained this place: a point of ours dropped here just now, with the model\'s current and a year of the archive') + '.</p>'
+            + (ours ? deleteControl(ours.id, ours.name) : '') + '</div>';
+        if (o.grabbed) html += '<p class="grabbed">' + icon('refresh') + ' Grabbed just now: ' + esc(grabWords(o.grabbed, o.from)) + '</p>';
+        html += '<div class="reading">'
+            + tile(fmt(c.temperatureC, 1) + ' °C', 'temperature', c.from.temperatureC, 'ground')
+            + tile(fmt(c.humidityPct, 0) + ' %', 'humidity', c.from.humidityPct, 'ground')
+            + tile(c.windSpeedKmh != null ? dirWord(c.windDirectionDeg) + ' ' + fmt(c.windSpeedKmh, 0) + '<small>km/h' + (c.windGustKmh != null ? ' · gust ' + fmt(c.windGustKmh, 0) : '') + '</small>' : '—', 'wind', c.from.windSpeedKmh, 'ground')
+            + tile(fmt(c.rainSince9amMm, 1) + '<small>mm</small>', 'rain since 9 am', c.from.rainSince9amMm, 'ground')
+            + tile(fmt(d.kbdiMm, 0) + '<small>mm' + (d.band ? ' · ' + esc(String(d.band).toLowerCase()) : '') + '</small>', 'KBDI', d.from, 'drought')
+            + tile(fmt(d.droughtFactor, 1) + '<small>of 10' + (d.complete === false ? ' · spin-up short' : '') + '</small>', 'drought factor', d.from, 'drought')
+            + tile(f.ffdi != null ? fmt(f.ffdi, 0) + '<small>' + esc(String(f.ffdiRating).toLowerCase()) + '</small>' : '—', 'FFDI', f.ffdi != null ? null : Object.keys(f.inputs).filter(function (k) { return !f.inputs[k]; }), 'fire')
+            + (o.afdrs ? tile(o.afdrs.fbi != null ? fmt(o.afdrs.fbi, 0) + '<small>' + esc(o.afdrs.rating) + '</small>' : '—', 'AFDRS here', [(o.afdrs.fuel.type || '') + (o.afdrs.fbi == null && o.afdrs.note ? ': ' + o.afdrs.note : '')], 'fire') : '')
+            + grassTiles(f.grass)
+            + (f.forest ? tile(fmt(f.forest.fbi, 0) + '<small>' + esc(f.forest.rating) + ' · ' + fmt(f.forest.rateOfSpreadKmh, 2) + ' km/h</small>', 'forest FBI (AFDRS)', ['provisional fuel'], 'fire') : '')
+            + tile(c.dewPointC != null ? fmt(c.dewPointC, 1) + ' °C' : '—', 'dew point', c.from.dewPointC, 'ground')
+            + '</div>';
+        html += '<p class="muted control-note">' + (c.at ? 'The current is as of ' + esc(when(c.at)) + ', ' + esc(ago(c.at)) + '. ' : '') + 'Temperature and dew point are brought to this point\'s height by the lapse rate; the rest is blended as it is, each value from the stations named under it, weighted by 1/cost² with the cost measured along the ray as the reach is.</p>';
+        if (o.modelNow && o.modelNow.length) html += '<p class="grabbed model">' + esc(o.modelNow.length) + ' station' + (o.modelNow.length === 1 ? '' : 's') + ' in reach ' + (o.modelNow.length === 1 ? 'has' : 'have') + ' gone quiet, so the model\x27s now stands in for ' + (o.modelNow.length === 1 ? 'it' : 'them') + ': ' + esc(o.modelNow.join(', ')) + '.</p>';
+        // The stations it leans on, under the figures they gave (W-41): a row opens the station, the reading kept behind it.
+        html += '<h2>The stations <span class="muted">' + o.stations.length + ' in reach · their share of the blend · open one for everything held for it</span></h2>' + stationRows(o.stations, true);
+        html += warningsSection(o.warnings);
+        html += fireBanSection(o.fireBan);
+        html += forecastSection(o.forecast);
+        html += floodSection(o.flood);
+        if (outside.length) html += '<h2>Not in reach <span class="muted">the nearest ' + outside.length + ', and why</span></h2>' + stationRows(outside, false);
+        el.innerHTML = html;
+        el.classList.add('wide');
+        el.classList.remove('hidden');
+        el.scrollTop = r.scroll;
+        shownId = null;
+        $('close').addEventListener('click', closeDetail);
+        $('grab').addEventListener('click', function () { probe(lat, lon, true); });
+        wireDelete(el);
+        // A row is the station: pointed at, its spoke is lit; clicked, it opens with the reading kept to go back to.
+        el.querySelectorAll('table.probe').forEach(function (t) {
+            t.addEventListener('click', function (e) {
+                var row = e.target.closest('tr[data-station]');
+                if (!row) return;
+                e.preventDefault();
+                r.scroll = el.scrollTop;
+                back = r;
+                detail(row.dataset.station, true);
+            });
+            t.addEventListener('mouseover', function (e) { var row = e.target.closest('tr[data-station]'); lightSpoke(row ? row.dataset.station : null); });
+            t.addEventListener('mouseleave', function () { lightSpoke(null); });
+        });
+    }
+    // Back from a station to the reading it was opened from: nothing asked, the map as the reading left it.
+    function goBack() {
+        var r = back;
+        if (!r) return;
+        askSeq++;
+        back = null;
+        state.selected = null;
+        lightSpoke(null);
+        stations();
+        drawReach();
+        reading(r);
     }
     // What a forced ask brought, in a line.
     function grabWords(g, from) {
@@ -568,11 +618,11 @@
     function stationRows(list, inReach) {
         var html = '<table class="table table-sm probe"><thead><tr><th>station</th><th class="num">km</th><th>from</th><th class="num">Δ m</th><th class="num">°C</th><th class="num">%</th><th>wind</th><th class="num">mm</th><th class="num" title="Keetch-Byram drought index, mm">KBDI</th><th class="num" title="drought factor, 0 to 10">DF</th><th>age</th></tr></thead><tbody>';
         list.forEach(function (s) {
-            html += '<tr' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#" data-station="' + esc(s.id) + '">' + esc(s.name) + '</a>' + (s.from === 'model' ? ' <span class="model-tag" title="its now is the model\x27s">model</span>' : '') + '</td>'
+            html += '<tr data-station="' + esc(s.id) + '"' + (s.fresh ? '' : ' class="stale"') + '><td><a href="#">' + esc(s.name) + '</a>' + (s.from === 'model' ? ' <span class="model-tag" title="its now is the model\x27s">model</span>' : '') + '</td>'
                 + '<td class="num">' + fmt(s.km, 1) + '</td><td class="mono">' + dirWord(s.bearingDeg) + '</td><td class="num">' + (s.aboveM != null ? (s.aboveM > 0 ? '+' : '') + s.aboveM : '—') + '</td>'
                 + '<td class="num">' + fmt(s.temperatureC, 1) + '</td><td class="num">' + fmt(s.humidityPct) + '</td><td class="mono">' + (s.windSpeedKmh != null ? dirWord(s.windDirectionDeg) + ' ' + Math.round(s.windSpeedKmh) : '—') + '</td><td class="num">' + fmt(s.rainSince9amMm, 1) + '</td><td class="num">' + fmt(s.kbdiMm, 0) + '</td><td class="num">' + fmt(s.droughtFactor, 1) + '</td><td class="muted">' + (s.at ? ago(s.at) : '—') + '</td></tr>';
-            if (!inReach) html += '<tr class="why"><td colspan="11" class="muted">' + esc(s.why) + '</td></tr>';
-            else if (s.margin != null) html += '<tr class="why"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut) : '') + '</td></tr>';
+            if (!inReach) html += '<tr class="why" data-station="' + esc(s.id) + '"><td colspan="11" class="muted">' + esc(s.why) + '</td></tr>';
+            else if (s.margin != null) html += '<tr class="why" data-station="' + esc(s.id) + '"><td colspan="11" class="muted">' + (s.weight != null && list.length ? 'share ' + Math.round(s.weight / list.reduce(function (a, x) { return a + (x.weight || 0); }, 0) * 100) + ' % · cost ' + fmt(s.costKm, 1) + ' km · gives ' + (s.gives && s.gives.length ? s.gives.join(", ") : "nothing") + ' · ' : '') + 'its ray towards here reaches ' + fmt(s.rayKm, 1) + ' km, ' + fmt(s.margin, 1) + ' km past the point' + (s.rayCut !== 'distance' ? ' · ' + esc(s.rayCut === 'height' ? 'cut by height' : s.rayCut === 'water' ? 'ends at the water' : s.rayCut) : '') + '</td></tr>';
         });
         return html + '</tbody></table>';
     }
@@ -692,7 +742,7 @@
         if (g.curingPct == null) return tile('—', 'grass', [g.note || 'no curing figure'], 'fire');
         var cured = [g.curingPct + ' % cured, ' + g.fuelLoadTHa + ' t/ha' + (g.curingOld ? ' (old)' : '')];
         return tile(g.gfdi != null ? fmt(g.gfdi, 0) + '<small>' + esc(String(g.gfdiRating).toLowerCase()) + '</small>' : '—', 'GFDI', cured, 'fire')
-            + tile(g.fbi != null ? fmt(g.fbi, 0) + '<small>' + esc(g.afdrsRating) + ' 00b7 ' + fmt(g.rateOfSpreadKmh, 1) + ' km/h</small>' : '—', 'grass FBI (AFDRS)', [g.condition || ''], 'fire');
+            + tile(g.fbi != null ? fmt(g.fbi, 0) + '<small>' + esc(g.afdrsRating) + ' · ' + fmt(g.rateOfSpreadKmh, 1) + ' km/h</small>' : '—', 'grass FBI (AFDRS)', [g.condition || ''], 'fire');
     }
     // An index in its band's colour: the six pre-2022 bands the FFDI was drawn against.
     var FFDI_COLOURS = {'LOW-MODERATE': '#22c55e', 'HIGH': '#3b82f6', 'VERY HIGH': '#eab308', 'SEVERE': '#f97316', 'EXTREME': '#ef4444', 'CATASTROPHIC': '#991b1b'};
@@ -701,7 +751,7 @@
     }
     function grassCell(gfdi, fbi, rating) {
         if (gfdi == null && fbi == null) return '—';
-        return fmt(gfdi, 0) + ' 00b7 ' + (fbi == null ? '—' : '<span class="ffdi" style="--r:' + (AFDRS_COLOURS[rating] || NONE) + '" title="' + esc(rating) + '">' + fmt(fbi, 0) + '</span>');
+        return fmt(gfdi, 0) + ' · ' + (fbi == null ? '—' : '<span class="ffdi" style="--r:' + (AFDRS_COLOURS[rating] || NONE) + '" title="' + esc(rating) + '">' + fmt(fbi, 0) + '</span>');
     }
     function ffdiCell(v, rating) {
         if (v == null) return '—';
@@ -769,17 +819,28 @@
         return html;
     }
 
-    function detail(id) {
+    // A station's drawer. Kept (W-41), whatever the drawer came from stays behind it - the reading, its pin and spokes -
+    // with a way back; otherwise it starts afresh, as a click on a station on the map does.
+    var shownId = null;
+    function backLine() { return back ? '<button class="back" id="back" title="Back to the reading (Esc)" type="button">‹ back to the reading <span class="muted">' + fmt(back.lat, 4) + ', ' + fmt(back.lon, 4) + '</span></button>' : ''; }
+    function wireHead() {
+        $('close').addEventListener('click', closeDetail);
+        if ($('back')) $('back').addEventListener('click', goBack);
+    }
+    function detail(id, keep) {
         var my = ++askSeq;
         state.selected = id;
-        clearProbe();
+        if (!keep) clearProbe();
+        lightSpoke(id);
         stations();
         drawReach();
         fetch('/console/map/station/' + encodeURIComponent(id)).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
             if (my !== askSeq) return;
             var el = $('detail');
-            if (!s) { el.innerHTML = '<div class="drawer-head"><h3>' + esc(id) + '</h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div><p class="muted">not held</p>'; el.classList.remove('hidden'); $('close').addEventListener('click', closeDetail); return; }
-            var html = '<div class="drawer-head"><h3>' + esc(s.name) + ' <span class="muted">' + esc(s.id) + (s.wmoId ? ' · WMO ' + esc(s.wmoId) : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            if (id !== shownId) el.scrollTop = 0;
+            shownId = id;
+            if (!s) { el.innerHTML = '<div class="drawer-head">' + backLine() + '<h3>' + esc(id) + '</h3><button class="icon-btn" id="close" type="button">' + icon('close') + '</button></div><p class="muted">not held</p>'; el.classList.remove('wide'); el.classList.remove('hidden'); wireHead(); return; }
+            var html = '<div class="drawer-head">' + backLine() + '<h3>' + esc(s.name) + ' <span class="muted">' + esc(s.id) + (s.wmoId ? ' · WMO ' + esc(s.wmoId) : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
             if (s.kind === 'point') html += '<div class="point-line"><p class="muted mb-1">A point of ours, dropped where no station reached: the model\x27s current and a year of the archive.</p>' + deleteControl(s.id, s.name) + '</div>';
             html += '<h2>Station</h2>' + kv([
                 ['position', fmt(s.lat, 4) + ', ' + fmt(s.lon, 4)],
@@ -821,7 +882,7 @@
             el.innerHTML = html;
             el.classList.remove('wide');
             el.classList.remove('hidden');
-            $('close').addEventListener('click', closeDetail);
+            wireHead();
             if ($('sampleNow')) $('sampleNow').addEventListener('click', function () { sampleTerrain(id); });
             wireDelete(el);
         }).catch(function (e) { note('station failed: ' + e); });
@@ -889,7 +950,7 @@
     $('reachSet').addEventListener('click', setReach);
     reachSaved($('reachSaved').dataset.km, $('reachSaved').dataset.per, $('reachSaved').dataset.inland, $('reachSaved').dataset.descent, $('reachSaved').dataset.by, $('reachSaved').dataset.since);
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeDetail();
+        if (e.key === 'Escape') { if (back) goBack(); else closeDetail(); }
     });
     $('inView').addEventListener('click', function () { inView = !inView; $('inView').classList.toggle('on', inView); $('inView').setAttribute('aria-checked', inView); legend(); });
     map.on('zoomend', stations);

@@ -602,3 +602,23 @@ deletes.
 able to reselect points and delete them (not stations)". On 27 September 2026 three of the 22 points were below sea
 level - one at −36 m in Gulf St Vincent - with no way to remove them short of 548 days or the admin reset. He chose
 the inline two-step over a browser dialog. — James, 27 September 2026.
+
+### W-41 · A reading's stations under its figures, opened with the reading kept
+
+**The decision.** The reading's drawer lists the stations in reach straight under the figures, before the warnings,
+the fire ban, the forecast and the flood; *not in reach* stays last. A row is its station: pointed at, its spoke from
+the pin is drawn bold and the rest fall back; clicked, the station's drawer opens with *‹ back to the reading* in its
+head, while the map keeps the pin and every spoke, lights that station's spoke and reach, and rings it. Back - or Esc -
+draws the reading again from the answer the page already holds, at the same scroll, and asks nothing: no second ask
+through the API, no point touched or dropped. A point of ours in either list opens the same way, delete and all
+(W-40); deleting one closes the reading, which named it. A station clicked on the map itself still starts afresh, as
+before. Three things found on the way are mended: a literal "00b7" printed where a middle dot was meant (the legend's
+stale count, the forest and grass tiles, the forecast's grass column), the grass tile's long note forcing the figures
+wider than the drawer, and the lines under each station cut off at the drawer's edge instead of wrapping.
+
+**Why.** James: "when I click on the map, the list of stations the point is referencing, and from the side panel be
+able to access (and see on the map too) that station's data, including manual data points … keep the initial point
+on the map, clicking back to go back to the list of data … to start seeing and searching for problematic data". The
+list was there, at the very bottom, and opening a station threw the reading away - the only way back was to click
+again, a second ask that touched the point. He chose the list under the figures and to leave a click on a station on
+the map as it was. — James, 27 September 2026.

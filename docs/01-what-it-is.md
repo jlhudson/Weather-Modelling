@@ -161,6 +161,11 @@ next ask has it. The forest fire danger index (McArthur Mk 5, Noble, Bary and Gi
 is computed from the blended temperature, humidity, wind and drought factor, and is null when any
 is missing rather than made from a guess.
 
+On the map, the reading's drawer lists its stations right under the figures they gave, each with its share (W-41).
+Pointing at a row lights its spoke from the pin; clicking it opens the station - a point of ours among them - with the
+reading kept behind it: the pin and the spokes stay, the station's spoke and reach are lit, and *back* (or Esc) draws the
+reading again from the answer already held, asking nothing. A station clicked on the map itself starts afresh.
+
 **Where no station can say what the weather is** - none reaches, or those that do carry no
 temperature - **a point of our own answers** (W-7). One already dropped whose reach contains the
 place is used: its current fetched again if older than an hour, its record filled for the missing

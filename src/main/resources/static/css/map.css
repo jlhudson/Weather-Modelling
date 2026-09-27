@@ -179,7 +179,7 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .drawer .probe a { color: var(--p-fg); text-decoration: none; border-bottom: 1px dotted var(--p-line-strong); }
 .drawer .probe a:hover { color: var(--p-reach); }
 .drawer .probe tr.stale td { color: var(--p-muted); }
-.drawer .probe tr.why td { font-size: .72rem; padding-top: 0; border-top: 0; }
+.drawer .probe tr.why td { font-size: .72rem; padding-top: 0; border-top: 0; white-space: normal; }
 .drawer .probe td.mono { font-family: var(--g-mono); }
 
 /* ---- the drought (W-6): the last twenty days' rain as bars, and the record folded away */
@@ -193,13 +193,13 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .drawer details.rec .table { margin-top: .3rem; }
 
 /* ---- the reading (W-8): the figures at the point, each naming the stations it came from */
-.drawer .reading { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem .75rem; margin: .4rem 0 .3rem; }
+.drawer .reading { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem .75rem; margin: .4rem 0 .3rem; }
 .drawer .reading .tile .v { font-size: 1.25rem; }
 .drawer .reading .tile .v small { display: block; margin: 0; font-size: .68rem; }
 .drawer .reading .tile.drought .v { color: #a855f7; }
 .drawer .reading .tile.fire .v { color: #f97316; }
 .drawer .reading .tile .who { font-family: var(--g-mono); font-size: .66rem; color: var(--p-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: .1rem; }
-@media (max-width: 767.98px) { .drawer .reading { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 767.98px) { .drawer .reading { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---- the wind at a station (W-9): two arrows from one point - the latest solid, the mean of the last five grey */
 .wind { display: block; overflow: visible; }
@@ -243,3 +243,11 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .del { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; font-size: .78rem; }
 .pill.danger { color: var(--p-danger); border-color: color-mix(in srgb, var(--p-danger) 55%, transparent); }
 .pill.danger:hover { border-color: var(--p-danger); background: color-mix(in srgb, var(--p-danger) 12%, transparent); }
+
+/* ---- a reading's stations, opened with the reading kept (W-41): a row is the station, and the drawer's head says the way back */
+.drawer .probe tbody tr[data-station] { cursor: pointer; }
+.drawer .probe tbody tr[data-station]:hover td { background: color-mix(in srgb, var(--p-reach) 9%, transparent); }
+.drawer-head { flex-wrap: wrap; }
+.drawer-head .back { flex: 1 0 100%; order: -1; display: inline-flex; align-items: baseline; gap: .4rem; background: none; border: 0; padding: 0 0 .1rem; color: var(--p-reach); font-size: .76rem; text-align: left; cursor: pointer; }
+.drawer-head .back:hover { text-decoration: underline; }
+.drawer-head .back .muted { font-family: var(--g-mono); font-size: .72rem; }
