@@ -1,18 +1,22 @@
-# Gully: one stack, one machine (The-Hub-Database/docs/28-deployment.md, D-255).
+# Gully: one stack, standalone.
 #
-# Three containers: Postgres, the application, and the Cloudflare connector that publishes it. Nothing
-# here belongs to a particular machine: what differs from one to the next is an environment variable,
-# read from .env beside this file or from the stack's variables in Portainer. The same file runs on a
-# development machine (`docker compose up -d`) and still runs alone on a server; production runs Weather
-# in the Hub's core stack instead (The-Hub-Database/docker/core/compose.yaml), from the image CI pushes
-# on `main`.
+# Four containers: Postgres with PostGIS, the application, the nightly backup, and - with the edge
+# profile - the Cloudflare connector that publishes it. The stack owns its database and its volumes
+# and deploys from this repository alone. The same file runs on a development machine
+# (`docker compose up -d`, which merges compose.override.yaml to build from this checkout) and on a
+# server as a Portainer stack from `main`, where it pulls the image CI pushed to ghcr.io.
 #
-# The service and container names are `weather-*` and the database volume `weather-pgdata`, so The
-# Hub's HUB_WEATHER_URL keeps working.
+# Being asked. The app joins the `apps` network, an external network created once per machine
+# (`docker network create apps`), which every stack's app joins too. On it this service answers at
+# http://weather-app:8082, which is what the Hub's HUB_WEATHER_URL defaults to; from another machine
+# the Hub uses this service's https:// hostname instead. Gully asks nothing of the other applications.
+# The database stays on this stack's own network.
 #
-# No bind mounts of repository files. A development machine builds the images from the checkout
-# (PULL_POLICY unset); a server sets PULL_POLICY=always and pulls the ones CI tested and pushed to
-# ghcr.io (IMAGE_TAG, main by default; a commit to roll back). The edge is a profile: COMPOSE_PROFILES=edge starts the connector.
+# No `build:` here (Portainer builds every one it finds, on the server; the build lives in
+# compose.override.yaml) and no bind mounts of repository files (Portainer's clone is invisible to
+# the Docker engine). Named volumes only, named outright.
+name: weather
+
 services:
   db:
     image: postgis/postgis:18-3.6
@@ -25,8 +29,8 @@ services:
       TZ: UTC
       PGTZ: UTC
     ports:
-      # Loopback only. 5435 on the host: 5432 is the Hub stack's Postgres, 5433 IncidentWatch's and
-      # 5434 Operations', so all four run on one machine.
+      # Loopback only. 5435 on the host: 5432 is the Hub's Postgres, 5433 IncidentWatch's, 5434 Operations'
+      # and 5436 WaterBuddy's, so every stack runs on one machine.
       - "127.0.0.1:${WEATHER_DB_PORT:-5435}:5432"
     volumes:
       # The PostgreSQL 18 image keeps its data directory under /var/lib/postgresql.
@@ -39,9 +43,8 @@ services:
     restart: unless-stopped
 
   app:
-    build: .
     image: ghcr.io/jlhudson/weather-app:${IMAGE_TAG:-main}
-    pull_policy: ${PULL_POLICY:-build}
+    pull_policy: always
     container_name: weather-app
     logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     depends_on:
@@ -64,6 +67,9 @@ services:
     ports:
       # Loopback only: the tunnel carries the public traffic, and a VPS should accept nothing else.
       - "127.0.0.1:${WEATHER_PORT:-8082}:8082"
+    networks:
+      - default
+      - apps
     # The JVM takes 75% of this for its heap (Dockerfile).
     mem_limit: ${WEATHER_MEM_LIMIT:-1g}
     healthcheck:
@@ -74,14 +80,13 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # The nightly backup (docker/backup, as Operations'): pg_dump at BACKUP_AT, kept BACKUP_KEEP_DAYS on
-  # the weather-backups volume, copied off the box when BACKUP_RCLONE_REMOTE names an rclone remote
+  # The nightly backup (docker/backup): pg_dump at BACKUP_AT, kept BACKUP_KEEP_DAYS on the
+  # weather-backups volume, copied off the box when BACKUP_RCLONE_REMOTE names an rclone remote
   # (Cloudflare R2 or S3 through the RCLONE_CONFIG_R2_* lines), and restored into a scratch database
   # on the first of each month to prove it restores. `docker logs weather-backup` says how each run went.
   backup:
-    build: docker/backup
     image: ghcr.io/jlhudson/weather-backup:${IMAGE_TAG:-main}
-    pull_policy: ${PULL_POLICY:-build}
+    pull_policy: always
     container_name: weather-backup
     logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     depends_on:
@@ -109,8 +114,9 @@ services:
     restart: unless-stopped
 
   # The edge: the connector dials out to Cloudflare over QUIC and forwards to the application on this
-  # network. Which hostname reaches it is set on the tunnel in the Cloudflare dashboard: one published
-  # application route, type HTTP, URL app:8082, path empty (.env.example).
+  # stack's network. Which hostname reaches it is set on the tunnel in the Cloudflare dashboard: one
+  # published application route, type HTTP, URL app:8082, path empty (.env.example). One tunnel per
+  # stack: the stack carries its own connector wherever it runs.
   cloudflared:
     profiles: [ edge ]
     image: cloudflare/cloudflared:latest
@@ -125,6 +131,15 @@ services:
     command: tunnel run
     restart: unless-stopped
 
+networks:
+  # This stack's own: the database, the backup and the connector reach the app here, and nothing outside
+  # the stack reaches the database.
+  default:
+  # Shared by every stack on this machine, created once by hand: `docker network create apps`.
+  apps:
+    external: true
+
+# Named outright, so the data is the same whatever the stack is called.
 volumes:
-  weather-pgdata:
-  weather-backups:
+  weather-pgdata: { name: weather-pgdata }
+  weather-backups: { name: weather-backups }
