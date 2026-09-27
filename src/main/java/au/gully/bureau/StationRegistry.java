@@ -285,6 +285,16 @@ public class StationRegistry {
     }
 
     /**
+     * When each point of ours was dropped (W-42): its first sighting, read from the table, since only the map's list asks.
+     */
+    public Map<String, Instant> droppedAt() {
+        Map<String, Instant> out = new java.util.HashMap<>();
+        db.sql("select id, first_seen_at from station where kind = :kind").param("kind", Station.POINT).query().listOfRows()
+                .forEach(row -> out.put((String) row.get("id"), Db.instant(row.get("first_seen_at"))));
+        return out;
+    }
+
+    /**
      * The model's current at a point, as the point's latest: written and kept like a reading. A
      * point's days come from the archive, never from folding its fetches.
      */

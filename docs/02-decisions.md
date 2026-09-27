@@ -622,3 +622,17 @@ on the map, clicking back to go back to the list of data … to start seeing and
 list was there, at the very bottom, and opening a station threw the reading away - the only way back was to click
 again, a second ask that touched the point. He chose the list under the figures and to leave a click on a station on
 the map as it was. — James, 27 September 2026.
+
+### W-42 · The points of ours, listed
+
+**The decision.** The *points of ours* tile in the map's figures opens a list of every point, newest first, from
+`/console/map/points.json`: its place, its height, its fuel by the land cover (only if held - the list never waits on
+DEA), when it was dropped and last asked, and the days of record it holds. A point at or below sea level, or whose land
+cover is water, is tagged *water* in the sea's blue and counted in the head. Pointed at, a row rings its point on the
+map; clicked, the point opens with *‹ back to the points of ours* and the map on it, and one deleted there (W-40) comes
+back to the list without it. A point's height is shown to the metre, not as the terrain's float. On a phone the list
+keeps the place, height, fuel and when dropped.
+
+**Why.** James: "reselect points and delete them … start seeing and searching for problematic data". A point was only
+reachable by finding its diamond on the map. The first list, on 27 September 2026, showed 22 points and three on the
+water - the same three by height and by land cover. — James, 27 September 2026.

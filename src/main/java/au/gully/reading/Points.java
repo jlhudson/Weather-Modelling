@@ -3,6 +3,7 @@ package au.gully.reading;
 import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
 import au.gully.bureau.StationRegistry;
+import au.gully.fuel.LandCover;
 import au.gully.platform.GullyProperties;
 import au.gully.reach.Probe;
 import au.gully.reach.Reach;
@@ -21,8 +22,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -57,6 +62,7 @@ public class Points {
     private final Backfill backfill;
     private final Record record;
     private final GullyProperties properties;
+    private final LandCover landCover;
     private final GeometryFactory geometry = new GeometryFactory();
 
     /**
@@ -173,6 +179,40 @@ public class Points {
             }
         }
         return n;
+    }
+
+    /**
+     * Every point of ours as the map's list gives it (W-42), newest first: where, how high, what the land cover says is
+     * there (only if held - the list never waits on the upstream), when it was dropped and last asked, how many days of
+     * record it holds and when its current is from; {@code water} when it is at or below sea level or the land cover is
+     * water, the likeliest sign of a click that landed in the sea.
+     */
+    public List<Map<String, Object>> list() {
+        Map<String, Instant> dropped = stations.droppedAt();
+        List<Station> all = new ArrayList<>(stations.points());
+        all.sort(Comparator.comparing((Station p) -> dropped.get(p.id()), Comparator.nullsLast(Comparator.reverseOrder())));
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Station p : all) {
+            LandCover.Cover c = landCover.held(p.lat(), p.lon()).orElse(null);
+            boolean below = p.heightM() != null && p.heightM() <= 0, wet = c != null && c.level3() != null && c.level3() == LandCover.WATER;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", p.id());
+            m.put("name", p.name());
+            m.put("lat", p.lat());
+            m.put("lon", p.lon());
+            m.put("heightM", p.heightM());
+            m.put("landCover", c == null ? null : c.label());
+            m.put("fuel", c == null ? null : c.fuel().word);
+            m.put("water", below || wet);
+            m.put("waterWhy", below && wet ? "below sea level, and the land cover is water" : below ? "at or below sea level" : wet ? "the land cover is water" : null);
+            Instant at = dropped.get(p.id()), asked = stations.lastAsked(p.id());
+            m.put("droppedAt", at == null ? null : at.toString());
+            m.put("lastAskedAt", asked == null ? null : asked.toString());
+            m.put("recordDays", record.days(p.id()).size());
+            m.put("currentAt", stations.latest(p.id()).map(Observation::at).map(Instant::toString).orElse(null));
+            out.add(m);
+        }
+        return out;
     }
 
     /**

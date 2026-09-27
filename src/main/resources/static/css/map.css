@@ -251,3 +251,11 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .drawer-head .back { flex: 1 0 100%; order: -1; display: inline-flex; align-items: baseline; gap: .4rem; background: none; border: 0; padding: 0 0 .1rem; color: var(--p-reach); font-size: .76rem; text-align: left; cursor: pointer; }
 .drawer-head .back:hover { text-decoration: underline; }
 .drawer-head .back .muted { font-family: var(--g-mono); font-size: .72rem; }
+
+/* ---- the points of ours, listed (W-42): the tile opens the list; a point on the water is tagged in the sea's blue */
+button.tile.open { background: none; border: 1px solid transparent; border-radius: 8px; color: inherit; text-align: left; padding: .1rem .3rem; margin: -.1rem -.3rem; cursor: pointer; font: inherit; }
+button.tile.open:hover { border-color: var(--p-line-strong); background: rgba(127, 127, 127, .08); }
+.water-tag { display: inline-block; font-size: .64rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #0ea5e9; border: 1px solid color-mix(in srgb, #0ea5e9 55%, transparent); border-radius: 4px; padding: 0 .3rem; line-height: 1.35; vertical-align: .08em; font-family: inherit; }
+.drawer .points tr.water td { background: color-mix(in srgb, #0ea5e9 7%, transparent); }
+.drawer .points td a { font-family: var(--g-mono); }
+@media (max-width: 767.98px) { .drawer .points th:nth-child(n+5), .drawer .points td:nth-child(n+5) { display: none; } }

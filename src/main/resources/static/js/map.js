@@ -208,13 +208,17 @@
         var t = [
             {v: props.length, k: 'stations'},
             {v: fresh.length, k: 'reporting', cls: 'ground'},
-            {v: pts.length, k: 'points of ours', cls: 'model', t: "Places nobody's reach contained when asked, dropped as stations of our own: the model's current, a year of the archive, the same reach"},
+            {v: pts.length, k: 'points of ours ›', cls: 'model', open: 'points', t: "Places nobody's reach contained when asked, dropped as stations of our own: the model's current, a year of the archive, the same reach. Click for the list of them (W-42)"},
             {v: lastStations && lastStations.updatedAt ? ago(lastStations.updatedAt) : '—', k: 'file read'},
             {v: temps.length ? fmt(temps.reduce(function (a, x) { return a + x; }, 0) / temps.length, 1) + ' °C' : '—', k: 'mean temperature'},
             {v: lastReach ? reaches.length + (reaches.length < all.length ? ' of ' + all.length : '') : '—', k: 'reaches drawn', cls: 'reach', t: 'Stations whose terrain has been sampled; the daily housekeeping samples the rest'},
             {v: reaches.length ? fmt(reaches.reduce(function (a, p) { return a + p.areaKm2; }, 0) / reaches.length, 0) + ' km²' : '—', k: 'mean reach area', cls: 'reach'}
         ];
-        $('tiles').innerHTML = t.map(function (x) { return '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '"><div class="v">' + esc(x.v) + '</div><div class="k">' + esc(x.k) + '</div></div>'; }).join('');
+        $('tiles').innerHTML = t.map(function (x) {
+            var inner = '<div class="v">' + esc(x.v) + '</div><div class="k">' + esc(x.k) + '</div>';
+            return x.open ? '<button class="tile open ' + (x.cls || '') + '" data-open="' + x.open + '" title="' + esc(x.t || '') + '" type="button">' + inner + '</button>'
+                : '<div class="tile ' + (x.cls || '') + '" title="' + esc(x.t || '') + '">' + inner + '</div>';
+        }).join('');
     }
 
     // ---- the fire outlook on the map (W-31): what is held at once, the rest as it is fetched
@@ -594,6 +598,7 @@
     function goBack() {
         var r = back;
         if (!r) return;
+        if (r.kind === 'points') { pointsList(r.scroll); return; }
         askSeq++;
         back = null;
         state.selected = null;
@@ -822,7 +827,11 @@
     // A station's drawer. Kept (W-41), whatever the drawer came from stays behind it - the reading, its pin and spokes -
     // with a way back; otherwise it starts afresh, as a click on a station on the map does.
     var shownId = null;
-    function backLine() { return back ? '<button class="back" id="back" title="Back to the reading (Esc)" type="button">‹ back to the reading <span class="muted">' + fmt(back.lat, 4) + ', ' + fmt(back.lon, 4) + '</span></button>' : ''; }
+    function backLine() {
+        if (!back) return '';
+        var to = back.kind === 'points' ? 'the points of ours' : 'the reading <span class="muted">' + fmt(back.lat, 4) + ', ' + fmt(back.lon, 4) + '</span>';
+        return '<button class="back" id="back" title="Back (Esc)" type="button">‹ back to ' + to + '</button>';
+    }
     function wireHead() {
         $('close').addEventListener('click', closeDetail);
         if ($('back')) $('back').addEventListener('click', goBack);
@@ -844,7 +853,7 @@
             if (s.kind === 'point') html += '<div class="point-line"><p class="muted mb-1">A point of ours, dropped where no station reached: the model\x27s current and a year of the archive.</p>' + deleteControl(s.id, s.name) + '</div>';
             html += '<h2>Station</h2>' + kv([
                 ['position', fmt(s.lat, 4) + ', ' + fmt(s.lon, 4)],
-                ['height', s.heightM != null ? s.heightM + ' m' : null],
+                ['height', s.heightM != null ? (s.kind === 'point' ? fmt(s.heightM, 0) : s.heightM) + ' m' : null],
                 ['district', esc(s.district)],
                 ['zone', esc(s.zone)],
                 ['fuel', s.fuel ? esc(s.fuel.type) + ' <span class="muted">' + esc(s.fuel.landCover || s.fuel.why) + (s.fuel.year ? ', ' + s.fuel.year : '') + '</span>' : null]
@@ -908,11 +917,65 @@
         var headers = window.gullyCsrf ? window.gullyCsrf() : {}, name = d.dataset.name;
         d.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
         fetch('/console/map/point/' + encodeURIComponent(d.dataset.point), {method: 'DELETE', headers: headers}).then(json).then(function () {
-            closeDetail();
+            // Opened from the list (W-42), back to the list without it; opened from a reading, the reading named it, so it goes too.
+            if (back && back.kind === 'points') pointsList(back.scroll); else closeDetail();
             note(name + ' deleted');
             load();
             loadReach(true);
         }).catch(function (e) { d.innerHTML = deleteAsk(); note('delete failed: ' + e); });
+    }
+
+    // ---- the points of ours, listed (W-42): from the tile, newest first, the ones on the water said. Pointed at, a row
+    // rings its point on the map; clicked, the point opens with the list kept behind it, and one deleted there comes back
+    // to the list without it.
+    var hoverRing = null;
+    function ringPoint(p) {
+        if (hoverRing) { probeLayer.removeLayer(hoverRing); hoverRing = null; }
+        if (p) hoverRing = L.circleMarker([p.lat, p.lon], {renderer: canvas, radius: 13, color: REACH, weight: 2.2, opacity: .95, fill: false, interactive: false}).addTo(probeLayer);
+    }
+    function pointsList(scroll) {
+        var my = ++askSeq;
+        state.selected = null;
+        clearProbe();
+        hoverRing = null;
+        stations();
+        drawReach();
+        fetch('/console/map/points.json').then(json).then(function (o) {
+            if (my !== askSeq) return;
+            var el = $('detail'), list = o.points || [], byId = {}, wet = list.filter(function (p) { return p.water; }).length;
+            list.forEach(function (p) { byId[p.id] = p; });
+            var html = '<div class="drawer-head"><h3>Points of ours <span class="muted">' + list.length + (wet ? ' · ' + wet + ' on the water' : '') + '</span></h3><button class="icon-btn" id="close" title="Close (Esc)" type="button">' + icon('close') + '</button></div>';
+            html += '<p class="muted mb-1">Places nobody\x27s reach contained when asked, each dropped as a station of ours with the model\x27s current and a year of the archive; newest first. One on the water - at or below sea level, or water by its land cover - is likelier a click in the wrong place than a place anyone asks about. Open one to see it, and delete it there.</p>';
+            if (!list.length) html += '<p class="muted">None held.</p>';
+            else {
+                html += '<table class="table table-sm probe points"><thead><tr><th>point</th><th class="num">m</th><th>fuel</th><th>dropped</th><th>last asked</th><th class="num" title="days of record held">days</th></tr></thead><tbody>';
+                list.forEach(function (p) {
+                    html += '<tr data-station="' + esc(p.id) + '"' + (p.water ? ' class="water"' : '') + '><td><a href="#">' + esc(String(p.name).replace(/^Point /, '')) + '</a>' + (p.water ? ' <span class="water-tag" title="' + esc(p.waterWhy) + '">water</span>' : '') + '</td>'
+                        + '<td class="num">' + fmt(p.heightM, 0) + '</td><td class="muted" title="' + esc(p.landCover || 'the land cover is not held yet') + '">' + esc(p.fuel || '—') + '</td>'
+                        + '<td class="muted" title="' + esc(when(p.droppedAt)) + '">' + ago(p.droppedAt) + '</td><td class="muted" title="' + esc(when(p.lastAskedAt)) + '">' + ago(p.lastAskedAt) + '</td><td class="num">' + fmt(p.recordDays) + '</td></tr>';
+                });
+                html += '</tbody></table>';
+            }
+            el.innerHTML = html;
+            el.classList.add('wide');
+            el.classList.remove('hidden');
+            el.scrollTop = scroll || 0;
+            shownId = null;
+            wireHead();
+            var t = el.querySelector('table.points');
+            if (!t) return;
+            t.addEventListener('click', function (e) {
+                var row = e.target.closest('tr[data-station]'), p = row && byId[row.dataset.station];
+                if (!p) return;
+                e.preventDefault();
+                back = {kind: 'points', scroll: el.scrollTop};
+                ringPoint(p);
+                detail(p.id, true);
+                map.panInside([p.lat, p.lon], {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [el.offsetWidth + 24, 24]});
+            });
+            t.addEventListener('mouseover', function (e) { var row = e.target.closest('tr[data-station]'); ringPoint(row ? byId[row.dataset.station] : null); });
+            t.addEventListener('mouseleave', function () { ringPoint(null); });
+        }).catch(function (e) { note('points failed: ' + e); });
     }
 
     // ---- the footer: read now, and live
@@ -943,6 +1006,7 @@
         b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else if (k === 'districts') drawDistricts(); else if (k === 'warnings') drawWarnings(); else drawReach(); });
     });
     $('readNow').addEventListener('click', readNow);
+    $('tiles').addEventListener('click', function (e) { var b = e.target.closest('[data-open=points]'); if (b) pointsList(0); });
     ['reachKm', 'inlandPct', 'kmPer100m', 'descentShare'].forEach(function (id) {
         $(id).addEventListener('input', function () { reachHint(); loadReach(false); });
         $(id).addEventListener('change', function () { loadReach(true); });

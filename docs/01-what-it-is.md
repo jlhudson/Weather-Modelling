@@ -175,7 +175,9 @@ block, with the rain since 9 am and the day's total summed from the 48 hours of 
 and a year of the archive for its record. The first ask at a new place takes a few seconds; every
 later ask inside its reach is immediate. A point no ask has used for 548 days is dropped again,
 record and all; one dropped in the wrong place - a click that landed in the sea - is deleted the same way from
-its drawer on the map, or from the reading it answered (W-40). A point never gets a six-hour ledger: its days come from the archive, not from
+its drawer on the map, or from the reading it answered (W-40). The *points of ours* tile in the map's figures lists
+them all (W-42), newest first - height, fuel by the land cover, when dropped and last asked, days of record - with the
+ones at or below sea level or on water tagged; a row opens its point, with the list to go back to. A point never gets a six-hour ledger: its days come from the archive, not from
 folding its fetches; and nothing of a point moves on a timer (W-14) - its current and its missing
 days are fetched when an ask lands in its reach, and only then. On the map a point is an amber diamond, filled with its value like a station.
 

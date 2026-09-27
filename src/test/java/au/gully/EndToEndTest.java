@@ -438,7 +438,7 @@ class EndToEndTest {
             }
         }
         for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&inlandPct=15",
-                "/console/upstreams/spend.json", "/console/map/outlook.json", "/console/map/warnings.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+                "/console/upstreams/spend.json", "/console/map/outlook.json", "/console/map/warnings.json", "/console/map/points.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }
@@ -451,6 +451,10 @@ class EndToEndTest {
         double[] far = au.gully.reach.Geo.destination(-34.9257, 138.5832, 90, 140);
         Map<String, Object> dropped = client().get().uri("/api/v1/reading?lat=" + far[0] + "&lon=" + far[1]).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
         String pointId = (String) ((List<Map<String, Object>>) dropped.get("stations")).stream().filter(s -> "point".equals(s.get("kind"))).findFirst().orElseThrow().get("id");
+        // The map's list of them (W-42) names it, with when it was dropped.
+        Map<String, Object> listed = client().get().uri("/console/map/points.json").header(HttpHeaders.COOKIE, session).retrieve().body(Map.class);
+        assertThat((List<Map<String, Object>>) listed.get("points")).filteredOn(p -> pointId.equals(p.get("id"))).singleElement()
+                .satisfies(p -> assertThat(p).containsKeys("heightM", "water", "droppedAt", "lastAskedAt", "recordDays").extractingByKey("droppedAt").isNotNull());
         String mapPage = client().get().uri("/console/map").header(HttpHeaders.COOKIE, session).retrieve().body(String.class);
         java.util.regex.Matcher token = java.util.regex.Pattern.compile("<meta name=\"_csrf\" content=\"([^\"]+)\"").matcher(mapPage);
         assertThat(token.find()).as("the map page carries a CSRF token").isTrue();
@@ -463,6 +467,8 @@ class EndToEndTest {
         assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(deleted.getBody()).containsEntry("deleted", pointId);
         assertThat(stations.station(pointId)).isEmpty();
+        Map<String, Object> after = client().get().uri("/console/map/points.json").header(HttpHeaders.COOKIE, session).retrieve().body(Map.class);
+        assertThat((List<Map<String, Object>>) after.get("points")).noneMatch(p -> pointId.equals(p.get("id")));
         for (String table : new String[]{"station", "station_reading", "station_hour6", "station_day", "station_forecast", "terrain"}) {
             assertThat(db.sql("select count(*) from " + table + " where " + (table.equals("station") ? "id" : "station_id") + " = :id").param("id", pointId).query(Long.class).single())
                     .as(table).isZero();

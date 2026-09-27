@@ -103,6 +103,15 @@ public class MapController {
     }
 
     /**
+     * Every point of ours, newest first, the ones on the water said (W-42): the map's list to find and delete them from.
+     */
+    @GetMapping(value = "/points.json", produces = "application/json")
+    @ResponseBody
+    public Map<String, Object> points() {
+        return Map.of("points", points.list());
+    }
+
+    /**
      * Delete a point of ours (W-40): a click in the wrong place undone - the register, readings, terrain, record and
      * forecast, as expiry drops one. A Bureau station is refused; it is the Bureau's.
      */

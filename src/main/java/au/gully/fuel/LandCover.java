@@ -33,6 +33,8 @@ public class LandCover {
     public static final String ID = "dea-landcover";
     public static final String LAYER = "ga_ls_landcover_c3";
     public static final double CELL_DEG = 0.002;
+    /** The level 3 class that is water. */
+    public static final int WATER = 220;
     public static final Duration RETRY = Duration.ofMinutes(10);
 
     private final JdbcClient db;
@@ -69,6 +71,13 @@ public class LandCover {
 
     static String cell(double lat, double lon) {
         return String.format(Locale.ROOT, "%.3f,%.3f", Math.round(lat / CELL_DEG) * CELL_DEG, Math.round(lon / CELL_DEG) * CELL_DEG);
+    }
+
+    /**
+     * The land cover at a place if it is held, never looked up: for a list that must not wait on the upstream.
+     */
+    public Optional<Cover> held(double lat, double lon) {
+        return Optional.ofNullable(held.get(cell(lat, lon)));
     }
 
     /**
