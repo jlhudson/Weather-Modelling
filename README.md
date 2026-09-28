@@ -42,7 +42,7 @@ limits in the `RateLimit-*` headers.
 ## Running it
 
 **With compose.** Once per machine, create the network every stack's app joins. Then copy
-`.env.example` to `.env`, set `SPRING_PROFILES_ACTIVE=development` and `WEATHER_CONSOLE_CODE`, and start
+`.env.development.example` to `.env`, which is set for the development profile and runs as copied, and start
 the stack; `compose.override.yaml` builds the image from this checkout:
 
 ```bash
@@ -51,7 +51,7 @@ docker compose up -d --build
 ```
 
 The console is at <http://localhost:8082/console/map>, username `operator`, the 8-digit code from
-`.env`. The stack is standalone: the service and, under the `owndb` profile `.env.example` turns on, its
+`.env`. The stack is standalone: the service and, under the `owndb` profile `.env.development.example` turns on, its
 own PostGIS and nightly backup. Two Spring profiles: `development` on your own machine, `production` on a
 server (JSON logs, and the service refuses to start on a default code or password). The Hub reaches it
 at `http://weather-app:8082` on the `apps` network when the two stacks share a server (its
@@ -71,7 +71,7 @@ throwaway Postgres with Testcontainers and is skipped where Docker is not availa
 
 Every setting carries its default in `GullyProperties` and is printed once at startup; the shipped
 `application.yml` is the handful that differ between machines, each from an environment variable, all
-in `.env.example`.
+in `.env.development.example`; `.env.production.example` is the same set of names for a server.
 
 ## The docs
 
