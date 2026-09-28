@@ -53,7 +53,7 @@ jobs:
   # server pulls what was tested instead of building it, and a rollback is a tag (IMAGE_TAG in .env).
   # Nothing is deployed from here: Watchtower on the server replaces the container when a newer image
   # appears here, and Portainer redeploys the stack when main changes its compose file
-  # (The-Hub-Database/docs/deployment.md).
+  # (The-Hub-Database/docs/production/how-it-fits.md).
   image:
     name: Image ${{ matrix.name }}
     needs: build

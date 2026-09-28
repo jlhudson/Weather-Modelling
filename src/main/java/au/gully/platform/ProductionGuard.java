@@ -24,8 +24,17 @@ public class ProductionGuard {
      */
     static final Map<String, Set<String>> REFUSED = refusals();
 
+    /**
+     * The keys the applications hold for each other. Every .env.example ships them as {@code dev-key-…}
+     * values that match across the five checkouts, so a development machine talks to itself out of the
+     * box; production must replace each with a value of its own.
+     */
+    static final List<String> KEYS = List.of("gully.keys.hub");
+    static final String DEV_KEY_PREFIX = "dev-key-";
+
     public ProductionGuard(Environment environment) {
-        List<String> refused = refused(environment::getProperty, REFUSED);
+        List<String> refused = new ArrayList<>(refused(environment::getProperty, REFUSED));
+        refused.addAll(devKeys(environment::getProperty, KEYS));
         if (!refused.isEmpty()) {
             throw new IllegalStateException("the production profile refuses to start: " + String.join(", ", refused)
                     + " blank or left at the default; set them in the deployment's .env");
@@ -50,6 +59,21 @@ public class ProductionGuard {
                 out.add(property);
             }
         });
+        return out;
+    }
+
+    /**
+     * The key properties still holding a {@code dev-key-} value from .env.example, in order. Blank is not
+     * refused here: a blank key means "not shared", which production may choose.
+     */
+    static List<String> devKeys(Function<String, String> read, List<String> keys) {
+        List<String> out = new ArrayList<>();
+        for (String key : keys) {
+            String v = read.apply(key);
+            if (v != null && v.contains(DEV_KEY_PREFIX)) {
+                out.add(key + " (a dev-key value from .env.example)");
+            }
+        }
         return out;
     }
 }
