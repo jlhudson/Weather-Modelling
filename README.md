@@ -45,7 +45,7 @@ limits in the `RateLimit-*` headers.
 On your PC, run `compose.development.yaml` in IntelliJ (the ▶ beside `services:`, or **Weather
 (development)**): its database, Weather built from this checkout, a nightly backup, and the
 weather.surefirehudson.com tunnel. The console is at <http://localhost:8082/console/map>, username
-`operator`, the code `DEV_WEATHER_CONSOLE_CODE` from the secrets file. Its settings are
+`operator`, code `12345678`. Its settings are
 `.env.development`, which The-Hub-Database's `env/make-env.sh` writes. A server runs
 `compose.production.yaml` through Portainer with `.env.production`
 ([Development](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development.md) ·
