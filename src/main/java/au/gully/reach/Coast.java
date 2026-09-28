@@ -12,7 +12,8 @@ import java.util.List;
 /**
  * Where the sea is (W-19): how far a station is from it, which its reach grows with. The coast is
  * found once, in coarse elevation tiles - zoom {@link #ZOOM}, about a kilometre a pixel, over South
- * Australia and the Southern Ocean below it, {@value #TILES_ACROSS} tiles a side - as the water
+ * Australia, Tasmania and the Southern Ocean below them, {@value #TILES_ACROSS} tiles across and {@value #TILES_DOWN}
+ * down - as the water
  * joined to the ocean: every pixel at or below sea level reached from the bottom edge, which is all
  * sea, without crossing land. So the gulfs are sea and Lake Eyre and the salt lakes, though they read
  * below zero or near it, are not. The coastline is the sea's pixels that touch land, and a station's
@@ -27,9 +28,11 @@ public class Coast {
 
     public static final int ZOOM = 7;
     /**
-     * The tiles, left and top: 126.6°E to 149.1°E, 24.5°S to 43°S at zoom 7 - the state, and the ocean below it all the way along.
+     * The tiles, left and top: 126.6°E to 149.1°E, 24.5°S to 45°S at zoom 7 - South Australia and Tasmania, and the ocean
+     * below them all the way along. The ninth row down (W-47) takes in Tasmania's south, which the eighth cut off at 43°S,
+     * leaving land on the bottom edge the search for the sea begins from.
      */
-    static final int X0 = 109, Y0 = 73, TILES_ACROSS = 8;
+    static final int X0 = 109, Y0 = 73, TILES_ACROSS = 8, TILES_DOWN = 9;
     static final Duration RETRY_AFTER = Duration.ofMinutes(5);
 
     private final TerrainTiles tiles;
@@ -68,14 +71,14 @@ public class Coast {
         if (failedAt != null && Instant.now().isBefore(failedAt.plus(RETRY_AFTER))) {
             throw new UpstreamException("the coast: " + failure + " (tried again after " + failedAt.plus(RETRY_AFTER) + ")");
         }
-        int side = TILES_ACROSS * TerrainTiles.SIZE;
-        float[] heights = new float[side * side];
+        int width = TILES_ACROSS * TerrainTiles.SIZE, height = TILES_DOWN * TerrainTiles.SIZE;
+        float[] heights = new float[width * height];
         try {
-            for (int ty = 0; ty < TILES_ACROSS; ty++) {
+            for (int ty = 0; ty < TILES_DOWN; ty++) {
                 for (int tx = 0; tx < TILES_ACROSS; tx++) {
                     float[] t = tiles.tile(ZOOM, X0 + tx, Y0 + ty);
                     for (int j = 0; j < TerrainTiles.SIZE; j++) {
-                        System.arraycopy(t, j * TerrainTiles.SIZE, heights, (ty * TerrainTiles.SIZE + j) * side + tx * TerrainTiles.SIZE, TerrainTiles.SIZE);
+                        System.arraycopy(t, j * TerrainTiles.SIZE, heights, (ty * TerrainTiles.SIZE + j) * width + tx * TerrainTiles.SIZE, TerrainTiles.SIZE);
                     }
                 }
             }
@@ -84,35 +87,35 @@ public class Coast {
             failure = e.getMessage();
             throw e;
         }
-        List<int[]> edge = coastline(heights, side);
+        List<int[]> edge = coastline(heights, width, height);
         double[][] out = new double[edge.size()][];
         for (int i = 0; i < out.length; i++) {
             out[i] = latLon(edge.get(i)[0], edge.get(i)[1]);
         }
         coastline = out;
         failedAt = null;
-        log.info("the coast found: {} pixels of coastline in {} tiles at zoom {}", out.length, TILES_ACROSS * TILES_ACROSS, ZOOM);
+        log.info("the coast found: {} pixels of coastline in {} tiles at zoom {}", out.length, TILES_ACROSS * TILES_DOWN, ZOOM);
         return out;
     }
 
     /**
-     * The coastline in a square of heights: the pixels at or below sea level joined to the bottom edge
-     * without crossing land, that touch land. {@code {column, row}} each.
+     * The coastline in a rectangle of heights, {@code width} a row: the pixels at or below sea level joined to the bottom
+     * edge without crossing land, that touch land. {@code {column, row}} each.
      */
-    static List<int[]> coastline(float[] heights, int side) {
+    static List<int[]> coastline(float[] heights, int width, int height) {
         boolean[] sea = new boolean[heights.length];
         int[] stack = new int[heights.length];
         int top = 0;
-        for (int i = 0; i < side; i++) {
-            int p = (side - 1) * side + i;
+        for (int i = 0; i < width; i++) {
+            int p = (height - 1) * width + i;
             if (water(heights[p])) {
                 sea[p] = true;
                 stack[top++] = p;
             }
         }
         while (top > 0) {
-            int p = stack[--top], x = p % side, y = p / side;
-            int[] next = {x > 0 ? p - 1 : -1, x < side - 1 ? p + 1 : -1, y > 0 ? p - side : -1, y < side - 1 ? p + side : -1};
+            int p = stack[--top], x = p % width, y = p / width;
+            int[] next = {x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1, y > 0 ? p - width : -1, y < height - 1 ? p + width : -1};
             for (int q : next) {
                 if (q >= 0 && !sea[q] && water(heights[q])) {
                     sea[q] = true;
@@ -125,8 +128,8 @@ public class Coast {
             if (!sea[p]) {
                 continue;
             }
-            int x = p % side, y = p / side;
-            if ((x > 0 && !sea[p - 1]) || (x < side - 1 && !sea[p + 1]) || (y > 0 && !sea[p - side]) || (y < side - 1 && !sea[p + side])) {
+            int x = p % width, y = p / width;
+            if ((x > 0 && !sea[p - 1]) || (x < width - 1 && !sea[p + 1]) || (y > 0 && !sea[p - width]) || (y < height - 1 && !sea[p + width])) {
                 out.add(new int[]{x, y});
             }
         }

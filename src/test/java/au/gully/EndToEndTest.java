@@ -374,7 +374,10 @@ class EndToEndTest {
         assertThat(body).containsKeys("app", "startup", "logs", "gully");
         Map<String, Object> gully = (Map<String, Object>) body.get("gully");
         assertThat(gully).containsKeys("upstreams", "bureau", "held");
-        assertThat((Map<String, Object>) gully.get("bureau")).containsEntry("state", "sa");
+        // Two files since W-47: the states together, still a string, and each file under its own.
+        Map<String, Object> bureau = (Map<String, Object>) gully.get("bureau");
+        assertThat(bureau).containsEntry("state", "sa, tas");
+        assertThat((List<Map<String, Object>>) bureau.get("files")).extracting(f -> f.get("state")).containsExactly("sa", "tas");
     }
 
     @Test

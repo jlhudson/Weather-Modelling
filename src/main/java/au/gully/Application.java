@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
- * Gully: South Australia's weather from the Bureau's stations, each with the ground it speaks for
+ * Gully: South Australia's and Tasmania's weather from the Bureau's stations, each with the ground it speaks for
  * (docs/01-what-it-is.md).
  *
  * <p>No component-scan filters and no entity manager: every bean is an ordinary {@code @Component},

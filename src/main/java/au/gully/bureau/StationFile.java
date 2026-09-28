@@ -29,6 +29,20 @@ public class StationFile {
             "nsw", "IDN60920", "vic", "IDV60920", "qld", "IDQ60920", "sa", "IDS60920",
             "wa", "IDW60920", "tas", "IDT60920", "nt", "IDD60920");
 
+    /**
+     * The clock each state keeps: a station the file tags UTC, or not at all, keeps its state's, so its day turns at 9 am
+     * there (W-47).
+     */
+    public static final Map<String, String> ZONES = Map.of(
+            "nsw", "Australia/Sydney", "vic", "Australia/Melbourne", "qld", "Australia/Brisbane", "sa", "Australia/Adelaide",
+            "wa", "Australia/Perth", "tas", "Australia/Hobart", "nt", "Australia/Darwin");
+
+    /**
+     * No station south of this latitude is taken in (W-47): the Tasmanian file carries ten in Antarctica - Casey, Davis,
+     * Mawson, McMurdo and six more - whose ground the terrain, the coast and the upstreams here were never drawn for.
+     */
+    public static final double SOUTHERNMOST = -45;
+
     public static final String BASE = "https://reg.bom.gov.au/fwo/";
 
     /**
@@ -77,7 +91,9 @@ public class StationFile {
                     }
                 } else if (event == XMLStreamConstants.END_ELEMENT) {
                     if (r.getLocalName().equals("station") && station != null) {
-                        out.add(new StationReading(station, values.build(station.id())));
+                        if (station.lat() >= SOUTHERNMOST) {
+                            out.add(new StationReading(station, values.build(station.id())));
+                        }
                         station = null;
                         values = null;
                     }
@@ -99,7 +115,7 @@ public class StationFile {
         // Some stations come tagged UTC; every station in the state keeps the state's clock, or its day would turn at 6:30 pm.
         String tz = r.getAttributeValue(null, "tz");
         if (tz == null || !tz.startsWith("Australia/")) {
-            tz = "Australia/Adelaide";
+            tz = ZONES.getOrDefault(state, "Australia/Adelaide");
         }
         String district = r.getAttributeValue(null, "forecast-district-id");
         return new Station(bomId == null ? wmo : bomId, wmo, name, lat, lon, height, tz, district, state);

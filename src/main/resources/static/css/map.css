@@ -45,6 +45,8 @@ main:has(> .map-page) { padding: 0; overflow: hidden; }
 .side-head { padding: .55rem .6rem .5rem; border-bottom: 1px solid var(--p-line); }
 .side-title { font-weight: 600; font-size: .95rem; display: flex; align-items: center; gap: .4rem; }
 .side-title .ico { color: var(--p-ground); font-size: 1.1rem; }
+.states { margin-left: auto; display: inline-flex; gap: .2rem; }
+.states .tog { padding: .1rem .5rem; font-size: .72rem; font-weight: 500; }
 .side-caption { margin-top: .3rem; font-size: .76rem; color: var(--p-muted); line-height: 1.35; }
 .side-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: .35rem .6rem .55rem; }
 .side-legend { border-top: 1px solid var(--p-line); padding: .45rem .6rem .5rem; }

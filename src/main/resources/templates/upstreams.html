@@ -82,8 +82,8 @@
 
     <h2>The Bureau</h2>
     <table class="table kv w-auto">
-        <tr><th>station file</th><td><span class="mono" th:text="${bureau.state}"></span> · <span th:text="${bureau.stationsInFile}"></span> stations in the file · read <span th:text="${fmt.ago(bureau.readAt)}"></span> · checked <span th:text="${fmt.ago(bureau.checkedAt)}"></span> · every <span th:text="${fmt.human(T(java.time.Duration).parse(bureau.every))}"></span>
-            <span class="text-danger" th:if="${bureau.failure != null}" th:text="' · ' + ${bureau.failure} + ' (' + ${fmt.ago(bureau.failedAt)} + ')'"></span></td></tr>
+        <tr th:each="f : ${bureau.files}"><th>station file</th><td><span class="mono" th:text="${f.state}"></span> · <span th:text="${f.stationsInFile}"></span> stations in the file · read <span th:text="${fmt.ago(f.readAt)}"></span> · checked <span th:text="${fmt.ago(f.checkedAt)}"></span> · every <span th:text="${fmt.human(T(java.time.Duration).parse(bureau.every))}"></span>
+            <span class="text-danger" th:if="${f.failure != null}" th:text="' · ' + ${f.failure} + ' (' + ${fmt.ago(f.failedAt)} + ')'"></span></td></tr>
         <tr><th>register</th><td><span th:text="${held.stations}"></span> stations · <span th:text="${held.reporting}"></span> reporting inside 70 min · updated <span th:text="${fmt.ago(bureau.lastUpdateAt)}"></span></td></tr>
     </table>
 

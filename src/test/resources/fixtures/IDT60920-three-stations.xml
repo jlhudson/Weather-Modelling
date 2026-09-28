@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+<product xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="v1.7.1" xsi:noNamespaceSchemaLocation="http://www.bom.gov.au/schema/v1.7/product.xsd">
+  <amoc>
+    <source>
+      <sender>Australian Government Bureau of Meteorology</sender>
+      <region>Tasmania</region>
+      <office>TASRO</office>
+      <copyright>http://www.bom.gov.au/other/copyright.shtml</copyright>
+      <disclaimer>http://www.bom.gov.au/other/disclaimer.shtml</disclaimer>
+    </source>
+    <identifier>IDT60920</identifier>
+    <issue-time-utc>2026-09-28T14:31:02+00:00</issue-time-utc>
+    <issue-time-local tz="EST">2026-09-29T00:31:02+10:00</issue-time-local>
+    <sent-time>2026-09-28T14:31:57+00:00</sent-time>
+    <status>O</status>
+    <service>WSP</service>
+    <product-type>O</product-type>
+    <phase>NEW</phase>
+  </amoc>
+  <observations>
+    <station wmo-id="94970" bom-id="094029" tz="Australia/Hobart" stn-name="HOBART (ELLERSLIE ROAD)" stn-height="50.50" type="AWS" lat="-42.8897" lon="147.3278" forecast-district-id="TAS_PW006" description="Hobart">
+      <period index="0" time-utc="2026-09-28T14:30:00+00:00" time-local="2026-09-29T00:30:00+10:00" wind-src="metar_10">
+        <level index="0" type="surface">
+          <element units="Celsius" type="apparent_temp">5.3</element>
+          <element units="Celsius" type="delta_t">1.2</element>
+          <element units="km/h" type="gust_kmh">7</element>
+          <element units="knots" type="wind_gust_spd">4</element>
+          <element units="Celsius" type="air_temperature">7.6</element>
+          <element units="Celsius" type="dew_point">4.9</element>
+          <element units="hPa" type="pres">1031.4</element>
+          <element units="hPa" type="msl_pres">1031.4</element>
+          <element units="hPa" type="qnh_pres">1031.4</element>
+          <element units="mm" type="rain_hour">0.0</element>
+          <element units="mm" type="rain_ten">0.0</element>
+          <element units="%" type="rel-humidity">83</element>
+          <element type="wind_dir">NW</element>
+          <element units="deg" type="wind_dir_deg">311</element>
+          <element units="km/h" type="wind_spd_kmh">6</element>
+          <element units="knots" type="wind_spd">3</element>
+          <element start-time-local="2026-09-28T09:00:00+10:00" end-time-local="2026-09-29T00:31:00+10:00" duration="931" start-time-utc="2026-09-27T23:00:00+00:00" end-time-utc="2026-09-28T14:31:00+00:00" units="mm" type="rainfall">0.0</element>
+          <element start-time-local="2026-09-27T09:00:00+10:00" end-time-local="2026-09-28T09:00:00+10:00" duration="1440" start-time-utc="2026-09-26T23:00:00+00:00" end-time-utc="2026-09-27T23:00:00+00:00" units="mm" type="rainfall_24hr">0.0</element>
+          <element start-time-local="2026-09-28T06:00:00+10:00" end-time-local="2026-09-28T21:00:00+10:00" start-time-utc="2026-09-27T20:00:00+00:00" end-time-utc="2026-09-28T11:00:00+00:00" units="Celsius" type="maximum_air_temperature" instance="running" time-utc="2026-09-28T01:00:00+00:00" time-local="2026-09-28T11:00:00+10:00">14.9</element>
+          <element start-time-local="2026-09-28T18:00:00+10:00" end-time-local="2026-09-29T09:00:00+10:00" start-time-utc="2026-09-28T08:00:00+00:00" end-time-utc="2026-09-28T23:00:00+00:00" units="Celsius" type="minimum_air_temperature" instance="running" time-utc="2026-09-28T14:30:00+00:00" time-local="2026-09-29T00:30:00+10:00">7.5</element>
+          <element start-time-local="2026-09-29T00:00:00+10:00" end-time-local="2026-09-30T00:00:00+10:00" start-time-utc="2026-09-28T14:00:00+00:00" end-time-utc="2026-09-29T14:00:00+00:00" units="knots" type="maximum_gust_spd" instance="running" time-utc="2026-09-28T14:27:00+00:00" time-local="2026-09-29T00:27:00+10:00">4</element>
+          <element start-time-local="2026-09-29T00:00:00+10:00" end-time-local="2026-09-30T00:00:00+10:00" start-time-utc="2026-09-28T14:00:00+00:00" end-time-utc="2026-09-29T14:00:00+00:00" units="km/h" type="maximum_gust_kmh" instance="running" time-utc="2026-09-28T14:27:00+00:00" time-local="2026-09-29T00:27:00+10:00">7</element>
+          <element start-time-local="2026-09-29T00:00:00+10:00" end-time-local="2026-09-30T00:00:00+10:00" start-time-utc="2026-09-28T14:00:00+00:00" end-time-utc="2026-09-29T14:00:00+00:00" type="maximum_gust_dir" instance="running" time-utc="2026-09-28T14:27:00+00:00" time-local="2026-09-29T00:27:00+10:00">NW</element>
+        </level>
+      </period>
+    </station>
+    <station wmo-id="89611" bom-id="300017" tz="Australia/Casey" stn-name="CASEY" stn-height="40.00" type="AWS" lat="-66.2825" lon="110.5231" forecast-district-id="TAS_FA001" description="Casey">
+      <period index="0" time-utc="2026-09-28T14:30:00+00:00" time-local="2026-09-28T22:30:00+08:00" wind-src="metar_10">
+        <level index="0" type="surface">
+          <element units="Celsius" type="apparent_temp">-24.1</element>
+          <element type="cloud">Cloudy</element>
+          <element units="m" type="cloud_base_m">1290</element>
+          <element type="cloud_oktas">8</element>
+          <element units="km/h" type="gust_kmh">59</element>
+          <element units="knots" type="wind_gust_spd">32</element>
+          <element units="Celsius" type="air_temperature">-10.5</element>
+          <element units="Celsius" type="dew_point">-14.2</element>
+          <element units="hPa" type="pres">974.7</element>
+          <element units="hPa" type="msl_pres">974.7</element>
+          <element units="hPa" type="qnh_pres">974.2</element>
+          <element units="%" type="rel-humidity">74</element>
+          <element units="km" type="vis_km">1</element>
+          <element type="wind_dir">E</element>
+          <element units="deg" type="wind_dir_deg">90</element>
+          <element units="km/h" type="wind_spd_kmh">54</element>
+          <element units="knots" type="wind_spd">29</element>
+          <element start-time-local="2026-09-28T06:00:00+08:00" end-time-local="2026-09-28T21:00:00+08:00" start-time-utc="2026-09-27T22:00:00+00:00" end-time-utc="2026-09-28T13:00:00+00:00" units="Celsius" type="maximum_air_temperature" instance="running" time-utc="2026-09-27T22:30:00+00:00" time-local="2026-09-28T06:30:00+08:00">-5.9</element>
+          <element start-time-local="2026-09-28T18:00:00+08:00" end-time-local="2026-09-29T09:00:00+08:00" start-time-utc="2026-09-28T10:00:00+00:00" end-time-utc="2026-09-29T01:00:00+00:00" units="Celsius" type="minimum_air_temperature" instance="running" time-utc="2026-09-28T13:52:00+00:00" time-local="2026-09-28T21:52:00+08:00">-10.6</element>
+          <element start-time-local="2026-09-28T00:00:00+08:00" end-time-local="2026-09-29T00:00:00+08:00" start-time-utc="2026-09-27T16:00:00+00:00" end-time-utc="2026-09-28T16:00:00+00:00" units="knots" type="maximum_gust_spd" instance="running" time-utc="2026-09-27T17:03:00+00:00" time-local="2026-09-28T01:03:00+08:00">56</element>
+          <element start-time-local="2026-09-28T00:00:00+08:00" end-time-local="2026-09-29T00:00:00+08:00" start-time-utc="2026-09-27T16:00:00+00:00" end-time-utc="2026-09-28T16:00:00+00:00" units="km/h" type="maximum_gust_kmh" instance="running" time-utc="2026-09-27T17:03:00+00:00" time-local="2026-09-28T01:03:00+08:00">104</element>
+          <element start-time-local="2026-09-28T00:00:00+08:00" end-time-local="2026-09-29T00:00:00+08:00" start-time-utc="2026-09-27T16:00:00+00:00" end-time-utc="2026-09-28T16:00:00+00:00" type="maximum_gust_dir" instance="running" time-utc="2026-09-27T17:03:00+00:00" time-local="2026-09-28T01:03:00+08:00">ENE</element>
+        </level>
+      </period>
+    </station>
+    <station wmo-id="89664" bom-id="989664" tz="UTC" stn-name="MCMURDO" stn-height="24.00" type="Non-AWS" lat="-77.8500" lon="166.6667" forecast-district-id="TAS_FA001" description="McMurdo">
+      <period index="0" time-utc="2026-09-28T12:00:00+00:00" time-local="2026-09-28T12:00:00+00:00" wind-src="synop">
+        <level index="0" type="surface">
+          <element units="Celsius" type="apparent_temp">-35.8</element>
+          <element type="cloud">Mostly clear</element>
+          <element units="m" type="cloud_base_m">50</element>
+          <element type="cloud_oktas">1</element>
+          <element units="Celsius" type="air_temperature">-25.2</element>
+          <element units="Celsius" type="dew_point">-35.9</element>
+          <element units="hPa" type="pres">978.9</element>
+          <element units="hPa" type="msl_pres">978.9</element>
+          <element units="%" type="rel-humidity">36</element>
+          <element units="km" type="vis_km">9</element>
+          <element type="weather">Blowing snow</element>
+          <element units="deg" type="wind_dir_deg">0</element>
+          <element units="km/h" type="wind_spd_kmh">35</element>
+          <element units="knots" type="wind_spd">19</element>
+        </level>
+      </period>
+    </station>
+  </observations>
+</product>

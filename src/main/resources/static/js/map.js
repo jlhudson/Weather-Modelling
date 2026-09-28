@@ -1,4 +1,4 @@
-// The map: South Australia's Bureau stations, each drawn where it is, coloured by what it last said,
+// The map: the Bureau's stations in South Australia and Tasmania (W-47), each drawn where it is, coloured by what it last said,
 // and each with its reach - the ground it speaks for, a polygon drawn from the terrain around it by
 // the rule on the sliders (W-2): the clicked station's in cyan, every station's at once on a toggle, each in
 // its station's colour - overlapping, or tiled on the heat map (W-46), each place the nearest's. A click anywhere asks for the reading there (W-8): the weather now and the drought
@@ -260,6 +260,7 @@
             legend();
             tiles();
             staleNote();
+            markState();
             drawWarnings();
             if (overlaid()) drawReach();
         }).catch(function (e) { note('stations failed: ' + e); });
@@ -754,7 +755,7 @@
                 + (x.phenomena ? '<div class="muted">' + esc(x.phenomena) + '</div>' : '')
                 + '<div class="muted">' + (x.until ? 'until ' + esc(when(x.until)) + ' · ' : '') + x.areas.length + ' areas' + (x.link ? ' · <a href="' + esc(x.link) + '" target="_blank" rel="noopener">the Bureau\x27s page</a>' : '') + '</div></div>';
         });
-        if (w.elsewhere.length) html += '<p class="muted mb-1">Elsewhere in South Australia: ' + w.elsewhere.map(function (x) { return esc(x.title); }).join('; ') + '.</p>';
+        if (w.elsewhere.length) html += '<p class="muted mb-1">Elsewhere in the state: ' + w.elsewhere.map(function (x) { return esc(x.title); }).join('; ') + '.</p>';
         return html;
     }
     function warnBanner() {
@@ -1020,6 +1021,27 @@
         }).catch(function (e) { note('points failed: ' + e); });
     }
 
+    // ---- the states (W-47): each flies the map to its stations; the one whose stations are in view is lit, both when both are.
+    function stateBounds(st) {
+        var b = null;
+        (lastStations ? lastStations.features : []).forEach(function (f) {
+            if (st && f.properties.state !== st) return;
+            var ll = L.latLng(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+            b = b ? b.extend(ll) : L.latLngBounds(ll, ll);
+        });
+        return b;
+    }
+    function showState(st) {
+        var b = stateBounds(st);
+        if (b) map.flyToBounds(b, {paddingTopLeft: [$('side').offsetWidth + 24, 24], paddingBottomRight: [24, 24], duration: .8});
+    }
+    function markState() {
+        var v = map.getBounds(), seen = {};
+        (lastStations ? lastStations.features : []).forEach(function (f) { if (v.contains([f.geometry.coordinates[1], f.geometry.coordinates[0]])) seen[f.properties.state] = true; });
+        var which = seen.sa && seen.tas ? '' : seen.sa ? 'sa' : seen.tas ? 'tas' : null;
+        document.querySelectorAll('#states [data-state]').forEach(function (b) { b.classList.toggle('on', b.dataset.state === which); });
+    }
+
     // ---- the footer: read now, and live
     var noteTimer = null;
     function note(text) {
@@ -1069,7 +1091,8 @@
     });
     $('inView').addEventListener('click', function () { inView = !inView; $('inView').classList.toggle('on', inView); $('inView').setAttribute('aria-checked', inView); legend(); });
     map.on('zoomend', stations);
-    map.on('moveend', function () { if (inView) legend(); });
+    map.on('moveend', function () { if (inView) legend(); markState(); });
+    document.querySelectorAll('#states [data-state]').forEach(function (b) { b.addEventListener('click', function () { showState(b.dataset.state); }); });
     map.on('click', function (e) { probe(e.latlng.lat, e.latlng.lng); });
     document.addEventListener('gully:theme', function () { themeColours(); probeLayer.eachLayer(function (l) { if (l.setStyle && l.options.color !== NONE) l.setStyle({color: REACH}); }); stations(); drawReach(); });
     document.addEventListener('visibilitychange', function () { liveTick(); if (!document.hidden) { load(); loadReach(true); } });

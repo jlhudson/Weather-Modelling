@@ -46,7 +46,7 @@ public class StationDetails {
             if (ban != null && ban.get("aac") != null) {
                 aacs.add((String) ban.get("aac"));
             }
-            d.put("warnings", Readings.warningsView(warnings.at(aacs, now), aacs, warnings.readAt()));
+            d.put("warnings", Readings.warningsView(warnings.at(s.state(), aacs, now), aacs, warnings.readAt(s.state())));
             String district = ban == null ? null : (String) ban.get("district");
             au.gully.record.Drought dry = droughts.of(s, now).orElse(null);
             au.gully.fuel.LandCover.Cover cover = landCover.at(s.lat(), s.lon()).orElse(null);

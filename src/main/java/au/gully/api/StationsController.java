@@ -60,7 +60,7 @@ public class StationsController {
     }
 
     /**
-     * The Bureau's warnings in force in South Australia (W-25), each with the areas it covers.
+     * The Bureau's warnings in force in South Australia (W-25) and Tasmania (W-47), each with the areas it covers.
      */
     @GetMapping(value = "/warnings", produces = "application/json")
     public Map<String, Object> warnings() {

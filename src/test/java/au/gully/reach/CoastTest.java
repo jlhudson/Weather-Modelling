@@ -26,7 +26,7 @@ class CoastTest {
         }
         h[2 * side + 1] = -15;
         h[2 * side + 2] = -15;
-        List<int[]> c = Coast.coastline(h, side);
+        List<int[]> c = Coast.coastline(h, side, side);
         // The gulf touches land on both sides all the way up; the ocean's top row touches land; the bottom row does not.
         assertThat(c).anySatisfy(p -> assertThat(p).containsExactly(5, 3));
         assertThat(c).anySatisfy(p -> assertThat(p).containsExactly(0, 8));
@@ -35,6 +35,24 @@ class CoastTest {
         assertThat(c).noneSatisfy(p -> assertThat(p[1]).isEqualTo(2));
         // Ten along the ocean's edge but the one under the gulf, and the gulf's five.
         assertThat(c).hasSize(9 + 5);
+    }
+
+    @Test
+    void aRectangleIsSearchedFromItsBottomRow() {
+        // Four across and six down (W-47: nine rows of tiles by eight): the ocean along the bottom row, a bay one pixel up on
+        // the left, land everywhere else.
+        int width = 4, height = 6;
+        float[] h = new float[width * height];
+        Arrays.fill(h, 50);
+        for (int x = 0; x < width; x++) {
+            h[(height - 1) * width + x] = -40;
+        }
+        h[(height - 2) * width] = -40;
+        List<int[]> c = Coast.coastline(h, width, height);
+        // The bay, and the three of the bottom row with land above; not the one under the bay.
+        assertThat(c).anySatisfy(p -> assertThat(p).containsExactly(0, 4));
+        assertThat(c).noneSatisfy(p -> assertThat(p).containsExactly(0, 5));
+        assertThat(c).hasSize(4);
     }
 
     @Test

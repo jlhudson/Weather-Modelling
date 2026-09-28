@@ -717,3 +717,28 @@ polygons, JUST NOT OVERLAPPING"; and where no reach holds a place, leave it clea
 station a reading takes its forecast from, so a patch is where that station's forecast is the answer. A raster drawn
 in the browser was considered and set aside: stepped edges, and a second place to keep the reach's arithmetic.
 — James, 29 September 2026.
+
+### W-47 · Tasmania, the second state
+
+**The decision.** The Bureau's Tasmanian station file (`IDT60920`) is read beside South Australia's on the same
+ten-minute tick, each with its own conditional GET and status; the Upstreams page lists them as two rows and
+`/api/v1/status` gives each under `bureau.files`. Its 55 Tasmanian stations - King and Flinders Islands among them -
+join the register as South Australia's did, and the daily housekeeping samples their terrain and fills their year of
+record. Its ten Antarctic stations (Casey, Davis, Mawson, McMurdo and six more) are left out: nothing south of 45°S is
+taken in. Every station keeps its own state's clock where the file tags it UTC, so a Tasmanian day turns at 9 am
+Hobart time; a point of ours takes the state and clock of the nearest Bureau station; the forest model reads the
+place's own hour. The coast is found over a ninth row of tiles, to 45°S, since the eighth ended at 43°S across
+Tasmania's south with land on the edge the search for the sea starts from. The Bureau's Tasmanian warnings
+(`IDZ00058`) are read beside South Australia's; a place is under its own state's, the rest of that state's listed
+beside. The reach rule is one for both states. On the map, *SA · Tas · both* in the side panel fly to a state's
+stations. The CFS's districts, ratings and curing stay South Australia's alone: a Tasmanian place says it has no
+fire ban district.
+
+**What it costs.** Once, about 1,430 Open-Meteo units for the year of 55 stations (26 each), spread over the
+housekeeping's runs within the day's allowance; about a hundred terrain tiles a station, free. Colouring the map by an
+outlook asks for 137 forecasts where it asked for 82. Two small files every ten minutes, where there was one.
+
+**Why.** James: "lets ENABLE TASMANIA Data Please. it would be cool to see a second state and to see how our current
+assumptions played out!" - the reach rule, the coast and the drought were all drawn on South Australia; Tasmania's
+wet west, its ranges and its islands test them. Asked, he chose its warnings too, and a state switch on the map.
+— James, 29 September 2026.

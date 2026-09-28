@@ -1,6 +1,7 @@
 # What it is
 
-Gully holds South Australia's Bureau stations and, for each, the ground it speaks for. This page is
+Gully holds South Australia's and Tasmania's Bureau stations (Tasmania since W-47) and, for each, the ground it
+speaks for. This page is
 the mechanism as it stands; the decisions behind it are in [02-decisions.md](02-decisions.md), and every fire
 danger figure in one place - what it rests on, how it was checked - in [03-fire-danger.md](03-fire-danger.md), and every
 outside source with what was found building on it in [04-sources-and-findings.md](04-sources-and-findings.md).
@@ -8,8 +9,8 @@ outside source with what was found building on it in [04-sources-and-findings.md
 ## 1. The stations
 
 The Bureau publishes one observation file per state, refreshed every ten minutes
-(`https://reg.bom.gov.au/fwo/IDS60920.xml` for South Australia). Gully reads it every ten minutes
-with a conditional GET, so a file the Bureau has not changed costs a round trip and no download, and
+(`https://reg.bom.gov.au/fwo/IDS60920.xml` for South Australia, `IDT60920.xml` for Tasmania). Gully reads
+both every ten minutes, each with a conditional GET, so a file the Bureau has not changed costs a round trip and no download, and
 takes the whole file in: every station's id, WMO number, name, position, height, zone and district
 go into the `station` table (an upsert, so a station that moves or is renamed follows the file), and
 its latest values — temperature, apparent temperature, dew point, humidity, wind and gust, pressure,
@@ -26,6 +27,13 @@ station missing days. Everything else - a reading at a point, a point of ours, i
 record, a station's drought - happens when it is asked for, so the service idles at the cost of
 one small file every ten minutes, and Open-Meteo and Google are touched only by an ask or by the
 morning's backfill.
+
+**Tasmania** (W-47). Its file names 55 stations in Tasmania, King and Flinders Islands among them, and ten in
+Antarctica, which are left out: nothing south of 45°S is taken in. A station keeps its own clock - Hobart's, for a
+Tasmanian one, even where the file tags it UTC - so its Bureau day turns at 9 am Hobart time, and a point of ours takes
+the state and clock of the nearest Bureau station. The reach rule is one for both states, set once on the map. The
+CFS's fire ban districts, ratings and curing are South Australia's alone; Tasmania gets its stations, their reaches,
+record and drought, the forecast and the Bureau's Tasmanian warnings.
 
 A station is *reporting* when its latest observation is under seventy minutes old. Beside what it
 last said, every station carries its wind as a trend (W-9): the mean speed, gust and direction (as
@@ -98,8 +106,8 @@ ring on the map.
 reach, and a share of it again for every hundred kilometres inland - 20 % by default, a slider from
 0 to 50 - to at most 150 km, what the terrain is sampled to. At 40 km a station on the coast
 reaches 40, one 300 km inland 64; so the outback's few stations speak for the wide country between
-them. The distance is to the sea, found once in 64 coarse tiles (zoom 7, about a kilometre a pixel,
-over the state and the ocean below it) as the water joined to the ocean - the gulfs are sea, Lake
+them. The distance is to the sea, found once in 72 coarse tiles (zoom 7, about a kilometre a pixel,
+over South Australia, Tasmania and the ocean below them) as the water joined to the ocean - the gulfs are sea, Lake
 Eyre and the salt lakes are not - and kept with the station's terrain (`terrain.inland_km`).
 
 What this does around Adelaide: West Terrace (29 m) reaches the plains north and south, stops at the
@@ -222,9 +230,9 @@ its now is over an hour old), and that stands in: blended into the reading and d
 a dashed amber ring, labelled *model* everywhere, and never written into the station's readings or its
 history. So a point of ours is dropped only where no station reaches, not where they have gone quiet.
 
-**The fire ban district** (W-23). Every station and every reading carries its fire ban district - one of
+**The fire ban district** (W-23). Every South Australian station and reading carries its fire ban district - one of
 the CFS's fifteen, by point in polygon against the CFS's own file (read when asked, held a day, holes
-kept) - and what the CFS has published for it: the AFDRS rating, its Fire Behaviour Index and the total
+kept); a Tasmanian place has none, and says so, the Tasmania Fire Service's ratings not being read - and what the CFS has published for it: the AFDRS rating, its Fire Behaviour Index and the total
 fire ban, for today and the days ahead, read when asked and held an hour. Out of season the feed keeps
 the last day it published; every day carries its date, and a day before today is never given as
 today's - the answer says there is no rating for today, and when the last one was. The map draws the
@@ -239,8 +247,8 @@ each forecast day carries the worst hour of each. Without a curing figure the gr
 carries no index; a figure older than a fortnight is used and marked old. The curing is the operator's
 entry, not the weather: the admin reset keeps it.
 
-**The warnings** (W-25). The Bureau's South Australian warnings - fire weather, severe weather, severe
-thunderstorms, floods - from the state's listing and each product it names, read when asked and held ten
+**The warnings** (W-25). The Bureau's South Australian and Tasmanian (W-47) warnings - fire weather, severe
+weather, severe thunderstorms, floods - from each state's listing and each product it names, read when asked and held ten
 minutes. A warning carries every area it covers; a reading is under it when it names the public district of
 the nearest Bureau station in reach (or the nearest at all) or the point's fire weather district, and every
 other warning in force in the state is listed beside it by title, so a flood warning filed by river basin
@@ -292,7 +300,8 @@ no units. What each takes, costs and has been found to do is in [04-sources-and-
 
 ## 7. The console
 
-One login (`operator`, an 8-digit code, lockout after five wrong tries). The map draws every station
+One login (`operator`, an 8-digit code, lockout after five wrong tries). The side panel's *SA · Tas · both* fly the
+map to a state's stations, the one in view lit (W-47); it opens on South Australia. The map draws every station
 where it is, filled when it is reporting and hollow when it is not, coloured by what it last said
 and, filled, rimmed in the theme's ink so every colour stands off the tiles (W-43) - except by *Age*, where
 every station is filled, its age being the point; from zoom 8 its value sits just above it;

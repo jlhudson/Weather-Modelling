@@ -2,6 +2,7 @@ package au.gully.reading;
 
 import au.gully.bureau.Observation;
 import au.gully.bureau.Station;
+import au.gully.bureau.StationReader;
 import au.gully.bureau.StationRegistry;
 import au.gully.fuel.LandCover;
 import au.gully.platform.GullyProperties;
@@ -102,8 +103,10 @@ public class Points {
      */
     public Station drop(double lat, double lon, Double height, Instant now) {
         String id = idOf(lat, lon);
+        // Its state and its clock are the nearest Bureau station's (W-47), so a point in Tasmania turns its day at 9 am Hobart.
+        Station near = stations.bureau().stream().min(Comparator.comparingDouble(s -> au.gully.reach.Geo.distanceKm(lat, lon, s.lat(), s.lon()))).orElse(null);
         Station p = new Station(id, null, String.format(Locale.ROOT, "Point %.4f, %.4f", lat, lon), lat, lon, height,
-                properties.zone(), null, "sa", Station.POINT);
+                near == null ? properties.zone() : near.zone(), null, near == null ? StationReader.STATES.getFirst() : near.state(), Station.POINT);
         stations.addPoint(p, now);
         log.info("point {} dropped at {}, {} ({} m)", id, lat, lon, height == null ? "?" : Math.round(height));
         sampler.sample(p);

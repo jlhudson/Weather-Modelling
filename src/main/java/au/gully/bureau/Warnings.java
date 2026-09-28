@@ -31,18 +31,23 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The Bureau's warnings for South Australia (W-25): the state's listing, and the product each item points at,
- * which carries the areas the warning covers - public districts ({@code SA_PW…}), fire weather districts
- * ({@code SA_FW…}), river basins for a flood - and the hazard's own times. Read when asked and held
- * {@link #LIFE}, never on a clock (W-15); the listing by conditional GET, each product once for as long as the
- * listing names it at the same time.
+ * The Bureau's warnings for South Australia (W-25) and Tasmania (W-47): each state's listing, and the product each item
+ * points at, which carries the areas the warning covers - public districts ({@code SA_PW…}, {@code TAS_PW…}), fire
+ * weather districts ({@code SA_FW…}), river basins for a flood - and the hazard's own times. Read when asked and held
+ * {@link #LIFE}, never on a clock (W-15); each listing by conditional GET, each product once for as long as its listing
+ * names it at the same time. A place is under its own state's warnings, and the rest of that state's are listed beside.
  */
 @Slf4j
 @Component
 public class Warnings {
 
     public static final String ID = "bureau-warnings";
-    public static final String LISTING = "https://reg.bom.gov.au/fwo/IDZ00057.warnings_sa.xml";
+    /**
+     * Each state's listing, by the Bureau's lower-case state code.
+     */
+    public static final Map<String, String> LISTINGS = Map.of(
+            "sa", "https://reg.bom.gov.au/fwo/IDZ00057.warnings_sa.xml",
+            "tas", "https://reg.bom.gov.au/fwo/IDZ00058.warnings_tas.xml");
     public static final Duration LIFE = Duration.ofMinutes(10);
 
     /**
@@ -54,16 +59,31 @@ public class Warnings {
     private final HttpFetcher http;
     private final Ledger ledger;
     private final boolean enabled;
-    private final Map<String, Warning> products = new ConcurrentHashMap<>();
-    private volatile List<Warning> current = List.of();
-    private volatile Instant readAt;
-    private volatile Instant triedAt;
-    private volatile String failure;
+    private final Map<String, Listing> listings = new LinkedHashMap<>();
+
+    /**
+     * One state's listing as last read: the products it named, and the warnings among them.
+     */
+    private static final class Listing {
+        private final String state;
+        private final URI uri;
+        private final Map<String, Warning> products = new ConcurrentHashMap<>();
+        private volatile List<Warning> current = List.of();
+        private volatile Instant readAt;
+        private volatile Instant triedAt;
+        private volatile String failure;
+
+        Listing(String state, String url) {
+            this.state = state;
+            this.uri = URI.create(url);
+        }
+    }
 
     public Warnings(HttpFetcher http, Ledger ledger, au.gully.platform.GullyProperties properties) {
         this.http = http;
         this.ledger = ledger;
         this.enabled = properties.enabled();
+        StationReader.STATES.stream().filter(LISTINGS::containsKey).forEach(s -> listings.put(s, new Listing(s, LISTINGS.get(s))));
     }
 
     /**
@@ -90,55 +110,67 @@ public class Warnings {
     }
 
     /**
-     * The warnings in force, read now when older than {@link #LIFE}.
+     * Every state's warnings in force, each listing read now when older than {@link #LIFE}.
      */
-    public synchronized List<Warning> ensure(Instant now) {
-        boolean due = readAt == null || Duration.between(readAt, now).compareTo(LIFE) >= 0;
-        boolean resting = triedAt != null && failure != null && Duration.between(triedAt, now).compareTo(Duration.ofMinutes(5)) < 0;
-        if (!enabled || !due || resting) {
-            return current;
+    public List<Warning> ensure(Instant now) {
+        List<Warning> out = new ArrayList<>();
+        for (Listing l : listings.values()) {
+            out.addAll(ensure(l, now));
         }
-        triedAt = now;
-        long started = System.nanoTime();
-        try {
-            Fetched f = http.getIfChanged(URI.create(LISTING));
-            if (!f.notModified()) {
-                List<Warning> fresh = new ArrayList<>();
-                for (Item item : parseListing(f.body())) {
-                    Warning w = products.get(item.productId());
-                    if (w == null || !Objects.equals(w.listedAt(), item.publishedAt())) {
-                        byte[] xml = http.get(URI.create("https://reg.bom.gov.au/fwo/" + item.productId() + ".xml")).body();
-                        w = parseProduct(xml, item);
-                        if (w == null) {
-                            continue;
-                        }
-                        products.put(item.productId(), w);
-                    }
-                    fresh.add(w);
-                }
-                Set<String> listed = new HashSet<>(fresh.stream().map(Warning::id).toList());
-                products.keySet().removeIf(id -> !listed.contains(id));
-                current = List.copyOf(fresh);
-                ledger.record(ID, 0, true, Duration.ofNanos(System.nanoTime() - started), "warnings sa, " + fresh.size() + " in force");
+        return out;
+    }
+
+    private List<Warning> ensure(Listing l, Instant now) {
+        synchronized (l) {
+            boolean due = l.readAt == null || Duration.between(l.readAt, now).compareTo(LIFE) >= 0;
+            boolean resting = l.triedAt != null && l.failure != null && Duration.between(l.triedAt, now).compareTo(Duration.ofMinutes(5)) < 0;
+            if (!enabled || !due || resting) {
+                return l.current;
             }
-            readAt = now;
-            failure = null;
-        } catch (UpstreamException | XMLStreamException | RuntimeException e) {
-            failure = e.getMessage();
-            // Not taken in: heard again whole next time rather than "unchanged".
-            http.forget(URI.create(LISTING));
-            ledger.record(ID, 0, false, Duration.ofNanos(System.nanoTime() - started), "warnings sa: " + e.getMessage());
-            log.warn("bureau warnings: {}", e.getMessage());
+            l.triedAt = now;
+            long started = System.nanoTime();
+            try {
+                Fetched f = http.getIfChanged(l.uri);
+                if (!f.notModified()) {
+                    List<Warning> fresh = new ArrayList<>();
+                    for (Item item : parseListing(f.body())) {
+                        Warning w = l.products.get(item.productId());
+                        if (w == null || !Objects.equals(w.listedAt(), item.publishedAt())) {
+                            byte[] xml = http.get(URI.create("https://reg.bom.gov.au/fwo/" + item.productId() + ".xml")).body();
+                            w = parseProduct(xml, item);
+                            if (w == null) {
+                                continue;
+                            }
+                            l.products.put(item.productId(), w);
+                        }
+                        fresh.add(w);
+                    }
+                    Set<String> listed = new HashSet<>(fresh.stream().map(Warning::id).toList());
+                    l.products.keySet().removeIf(id -> !listed.contains(id));
+                    l.current = List.copyOf(fresh);
+                    ledger.record(ID, 0, true, Duration.ofNanos(System.nanoTime() - started), "warnings " + l.state + ", " + fresh.size() + " in force");
+                }
+                l.readAt = now;
+                l.failure = null;
+            } catch (UpstreamException | XMLStreamException | RuntimeException e) {
+                l.failure = e.getMessage();
+                // Not taken in: heard again whole next time rather than "unchanged".
+                http.forget(l.uri);
+                ledger.record(ID, 0, false, Duration.ofNanos(System.nanoTime() - started), "warnings " + l.state + ": " + e.getMessage());
+                log.warn("bureau warnings {}: {}", l.state, e.getMessage());
+            }
+            return l.current;
         }
-        return current;
     }
 
     /**
-     * The warnings in force covering any of a place's areas, and those that cover none of them.
+     * A state's warnings in force covering any of a place's areas, and the rest of that state's; none for a state whose
+     * listing is not read.
      */
-    public Split at(Collection<String> aacs, Instant now) {
+    public Split at(String state, Collection<String> aacs, Instant now) {
         List<Warning> here = new ArrayList<>(), elsewhere = new ArrayList<>();
-        for (Warning w : ensure(now)) {
+        Listing l = listings.get(state);
+        for (Warning w : l == null ? List.<Warning>of() : ensure(l, now)) {
             if (w.until() != null && w.until().isBefore(now)) {
                 continue;
             }
@@ -321,15 +353,40 @@ public class Warnings {
         }
     }
 
+    /**
+     * Every state's warnings as last read, without reading.
+     */
     public List<Warning> current() {
-        return current;
+        return listings.values().stream().flatMap(l -> l.current.stream()).toList();
     }
 
+    /**
+     * When the listing read longest ago was read: every state's is at least as fresh; null until each has been read.
+     */
     public Instant readAt() {
-        return readAt;
+        Instant oldest = null;
+        for (Listing l : listings.values()) {
+            if (l.readAt == null) {
+                return null;
+            }
+            oldest = oldest == null || l.readAt.isBefore(oldest) ? l.readAt : oldest;
+        }
+        return oldest;
     }
 
+    /**
+     * When a state's listing was last read, or null.
+     */
+    public Instant readAt(String state) {
+        Listing l = listings.get(state);
+        return l == null ? null : l.readAt;
+    }
+
+    /**
+     * What is wrong, state by state, or null while every listing reads.
+     */
     public String failure() {
-        return failure;
+        List<String> out = listings.values().stream().filter(l -> l.failure != null).map(l -> l.state + ": " + l.failure).toList();
+        return out.isEmpty() ? null : String.join("; ", out);
     }
 }

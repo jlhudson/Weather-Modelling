@@ -82,11 +82,12 @@ public class Status {
     }
 
     /**
-     * The Bureau's file: when it was checked, read and last failed, and how many stations it names.
+     * The Bureau's files: when they were checked, read and last failed, and how many stations they name - together, and
+     * state by state (W-47).
      */
     public Map<String, Object> bureau() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("state", StationReader.STATE);
+        m.put("state", String.join(", ", StationReader.STATES));
         m.put("every", StationReader.EVERY.toString());
         m.put("checkedAt", reader.checkedAt());
         m.put("readAt", reader.readAt());
@@ -94,6 +95,17 @@ public class Status {
         m.put("failure", reader.failure());
         m.put("stationsInFile", reader.stationsInFile());
         m.put("lastUpdateAt", stations.lastUpdateAt());
+        m.put("files", reader.files().stream().map(f -> {
+            Map<String, Object> x = new LinkedHashMap<>();
+            x.put("state", f.state());
+            x.put("url", au.gully.bureau.StationFile.url(f.state()));
+            x.put("checkedAt", f.checkedAt());
+            x.put("readAt", f.readAt());
+            x.put("failedAt", f.failedAt());
+            x.put("failure", f.failure());
+            x.put("stationsInFile", f.stationsInFile());
+            return x;
+        }).toList());
         return m;
     }
 

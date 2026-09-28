@@ -84,7 +84,7 @@ public class Reset {
                 forecasts.rehydrate();
                 backfill.clear();
                 // The file downloaded whole on the next read, not answered by the Bureau's 304; the tiles fetched again.
-                http.forget(URI.create(StationFile.url(StationReader.STATE)));
+                StationReader.STATES.forEach(s -> http.forget(URI.create(StationFile.url(s))));
                 tiles.clearCache();
             }
             out.put("deleted", before);

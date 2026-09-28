@@ -156,7 +156,7 @@ public class Readings {
         Map<String, Object> drought = drought(members);
         out.put("current", current);
         out.put("drought", drought);
-        out.put("fire", fire(current, drought));
+        out.put("fire", fire(current, drought, zoneOf(members)));
         List<Map<String, Object>> listed = new ArrayList<>();
         for (Member m : members) {
             Map<String, Object> s = new LinkedHashMap<>();
@@ -273,7 +273,7 @@ public class Readings {
         Map<String, Object> ban = fireBan.at(lat, lon, now).orElse(null);
         String district = ban == null ? null : (String) ban.get("district");
         au.gully.cfs.Curing.Entry cured = district == null ? null : curing.of(district).orElse(null);
-        Map<String, Object> fire = fire(current, drought);
+        Map<String, Object> fire = fire(current, drought, zoneOf(members));
         if (district != null) {
             Double rh = (Double) current.get("humidityPct");
             fire.put("grass", au.gully.cfs.Grass.block(district, cured, (Double) current.get("temperatureC"), rh == null ? null : (int) Math.round(rh),
@@ -285,17 +285,19 @@ public class Readings {
         out.put("fire", fire);
         out.put("fireBan", ban);
         // The Bureau's warnings in force here (W-25): by the public district of the nearest Bureau station in reach, or the
-        // nearest at all, and by the fire weather district; the rest of the state's listed apart, never dropped.
+        // nearest at all, and by the fire weather district; the rest of that station's state's listed apart, never dropped.
         List<String> aacs = new ArrayList<>();
-        members.stream().filter(m -> !m.station().isPoint() && m.station().district() != null).min(Comparator.comparingDouble(Member::km)).ifPresent(m -> aacs.add(m.station().district()));
-        if (aacs.isEmpty()) {
-            stations.bureau().stream().filter(s -> s.district() != null)
-                    .min(Comparator.comparingDouble(s -> Geo.distanceKm(lat, lon, s.lat(), s.lon()))).ifPresent(s -> aacs.add(s.district()));
+        Station districtStation = members.stream().filter(m -> !m.station().isPoint() && m.station().district() != null).min(Comparator.comparingDouble(Member::km)).map(Member::station)
+                .orElseGet(() -> stations.bureau().stream().filter(s -> s.district() != null)
+                        .min(Comparator.comparingDouble(s -> Geo.distanceKm(lat, lon, s.lat(), s.lon()))).orElse(null));
+        if (districtStation != null) {
+            aacs.add(districtStation.district());
         }
         if (ban != null && ban.get("aac") != null) {
             aacs.add((String) ban.get("aac"));
         }
-        out.put("warnings", warningsView(warnings.at(aacs, now), aacs, warnings.readAt()));
+        String state = districtStation == null ? StationReader.STATES.getFirst() : districtStation.state();
+        out.put("warnings", warningsView(warnings.at(state, aacs, now), aacs, warnings.readAt(state)));
         // The forecast (W-20): the nearest station in reach's, or the point of ours'; fetched when older than three hours.
         Member nearest = members.stream().min(Comparator.comparingDouble(Member::km)).orElse(null);
         // Forced, it is fetched again - unless this ask already did (a point's current, a quiet station's now).
@@ -485,7 +487,15 @@ public class Readings {
         return fire.get("grass") instanceof Map<?, ?> m ? (Map<String, Object>) m : null;
     }
 
-    private static Map<String, Object> fire(Map<String, Object> current, Map<String, Object> drought) {
+    /**
+     * The clock of the place (W-47): the nearest station's in the answer, else Adelaide's.
+     */
+    private static java.time.ZoneId zoneOf(List<Member> members) {
+        return members.stream().min(Comparator.comparingDouble(Member::km)).map(m -> au.gully.record.Record.zoneOf(m.station()))
+                .orElse(java.time.ZoneId.of("Australia/Adelaide"));
+    }
+
+    private static Map<String, Object> fire(Map<String, Object> current, Map<String, Object> drought, java.time.ZoneId zone) {
         Map<String, Object> f = new LinkedHashMap<>();
         Double ffdi = FireDanger.of((Double) current.get("temperatureC"), (Double) current.get("humidityPct"),
                 (Double) current.get("windSpeedKmh"), (Double) drought.get("droughtFactor"));
@@ -496,7 +506,7 @@ public class Readings {
         // The AFDRS dry forest index on the same weather (W-33), at the local time the weather is for.
         Instant at = current.get("at") == null ? Instant.now() : Instant.parse((String) current.get("at"));
         au.gully.fire.DryForest.Result r = au.gully.fire.DryForest.of((Double) current.get("temperatureC"), (Double) current.get("humidityPct"),
-                (Double) current.get("windSpeedKmh"), (Double) drought.get("droughtFactor"), java.time.LocalDateTime.ofInstant(at, java.time.ZoneId.of("Australia/Adelaide")),
+                (Double) current.get("windSpeedKmh"), (Double) drought.get("droughtFactor"), java.time.LocalDateTime.ofInstant(at, zone),
                 au.gully.fire.DryForest.Fuel.PROVISIONAL);
         f.put("forest", r == null ? null : forest(r));
         return f;

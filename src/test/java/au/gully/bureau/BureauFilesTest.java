@@ -12,7 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The Bureau's files as they were read live on 18 September 2026: three stations cut from the
  * South Australian observations product, the Tasmanian warnings listing, and the severe weather
- * warning product it pointed at (its image removed).
+ * warning product it pointed at (its image removed); and three stations cut from the Tasmanian
+ * observations product as read on 29 September 2026 - Hobart, and two of the ten in Antarctica.
  */
 class BureauFilesTest {
 
@@ -31,6 +32,23 @@ class BureauFilesTest {
         assertThat(thevenard.station().zone()).isEqualTo("Australia/Adelaide");
         // It gives station-level pressure and no msl_pres: not blended with sea-level pressures.
         assertThat(thevenard.observation().pressureMslHpa()).isNull();
+    }
+
+    @Test
+    void theTasmanianFileKeepsHobartsClockAndLeavesAntarcticaOut() throws Exception {
+        byte[] xml = fixture("IDT60920-three-stations.xml");
+        // Hobart, Casey (tagged Australia/Casey) and McMurdo (tagged UTC) are in the file; only Hobart is Tasmania's ground.
+        List<StationFile.StationReading> readings = StationFile.parse(xml, "tas");
+        assertThat(readings).extracting(r -> r.station().name()).containsExactly("HOBART (ELLERSLIE ROAD)");
+        Station hobart = readings.getFirst().station();
+        assertThat(hobart.zone()).isEqualTo("Australia/Hobart");
+        assertThat(hobart.state()).isEqualTo("tas");
+        assertThat(hobart.district()).isEqualTo("TAS_PW006");
+        assertThat(readings.getFirst().observation().temperatureC()).isEqualTo(7.6);
+        // A Tasmanian station tagged UTC, as Thevenard is in South Australia's file, keeps Hobart's clock, not Adelaide's.
+        byte[] utc = new String(xml, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("tz=\"Australia/Hobart\" stn-name=\"HOBART", "tz=\"UTC\" stn-name=\"HOBART").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(StationFile.parse(utc, "tas").getFirst().station().zone()).isEqualTo("Australia/Hobart");
     }
 
     @Test
@@ -69,8 +87,10 @@ class BureauFilesTest {
     }
 
     @Test
-    void theStationFileIsSouthAustralias() {
-        assertThat(StationFile.url(StationReader.STATE)).isEqualTo("https://reg.bom.gov.au/fwo/IDS60920.xml");
+    void theStationFilesAreSouthAustraliasAndTasmanias() {
+        assertThat(StationReader.STATES.stream().map(StationFile::url)).containsExactly(
+                "https://reg.bom.gov.au/fwo/IDS60920.xml", "https://reg.bom.gov.au/fwo/IDT60920.xml");
         assertThat(StationFile.PRODUCTS).hasSize(7);
+        assertThat(StationFile.ZONES).containsOnlyKeys(StationFile.PRODUCTS.keySet());
     }
 }

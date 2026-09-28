@@ -9,8 +9,8 @@ the sources change, so a finding is what was true that day.
 
 | Source | What we take | When | Cost | Held |
 |---|---|---|---|---|
-| Bureau station file `IDS60920` | every SA station's latest observation | every 10 min, conditional GET | free | readings 3 days, windows and days 548 |
-| Bureau warnings `IDZ00057` + products | SA warnings and the areas they cover | when asked, held 10 min | free | memory |
+| Bureau station files `IDS60920`, `IDT60920` (W-47) | every SA and Tasmanian station's latest observation | every 10 min, conditional GET | free | readings 3 days, windows and days 548 |
+| Bureau warnings `IDZ00057`, `IDZ00058` + products | SA and Tasmanian warnings and the areas they cover | when asked, held 10 min | free | memory |
 | CFS fire ban districts | the 15 districts' shapes | when asked, held a day | free (230 KB) | memory |
 | CFS fire danger ratings | AFDRS rating, FBI, total fire ban, 4 days | when asked, held an hour | free (32 KB) | memory |
 | Open-Meteo forecast | now, 7 days hourly and daily (W-44), 48 h behind | when asked, held 3 h (now: 1 h) | 3 units | `station_forecast`, a day |
@@ -25,7 +25,13 @@ them with `?calls=all`.
 
 ## The Bureau
 
-**Station file** - `https://reg.bom.gov.au/fwo/IDS60920.xml`, South Australia's whole state in one file.
+**Station file** - `https://reg.bom.gov.au/fwo/IDS60920.xml`, South Australia's whole state in one file, and since W-47
+`IDT60920.xml`, Tasmania's, read on the same tick, each with its own conditional GET.
+
+- *Finding (29 September 2026, W-47):* the Tasmanian file names 65 stations, 55 of them in Tasmania - King and Flinders
+  Islands among them - and ten in Antarctica: Casey, Davis and Mawson on their own zones, McMurdo, Dumont d'Urville,
+  Syowa, Mirny, Novolazarevskaya, Bunger Hills and Snyder Rocks tagged UTC. Nothing south of 45°S is taken in. A
+  Tasmanian station tagged UTC would keep Hobart's clock, as Thevenard keeps Adelaide's.
 
 - Read with a conditional GET. *Finding (W-21):* the ETag used to be kept even when the file failed to parse or be
   stored, so the next read heard "304 unchanged" and that file's readings were lost for good. A failed read now forgets
@@ -42,7 +48,9 @@ them with `?calls=all`.
   its now (W-20), and the side panel says since when the file has not changed.
 
 **Warnings** - the listing `https://reg.bom.gov.au/fwo/IDZ00057.warnings_sa.xml` and a product XML per item
-(`https://reg.bom.gov.au/fwo/IDSnnnnn.xml`).
+(`https://reg.bom.gov.au/fwo/IDSnnnnn.xml`); since W-47 Tasmania's too, `IDZ00058.warnings_tas.xml` and its
+`IDTnnnnn.xml` products. A place is under its own state's warnings - the state of the Bureau station whose district it
+takes - and the rest of that state's are listed beside, never the other state's.
 
 - A product names every area it covers: public forecast districts (`SA_PWnnn`), fire weather districts (`SA_FWnnn`),
   and river basins for floods. *Finding (W-25):* the pre-start-over parser kept only public districts, so fire weather
@@ -112,7 +120,8 @@ each of its three endpoints (current, hourly, daily), and one fetch is one call 
 - Zoom 10 (~125 m a pixel here) for the terrain; the sea is negative (bathymetry), Lake Eyre about −15.
 - *Finding (W-19):* sampling to 150 km is about a hundred tiles a station (~4 MB) and a full resample of 82 stations took
   about fifteen minutes.
-- The coast is found once a process in 64 zoom-7 tiles (about a kilometre a pixel) as the water joined to the ocean -
+- The coast is found once a process in 72 zoom-7 tiles (about a kilometre a pixel; 64 until W-47 added a row for
+  Tasmania's south) as the water joined to the ocean -
   flood-filled from the Southern Ocean - so the gulfs are sea and Lake Eyre and the salt lakes are not. 8,528 pixels of
   coastline on 24 September 2026. Distances from the sea that day: Woomera 182 km, Coober Pedy 357, Oodnadatta 535,
   Moomba 547, Pukatja 588.
@@ -153,8 +162,9 @@ each of its three endpoints (current, hourly, daily), and one fetch is one call 
 | a quiet station's model now, per station in reach | 3 (then held an hour) |
 | a point of ours dropped | 3 + its year of archive (~26) |
 | the river at a new place / its series | 9 / 8 (series held 12 h) |
-| colouring the map by an outlook, first view | up to ~250 (82 stations × 3), then only what ages past 3 h |
+| colouring the map by an outlook, first view | up to ~410 (137 stations × 3), then only what ages past 3 h |
 | a year of archive for one station | ~26 |
+| Tasmania's 55 stations taken in (W-47), once | ~1,430 (55 years of archive), spread over the housekeeping's runs |
 
 The daily allowance is 10,000; the 90 % guard retires Open-Meteo at 9,000 and Google takes the overflow.
 

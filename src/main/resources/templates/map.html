@@ -29,8 +29,15 @@
         <!-- The side panel: what to colour the stations by, what else to draw, the figures, and the legend. -->
         <aside class="panel side" id="side">
             <div class="side-head">
-                <div class="side-title"><svg class="ico"><use href="#i-station"/></svg> Stations</div>
-                <div class="side-caption">South Australia's Bureau stations, and what each last said. A filled dot has reported inside the hour; a hollow one has not. Click a station for everything held for it, or anywhere else for the stations that speak for that point.</div>
+                <div class="side-title"><svg class="ico"><use href="#i-station"/></svg> Stations
+                    <!-- The states (W-47): each flies the map to its stations. -->
+                    <span class="states" id="states" role="group" aria-label="Show a state">
+                        <button class="tog" data-state="sa" title="South Australia's stations" type="button">SA</button>
+                        <button class="tog" data-state="tas" title="Tasmania's stations" type="button">Tas</button>
+                        <button class="tog" data-state="" title="Every station held" type="button">both</button>
+                    </span>
+                </div>
+                <div class="side-caption">The Bureau's stations in South Australia and Tasmania, and what each last said. A filled dot has reported inside the hour; a hollow one has not. Click a station for everything held for it, or anywhere else for the stations that speak for that point.</div>
             </div>
             <div class="side-body">
                 <div class="group">
