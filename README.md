@@ -59,7 +59,7 @@ at `http://weather-app:8082` on the `apps` network when the two stacks share a s
 key `WEATHER_KEY_HUB` here and `HUB_WEATHER_API_KEY` there. On the server the same `compose.yaml` is
 the `weather` Portainer stack from `main`, pulling the image CI pushes and using the server's shared
 PostGIS; Watchtower replaces the container on every merge, and the edge stack carries the public traffic
-([The Hub's Start here page](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/start-here.md)).
+([The Hub's Start here page](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/README.md)).
 
 **From the IDE.** `au.gully.Application`, with Postgres reachable at `localhost:5435` (this repository's
 compose Postgres, started alone with `docker compose up -d db`). Flyway creates the schema on first boot.
