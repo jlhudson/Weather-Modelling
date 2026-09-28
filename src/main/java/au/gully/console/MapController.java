@@ -42,6 +42,7 @@ public class MapController {
     private final StationRegistry stations;
     private final Status status;
     private final Reaches reaches;
+    private final au.gully.reach.Patches patches;
     private final ReachRule rule;
     private final TerrainSampler sampler;
     private final Droughts droughts;
@@ -141,6 +142,18 @@ public class MapController {
                                      @RequestParam(required = false) Double inlandPct,
                                      @RequestParam(required = false) Double descentShare) {
         return reaches.geojson(asked(km, kmPer100m, inlandPct, descentShare));
+    }
+
+    /**
+     * The heat map (W-46): every station's reach without the overlaps - each place the nearest station's whose reach holds
+     * it - under the rule in force or the rule asked about, as the reaches are.
+     */
+    @GetMapping(value = "/patches.geojson", produces = "application/geo+json")
+    @ResponseBody
+    public Map<String, Object> patches(@RequestParam(required = false) Double km, @RequestParam(required = false) Double kmPer100m,
+                                       @RequestParam(required = false) Double inlandPct,
+                                       @RequestParam(required = false) Double descentShare) {
+        return patches.geojson(asked(km, kmPer100m, inlandPct, descentShare));
     }
 
     private ReachRule.Rule asked(Double km, Double kmPer100m, Double inlandPct, Double descentShare) {

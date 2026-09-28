@@ -694,3 +694,26 @@ and a cache for weather, and the published rating is this service's. The Hub ask
 rows from 14 September 2026 are copied here once, by hand, with `name` left empty (the Hub kept the district in
 capitals only); the route titles those.
 — James, 28 September 2026.
+
+### W-46 · The heat map: every reach at once, without the overlaps
+
+**The decision.** Beside *All reaches* on the map, a *Heat map* toggle (the one or the other) draws every station's
+reach tiled rather than stacked: each place in the colour of the nearest station whose reach holds it, by whatever the
+map is coloured by, and clear where no reach holds it - where a click would drop a point of ours. The colour is the
+polygons' own (a station with no value grey), the fill firmer since nothing is stacked; a patch's tooltip says its
+station, the value and how much of the station's reach is its patch; hovering a legend bar lights the patches in it and
+a patch lights its bar; a click on a patch opens its station, as a polygon's does. A point of ours takes only what no
+Bureau station reaches, as a reading uses one only there. Nearest is by distance: each pair split midway, in a
+projection flat at their mean latitude. The patches are cut on the server with JTS, which was already here for the
+containment test, from the reaches under the rule on the sliders, so a preview tiles too
+(`/console/map/patches.geojson`, 105 patches from 106 stations in about 80 ms warm), and nothing is stored. A place a
+nearer station's reach stops short of goes to the next nearest that reaches it: the partition follows the reaches, not
+plain Voronoi cells, so a patch can have a hole or come in pieces.
+
+**Why.** James: "I LOVE the weather Polygons, BUT, I would like a new view mode … voronoi or something like nearest
+neighbour, more like a heat map … so I don't have to see hundreds of overlapping polygons, and it might be easier to see
+some certain types of data." Asked what should colour a place: "exactly the same colouring … as the overlapping
+polygons, JUST NOT OVERLAPPING"; and where no reach holds a place, leave it clear. Nearest by distance is also the
+station a reading takes its forecast from, so a patch is where that station's forecast is the answer. A raster drawn
+in the browser was considered and set aside: stepped edges, and a second place to keep the reach's arithmetic.
+— James, 29 September 2026.

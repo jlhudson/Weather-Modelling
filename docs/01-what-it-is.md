@@ -107,6 +107,16 @@ foothill scarp, never crosses to the Hills, and ends at the gulf; Mount Lofty (7
 and not the plain; Murray Bridge (30 m) reaches east over the flat and stops short of the Hills to its
 west. Two reaches may overlap — a point inside several is for the interpolation, which comes next.
 
+**The reaches tiled** (W-46). The map's *Heat map* draws every reach at once without the overlaps: each place in the
+colour of the nearest station whose reach holds it - the station a reading there takes its forecast from - and clear
+where no reach does. A Bureau station's patch is its reach less the places a nearer Bureau station's reach holds; a
+point of ours takes only what no Bureau station reaches, less what a nearer point holds, as a reading uses a point only
+where no station reaches. Nearer is by distance on the ground, each pair split by the line midway between them in a
+projection flat at their mean latitude, so neighbouring patches meet without a gap. The patches are cut with JTS from
+the reaches under the rule on the sliders, on demand (`/console/map/patches.geojson`, about 80 ms for a hundred
+stations) and stored nowhere. A place nearer a station whose reach stops short of it goes to the next nearest that
+reaches it, so a patch can be a ring or come in pieces.
+
 ## 3. The record and the drought
 
 **The readings, stored.** Every observation the Bureau's file brings is written to
@@ -288,7 +298,9 @@ and, filled, rimmed in the theme's ink so every colour stands off the tiles (W-4
 every station is filled, its age being the point; from zoom 8 its value sits just above it;
 a click opens everything held for it. The legend under the side panel is the colour's scale with
 the stations' distribution on it as bars, over the stations in view or every one held (W-17); hover
-a bar and its stations are lit on the map, hover a station and its bar is lit. A click anywhere else is an ask from outside, made the way
+a bar and its stations are lit on the map, hover a station and its bar is lit. Every reach can be drawn at once in its
+station's colour: overlapping, on *All reaches*, or tiled, on *Heat map* (W-46) - the one or the other - where a patch is
+lit by its bar, says its station and value, and opens the station, as a polygon does. A click anywhere else is an ask from outside, made the way
 The Hub makes one (W-14): through the API's front door with the console's own key - a key issued
 to the consumer `console` with the readings scope, carried on the map page, listed and revocable on
 the API keys page like any other, issued again on the next map page if revoked - so the flow the

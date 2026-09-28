@@ -1,7 +1,7 @@
 // The map: South Australia's Bureau stations, each drawn where it is, coloured by what it last said,
 // and each with its reach - the ground it speaks for, a polygon drawn from the terrain around it by
 // the rule on the sliders (W-2): the clicked station's in cyan, every station's at once on a toggle, each in
-// its station's colour. A click anywhere asks for the reading there (W-8): the weather now and the drought
+// its station's colour - overlapping, or tiled on the heat map (W-46), each place the nearest's. A click anywhere asks for the reading there (W-8): the weather now and the drought
 // blended from the stations in reach, or from a point of ours (W-7, an amber diamond) where none reaches.
 // One question at a time: click a station for everything held for it, or click anywhere for the
 // stations whose reach contains the point (W-5). Deferred, so it runs after Leaflet and console.js.
@@ -79,7 +79,9 @@
     // The warnings over the districts and the stations (W-30).
     var warnLayer = L.layerGroup().addTo(map), lastWarnings = [];
     var state = {id: 'temperatureC', selected: null, probe: null, bin: null};
-    var togs = {labels: true, reach: true, all: false, districts: false, warnings: true};
+    var togs = {labels: true, reach: true, all: false, heat: false, districts: false, warnings: true};
+    // Every reach drawn at once: as polygons, overlapping (All reaches), or as the heat map's patches, tiled (W-46).
+    function overlaid() { return togs.all || togs.heat; }
     var lastStations = null, lastReach = null;
     // The theme's colours, read at the start and again when the theme changes: the reach's cyan, and the ink a filled dot is
     // rimmed in (W-43) - the text colour, light on the dark map and dark on the light, so a dot stands off the tiles whatever
@@ -136,7 +138,7 @@
             b.className = 'chip' + (x.id === state.id ? ' on' : '');
             b.innerHTML = icon(x.icon) + '<span>' + esc(x.name) + (x.hint ? '<small>' + esc(x.hint) + '</small>' : '') + '</span>';
             b.title = x.name + (x.unit ? ' in ' + x.unit : '');
-            b.addEventListener('click', function () { state.id = x.id; state.bin = null; buildSide(); stations(); legend(); if (togs.all) drawReach(); if (x.outlook != null || x.change) loadOutlook(); });
+            b.addEventListener('click', function () { state.id = x.id; state.bin = null; buildSide(); stations(); legend(); if (overlaid()) drawReach(); if (x.outlook != null || x.change) loadOutlook(); });
             chips.appendChild(b);
         });
         Object.keys(togs).forEach(function (k) { var b = document.querySelector('.tog[data-tog=' + k + ']'); if (b) b.classList.toggle('on', togs[k]); });
@@ -199,7 +201,7 @@
         state.bin = i;
         markBar(i);
         stations();
-        if (togs.all) drawReach();
+        if (overlaid()) drawReach();
         var v = current();
         if (i == null) { legend(); return; }
         var n = legendProps().filter(function (p) { var x = valueOf(p, v); return x != null && binOf(x, v) === i; }).length;
@@ -240,7 +242,7 @@
         fetch('/console/map/outlook.json').then(json).then(function (o) {
             lastOutlook = o;
             if (current().outlook != null || current().change) {
-                stations(); legend(); if (togs.all) drawReach();
+                stations(); legend(); if (overlaid()) drawReach();
                 if (o.pending && !document.hidden) { note(o.pending + ' forecasts being fetched'); outlookTimer = setTimeout(loadOutlook, 5000); }
             }
         }).catch(function (e) { note('outlook failed: ' + e); });
@@ -259,7 +261,7 @@
             tiles();
             staleNote();
             drawWarnings();
-            if (togs.all) drawReach();
+            if (overlaid()) drawReach();
         }).catch(function (e) { note('stations failed: ' + e); });
     }
     // When the Bureau's file has not changed for over an hour (W-28), say so: the stations show what they last said, faded.
@@ -357,6 +359,7 @@
             fetch('/console/map/reach.geojson?' + ruleQuery(r)).then(json).then(function (fc) {
                 reachLoading = false;
                 lastReach = fc;
+                if (togs.heat) loadPatches(r);
                 drawReach();
                 stations();
                 tiles();
@@ -391,9 +394,42 @@
         return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.inlandKm != null ? ' · ' + fmt(p.inlandKm, 0) + ' km from the sea' : '') + '</span><br>reach ' + fmt(p.reachKm, 0) + ' km here · ' + fmt(p.areaKm2, 0) + ' km² · ' + fmt(p.minKm, 0) + '–' + fmt(p.maxKm, 0) + ' km, mean ' + fmt(p.meanKm, 1)
             + '<br><span class="muted">' + cutWords(p.cut) + ' · rule ' + ruleWords(lastReach.rule) + '</span>';
     }
+    // ---- the heat map (W-46): every reach at once without the overlaps - each place in the colour of the nearest station
+    // whose reach holds it, a point of ours only where no Bureau station reaches, clear where none does. The same colour as
+    // the polygons, a firmer fill since nothing is stacked; a patch opens its station and lights its bar as a polygon does.
+    var lastPatches = null, patchSeq = 0;
+    function loadPatches(r) {
+        var my = ++patchSeq;
+        fetch('/console/map/patches.geojson?' + ruleQuery(r || ruleOnSliders())).then(json).then(function (fc) {
+            if (my !== patchSeq) return;
+            lastPatches = fc;
+            drawReach();
+        }).catch(function (e) { note('heat map failed: ' + e); });
+    }
+    function patchStyle(id) {
+        var p = stationProps(id), c = p ? colourOf(p) : NONE;
+        if (state.bin != null) return p && inBin(p) ? {color: c, weight: 1.4, opacity: .95, fillColor: c, fillOpacity: .62, lineJoin: 'round'} : {color: c, weight: .4, opacity: .12, fillColor: c, fillOpacity: .05, lineJoin: 'round'};
+        return {color: c, weight: .8, opacity: .7, fillColor: c, fillOpacity: .42, lineJoin: 'round'};
+    }
+    function patchTip(p) {
+        var sp = stationProps(p.id), v = current(), x = sp ? valueOf(sp, v) : null;
+        return '<b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.id) + (p.kind === 'point' ? ' · a point of ours' : '') + '</span><br>'
+            + esc(v.name) + ' ' + (x == null ? '<span class="muted">none</span>' : esc(fmt(x, v.d || 0)) + (v.unit ? ' ' + esc(v.unit) : '') + (sp && stale(sp, v) ? ' <span class="muted">· last reported ' + esc(ago(sp.at)) + '</span>' : ''))
+            + '<br><span class="muted">the nearest station whose reach holds this ground: ' + fmt(p.patchKm2, 0) + ' km² of its ' + fmt(p.areaKm2, 0) + ' km² reach</span>';
+    }
+    function drawPatches() {
+        L.geoJSON(lastPatches, {pane: 'reaches', style: function (f) { return patchStyle(f.properties.id); }, onEachFeature: function (f, l) {
+            var p = f.properties;
+            l.bindTooltip(function () { return patchTip(p); }, {sticky: true, className: 'hx-tip'})
+                .on('click', function (e) { L.DomEvent.stopPropagation(e); detail(p.id); })
+                .on('mouseover', function () { var sp = stationProps(p.id), x = sp ? valueOf(sp) : null; if (state.bin == null) markBar(x == null ? null : binOf(x)); })
+                .on('mouseout', function () { if (state.bin == null) markBar(null); });
+        }}).addTo(allLayer);
+    }
     function drawReach() {
         allLayer.clearLayers();
         reachLayer.clearLayers();
+        if (togs.heat && lastPatches) drawPatches();
         if (!lastReach) return;
         lastReach.features.forEach(function (f) {
             var p = f.properties, lit = p.id === state.selected, probed = state.probe && state.probe.ids.indexOf(p.id) >= 0;
@@ -1009,7 +1045,16 @@
 
     // ---- wiring
     document.querySelectorAll('.tog[data-tog]').forEach(function (b) {
-        b.addEventListener('click', function () { var k = b.dataset.tog; togs[k] = !togs[k]; b.classList.toggle('on', togs[k]); if (k === 'labels') stations(); else if (k === 'districts') drawDistricts(); else if (k === 'warnings') drawWarnings(); else drawReach(); });
+        b.addEventListener('click', function () {
+            var k = b.dataset.tog;
+            togs[k] = !togs[k];
+            b.classList.toggle('on', togs[k]);
+            // Every reach one way or the other (W-46): the polygons or the heat map, never both at once.
+            var other = k === 'heat' ? 'all' : k === 'all' ? 'heat' : null;
+            if (other && togs[k] && togs[other]) { togs[other] = false; document.querySelector('.tog[data-tog=' + other + ']').classList.remove('on'); }
+            if (k === 'heat' && togs.heat) loadPatches();
+            if (k === 'labels') stations(); else if (k === 'districts') drawDistricts(); else if (k === 'warnings') drawWarnings(); else drawReach();
+        });
     });
     $('readNow').addEventListener('click', readNow);
     $('tiles').addEventListener('click', function (e) { var b = e.target.closest('[data-open=points]'); if (b) pointsList(0); });

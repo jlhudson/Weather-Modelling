@@ -17,6 +17,7 @@
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></symbol>
         <symbol id="i-reach" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3c5 0 9 4 9 9 0 3-2 5-3 7-2 2-4 2-6 2s-4 0-6-2C4 17 3 15 3 12c0-5 4-9 9-9Z"/></symbol>
         <symbol id="i-reaches" viewBox="0 0 24 24"><circle cx="9" cy="10" r="6"/><circle cx="15" cy="14" r="6"/></symbol>
+        <symbol id="i-heat" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 11l6-1 3-7"/><path d="M9 10l4 5 8-3"/><path d="M13 15l-2 6"/></symbol>
         <symbol id="i-drought" viewBox="0 0 24 24"><path d="M3 18h18"/><path d="M6 18c0-5 2-8 6-11 4 3 6 6 6 11"/><path d="M12 7v11"/></symbol>
         <symbol id="i-view" viewBox="0 0 24 24"><path d="M4 9V4h5"/><path d="M15 4h5v5"/><path d="M20 15v5h-5"/><path d="M9 20H4v-5"/></symbol>
         <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></symbol>
@@ -60,6 +61,7 @@
                         <button class="tog on" data-tog="labels" title="The value beside every reporting station, from zoom 8" type="button"><svg class="ico"><use href="#i-label"/></svg><span>Labels</span></button>
                         <button class="tog on" data-tog="reach" title="The clicked station's reach: the ground it speaks for" type="button"><svg class="ico"><use href="#i-reach"/></svg><span>Reach</span></button>
                         <button class="tog" data-tog="all" title="Every station's reach at once, so the overlaps show" type="button"><svg class="ico"><use href="#i-reaches"/></svg><span>All reaches</span></button>
+                        <button class="tog" data-tog="heat" title="Every station's reach at once without the overlaps: each place in the colour of the nearest station whose reach holds it, clear where none does (W-46)" type="button"><svg class="ico"><use href="#i-heat"/></svg><span>Heat map</span></button>
                         <button class="tog" data-tog="districts" title="The CFS fire ban districts, each in the colour of the rating published for today" type="button"><svg class="ico"><use href="#i-reaches"/></svg><span>Fire ban districts</span></button>
                         <button class="tog on" data-tog="warnings" title="The Bureau's warnings in force: a fire weather warning shades its district; a warning for a public district rings its stations" type="button"><svg class="ico"><use href="#i-reaches"/></svg><span>Warnings</span></button>
                     </div>
