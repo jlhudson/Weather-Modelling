@@ -12,11 +12,11 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Under the {@code prod} profile the application refuses to start while a secret is blank or still
+ * Under the {@code production} profile the application refuses to start while a secret is blank or still
  * the value a fresh checkout runs with. The message names the settings, never their values.
  */
 @Component
-@Profile("prod")
+@Profile("production")
 public class ProductionGuard {
 
     /**
@@ -27,7 +27,7 @@ public class ProductionGuard {
     public ProductionGuard(Environment environment) {
         List<String> refused = refused(environment::getProperty, REFUSED);
         if (!refused.isEmpty()) {
-            throw new IllegalStateException("the prod profile refuses to start: " + String.join(", ", refused)
+            throw new IllegalStateException("the production profile refuses to start: " + String.join(", ", refused)
                     + " blank or left at the default; set them in the deployment's .env");
         }
     }

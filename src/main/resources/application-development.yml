@@ -1,0 +1,6 @@
+# The development profile: SPRING_PROFILES_ACTIVE=development on your own machine, and what a run that
+# names no profile gets. Templates are re-read on each request and the log keeps its readable pattern;
+# a default console code and database password are allowed.
+spring:
+  thymeleaf:
+    cache: false

@@ -42,8 +42,8 @@ limits in the `RateLimit-*` headers.
 ## Running it
 
 **With compose.** Once per machine, create the network every stack's app joins. Then copy
-`.env.example` to `.env`, set `WEATHER_CONSOLE_CODE` and `POSTGRES_PASSWORD`, and start the stack;
-`compose.override.yaml` builds the image from this checkout:
+`.env.example` to `.env`, set `SPRING_PROFILES_ACTIVE=development` and `WEATHER_CONSOLE_CODE`, and start
+the stack; `compose.override.yaml` builds the image from this checkout:
 
 ```bash
 docker network create apps
@@ -51,12 +51,14 @@ docker compose up -d --build
 ```
 
 The console is at <http://localhost:8082/console/map>, username `operator`, the 8-digit code from
-`.env`. The stack is standalone: Postgres, the service, the nightly backup, and with
-`COMPOSE_PROFILES=edge` and a `CLOUDFLARE_TUNNEL_TOKEN` the Cloudflare connector that publishes it.
-The Hub reaches it at `http://weather-app:8082` on the `apps` network when the two stacks share a
-machine (its `HUB_WEATHER_URL` default), or at `https://weather.cranklyradix.com.au` from another, with
-a key issued on `/console/api-keys` here. On the server the same `compose.yaml` is the `weather`
-Portainer stack from `main`, pulling the image CI pushes; Portainer redeploys it on every merge
+`.env`. The stack is standalone: the service and, under the `owndb` profile `.env.example` turns on, its
+own PostGIS and nightly backup. Two Spring profiles: `development` on your own machine, `production` on a
+server (JSON logs, and the service refuses to start on a default code or password). The Hub reaches it
+at `http://weather-app:8082` on the `apps` network when the two stacks share a server (its
+`HUB_WEATHER_URL` default), or at `http://vps-1:8082` over Tailscale from the other, with the pre-shared
+key `WEATHER_KEY_HUB` here and `HUB_WEATHER_API_KEY` there. On the server the same `compose.yaml` is
+the `weather` Portainer stack from `main`, pulling the image CI pushes and using the server's shared
+PostGIS; Watchtower replaces the container on every merge, and the edge stack carries the public traffic
 ([The Hub's deployment guide](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/deployment.md)).
 
 **From the IDE.** `au.gully.Application`, with Postgres reachable at `localhost:5435` (this repository's
