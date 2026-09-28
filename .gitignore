@@ -6,7 +6,6 @@ target/
 # Secrets: D-101, never in code, never in git
 .env
 .env.*
-!.env.*.example
 
 # Local runtime state
 data/
@@ -17,3 +16,6 @@ out/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Development database backups (compose.development.yaml)
+backups/

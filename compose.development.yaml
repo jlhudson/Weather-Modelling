@@ -1,0 +1,62 @@
+# Weather on your PC, public at https://weather.surefirehudson.com through its Cloudflare tunnel.
+#
+# Run: the ▶ beside `services:` in IntelliJ, or `docker compose -f compose.development.yaml up -d`.
+# Every run rebuilds Weather from this folder. The database keeps running and keeps its data.
+# Settings: .env.development, written by The-Hub-Database/env/make-env.sh. Never edit it by hand.
+name: weather
+
+services:
+  db:
+    image: postgis/postgis:18-3.6
+    container_name: weather-db
+    env_file: .env.development
+    ports:
+      - "127.0.0.1:5435:5432"
+    volumes:
+      - weather-db:/var/lib/postgresql
+    healthcheck:
+      test: pg_isready -U weather -d weather
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build: .
+    pull_policy: build
+    container_name: weather-app
+    env_file: .env.development
+    environment:
+      SPRING_PROFILES_ACTIVE: development
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/weather
+      TZ: UTC
+    ports:
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backup:
+    image: prodrigestivill/postgres-backup-local:18
+    container_name: weather-backup
+    env_file: .env.development
+    environment:
+      POSTGRES_HOST: db
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: weather-tunnel
+    command: tunnel run
+    env_file: .env.development
+    restart: unless-stopped
+
+volumes:
+  weather-db: { name: weather-db }

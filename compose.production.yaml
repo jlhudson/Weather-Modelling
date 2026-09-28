@@ -1,0 +1,62 @@
+# Weather on a server, public at https://weather.cranklyradix.com.au through its Cloudflare tunnel.
+#
+# Run by Portainer: Stacks -> Add stack -> Repository, compose path compose.production.yaml, and
+# .env.production (written by The-Hub-Database/env/make-env.sh) loaded as the stack's environment
+# variables. Portainer saves those as stack.env beside this file. The image is the one CI built from main.
+name: weather
+
+services:
+  db:
+    image: postgis/postgis:18-3.6
+    container_name: weather-db
+    env_file: stack.env
+    volumes:
+      - weather-db:/var/lib/postgresql
+    healthcheck:
+      test: pg_isready -U weather -d weather
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/jlhudson/weather-app:main
+    pull_policy: always
+    container_name: weather-app
+    env_file: stack.env
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/weather
+      TZ: UTC
+    mem_limit: 1g
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backup:
+    image: prodrigestivill/postgres-backup-local:18
+    container_name: weather-backup
+    env_file: stack.env
+    environment:
+      POSTGRES_HOST: db
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 14
+    volumes:
+      - weather-backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: weather-tunnel
+    command: tunnel run
+    env_file: stack.env
+    restart: unless-stopped
+
+volumes:
+  weather-db: { name: weather-db }
+  weather-backups: { name: weather-backups }

@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+    <!-- Weather on your PC: compose.development.yaml. Each run rebuilds Weather from this folder. -->
+    <configuration default="false" name="Weather (development)" type="docker-deploy" factoryName="docker-compose.yml"
+                   server-name="Docker">
+        <deployment type="docker-compose.yml">
+            <settings>
+                <option name="sourceFilePath" value="compose.development.yaml"/>
+                <option name="upRemoveOrphans" value="true"/>
+            </settings>
+        </deployment>
+        <method v="2"/>
+    </configuration>
+</component>

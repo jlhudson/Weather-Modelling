@@ -21,7 +21,7 @@ year of any station missing days. Everything else - a reading at a point, a poin
 drought - is on demand, so the service idles until it is asked.
 
 Java 25, Spring Boot 4.1.1, PostgreSQL 18, one Maven module, plain SQL (no entity manager), Flyway.
-Port **8082** inside the container; `WEATHER_PORT` is the host side of the compose mapping.
+Port **8082**, inside the container and on your PC.
 
 ## The API
 
@@ -42,30 +42,21 @@ limits in the `RateLimit-*` headers.
 
 ## Running it
 
-**In IntelliJ**, with the machine's shared PostGIS running from The-Hub-Database's **PostGIS (shared)**
-configuration ([Set up development](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development/setup.md)): copy `.env.development.example` to `.env` and run
-**Weather stack (rebuild)**. **From a terminal**, the same: the network every stack's app joins once,
-the copy, then the stack, which `compose.override.yaml` builds from this checkout:
+On your PC, run `compose.development.yaml` in IntelliJ (the ▶ beside `services:`, or **Weather
+(development)**): its database, Weather built from this checkout, a nightly backup, and the
+weather.surefirehudson.com tunnel. The console is at <http://localhost:8082/console/map>, username
+`operator`, the code `DEV_WEATHER_CONSOLE_CODE` from the secrets file. Its settings are
+`.env.development`, which The-Hub-Database's `env/make-env.sh` writes. A server runs
+`compose.production.yaml` through Portainer with `.env.production`
+([Development](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development.md) ·
+[Production](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/production.md)).
 
-```bash
-docker network create apps
-cp .env.development.example .env
-docker compose up -d --build
-```
+Two Spring profiles: `development` on your PC, `production` on a server (JSON logs, and the service
+refuses to start on a default code or password). The Hub reaches it with the pre-shared key
+`WEATHER_KEY_HUB` here and `HUB_WEATHER_API_KEY` there.
 
-The console is at <http://localhost:8082/console/map>, username `operator`, the 8-digit code from
-`.env`. The stack is standalone: the service, against the machine's shared PostGIS (the `owndb` profile gives it
-its own instead, for a stack running alone). Two Spring profiles: `development` on your own machine, `production` on a
-server (JSON logs, and the service refuses to start on a default code or password). The Hub reaches it
-at `http://weather-app:8082` on the `apps` network when the two stacks share a server (its
-`HUB_WEATHER_URL` default), or at `http://vps-1:8082` over Tailscale from the other, with the pre-shared
-key `WEATHER_KEY_HUB` here and `HUB_WEATHER_API_KEY` there. On the server the same `compose.yaml` is
-the `weather` Portainer stack from `main`, pulling the image CI pushes and using the server's shared
-PostGIS; Watchtower replaces the container on every merge, and the edge stack carries the public traffic
-([The Hub's Start here page](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/README.md)).
-
-**From the IDE.** `au.gully.Application`, with Postgres reachable at `localhost:5435` (this repository's
-compose Postgres, started alone with `docker compose up -d db`). Flyway creates the schema on first boot.
+**From the IDE.** Stop the `weather-app` container and run `au.gully.Application`; it finds the
+database on `localhost:5435`. Flyway creates the schema on first boot.
 
 **The build.** `./mvnw -B -ntp verify`. The unit tests need nothing; the one end-to-end test starts a
 throwaway Postgres with Testcontainers and is skipped where Docker is not available.
@@ -73,8 +64,8 @@ throwaway Postgres with Testcontainers and is skipped where Docker is not availa
 ## Configuring it
 
 Every setting carries its default in `GullyProperties` and is printed once at startup; the shipped
-`application.yml` is the handful that differ between machines, each from an environment variable, all
-in `.env.development.example`; `.env.production.example` is the same set of names for a server.
+`application.yml` is the handful that differ between machines, each from an environment variable
+that `env/make-env.sh` writes into `.env.development` and `.env.production`.
 
 ## The docs
 

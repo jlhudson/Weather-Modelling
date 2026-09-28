@@ -7,9 +7,9 @@
 data
 docs
 *.md
-compose.yaml
-compose.override.yaml
 .env
 .env.*
 .dockerignore
 .gitignore
+backups
+compose.*.yaml
