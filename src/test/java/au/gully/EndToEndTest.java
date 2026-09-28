@@ -438,10 +438,13 @@ class EndToEndTest {
             }
         }
         for (String feed : new String[]{"/console/map/stations.geojson", "/console/map/station/023000", "/console/map/status.json", "/console/map/reach.geojson", "/console/map/reach.geojson?km=20&kmPer100m=5&inlandPct=15",
-                "/console/upstreams/spend.json", "/console/map/outlook.json", "/console/map/warnings.json", "/console/map/points.json", "/console/diagnostics/summary.json", "/actuator/prometheus"}) {
+                "/console/upstreams/spend.json", "/console/map/outlook.json", "/console/map/warnings.json", "/console/map/points.json", "/console/diagnostics/summary.json"}) {
             ResponseEntity<String> r = client().get().uri(feed).header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
             assertThat(r.getStatusCode()).as(feed).isEqualTo(HttpStatus.OK);
         }
+        // The actuator exposes health alone (the readiness probe is read above, as Uptime Kuma reads it from outside);
+        // the metrics endpoints nothing scraped are gone.
+        assertThat(client().get().uri("/actuator/prometheus").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getStatusCode()).as("/actuator/prometheus").isEqualTo(HttpStatus.NOT_FOUND);
         String points = client().get().uri("/console/map/stations.geojson").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class).getBody();
         assertThat(points).contains("\"stations\":3").contains("\"points\":").contains("\"fresh\":");
 
