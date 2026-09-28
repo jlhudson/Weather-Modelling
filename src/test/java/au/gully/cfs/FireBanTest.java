@@ -50,6 +50,31 @@ class FireBanTest {
         assertThat((Map<String, Object>) may.get("today")).containsEntry("rating", "No Rating").containsEntry("totalFireBan", false);
     }
 
+    /**
+     * The CFS map viewer's file (W-45): GeoJSON, the layer's names under {@code properties}, {@code fbi0}
+     * a string and {@code tfb0} spelt {@code No}. Kangaroo Island's feature as it stood out of season,
+     * the geometry left out - the test the Hub kept for this file until 28 September 2026.
+     */
+    @Test
+    void theViewersGeoJsonReadsAsTheLayerDid() {
+        String file = "{\"type\":\"FeatureCollection\",\"features\":[{\"id\":\"feature_01\",\"type\":\"Feature\",\"properties\":{\"objectid\":2,"
+                + "\"firebandistrict\":\"Kangaroo Island\",\"firedangerrating\":\"No Rating\",\"issuingauthority\":\"Australian Bureau of Meteorology\",\"aac\":\"SA_FW003\","
+                + "\"ratingdate\":\"01/05/2026\",\"firedangerrating_0\":\"No Rating\",\"fbi0\":\"0\",\"tfb0\":\"No\",\"ratingdate_0\":\"1/5/2026\","
+                + "\"sttmloc0\":\"2026-05-01T00:00:00+09:30\",\"endtmloc0\":\"2026-05-02T00:00:00+09:30\",\"sttmutc0\":\"2026-04-30T14:30:00Z\",\"endtmutc0\":\"2026-05-01T14:30:00Z\","
+                + "\"distnumb\":\"3\",\"tfb\":\"No\",\"tfb_override\":null,\"areaaff1\":\"Kangaroo Island\",\"areaaff2\":\"\"},\"geometry\":null}]}";
+        FireRatings.DistrictRating ki = new FireRatings(null, null, null, props()).parse(file.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .get(FireRatings.key("Kangaroo Island"));
+        assertThat(ki).isNotNull();
+        assertThat(ki.number()).isEqualTo(3);
+        assertThat(ki.aac()).isEqualTo("SA_FW003");
+        assertThat(ki.days()).singleElement().satisfies(d -> {
+            assertThat(d.date()).isEqualTo(LocalDate.parse("2026-05-01"));
+            assertThat(d.rating()).isEqualTo("No Rating");
+            assertThat(d.fbi()).isZero();
+            assertThat(d.totalFireBan()).isFalse();
+        });
+    }
+
     static au.gully.platform.GullyProperties props() {
         return new org.springframework.boot.context.properties.bind.Binder(new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.of("gully.enabled", "false")))
                 .bindOrCreate("gully", au.gully.platform.GullyProperties.class);

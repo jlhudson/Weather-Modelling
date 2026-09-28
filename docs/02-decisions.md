@@ -683,6 +683,11 @@ most 93 days; a range reaching today reads the feed first when its hour is up. T
 (W-15), so the ledger has a row for every day somebody asked about the danger, which with The Hub subscribed is every
 day. The admin reset keeps the ledger: it is what the public were told, not the weather.
 
+The ratings are read from the file the CFS's own fire danger map draws
+(`dx3673gl4rx5p.cloudfront.net/South_Australia_Fire_Danger_Ratings_Day_0.geojson`), no longer the GeoHub layer: the
+same fields under GeoJSON `properties`, all five days in one anonymous CloudFront file with an ETag. The Hub had read
+it since 20 September 2026, the week the GeoHub began timing out one poll in four.
+
 **Why.** James, 28 September 2026: "fire danger day should be in the weather model." The Hub kept this ledger itself,
 from its own copy of the CFS feed, so an incident could be read against the danger of its day; the Hub is now an API
 and a cache for weather, and the published rating is this service's. The Hub asks this route and keeps nothing. Its

@@ -32,13 +32,20 @@ import java.util.Optional;
  * stops publishing and the feed keeps the last day it did - in September 2026, "No Rating" for 1 May - so
  * every day carries its date, and a day before today is never passed off as today's. Every good read is
  * also written to the ledger of district-days (W-45, {@link FireDangerDays}), which outlives the feed.
+ * <p>
+ * <b>The file the CFS's own fire danger map draws</b> (W-45), not the GeoHub layer: the CFS's ratings
+ * page embeds a viewer whose bundle names {@code dx3673gl4rx5p.cloudfront.net} and its
+ * {@code South_Australia_Fire_Danger_Ratings_Day_0.geojson} to {@code _Day_4}, byte-identical, each
+ * carrying all five days under the layer's own field names in {@code properties}. The Hub moved to it
+ * on 20 September 2026, the week the GeoHub began timing out one poll in four; it is anonymous,
+ * CloudFront with an ETag, and served as {@code binary/octet-stream}, so the body is parsed whatever
+ * the header says. It carries the districts' shapes too (about 200 KB), which are not read here.
  */
 @Slf4j
 @Component
 public class FireRatings {
 
-    public static final String URL = "https://cfs.geohub.sa.gov.au/server/rest/services/CFS_Custodial_Read/"
-            + "South_Australia_Fire_Danger_Ratings_Read/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=false&f=json";
+    public static final String URL = "https://dx3673gl4rx5p.cloudfront.net/South_Australia_Fire_Danger_Ratings_Day_0.geojson";
     public static final Duration LIFE = Duration.ofHours(1);
     static final ZoneId ADELAIDE = ZoneId.of("Australia/Adelaide");
 
@@ -139,7 +146,8 @@ public class FireRatings {
             return out;
         }
         for (JsonNode f : features) {
-            JsonNode a = Nodes.at(f, "attributes");
+            // The GeoHub layer answers attributes; the viewer's GeoJSON the same names under properties.
+            JsonNode a = Nodes.at(f, "attributes") != null ? Nodes.at(f, "attributes") : Nodes.at(f, "properties");
             String district = Nodes.str(a, "firebandistrict");
             if (district == null) {
                 continue;
