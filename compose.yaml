@@ -6,10 +6,11 @@
 # server as a Portainer stack from `main`, where it pulls the image CI pushed to ghcr.io and Watchtower
 # replaces it when CI pushes a new one.
 #
-# The database. COMPOSE_PROFILES=owndb (as .env.development.example sets) starts a PostGIS for this stack
-# alone. On a server that runs the shared `postgis` stack (The-Hub-Database/docker/postgis), drop the
-# profile and set WEATHER_DB_HOST=postgis: the application then uses the database that stack made for
-# it, and the backup is that stack's too.
+# The database. Both example env files point at the shared `postgis` stack (The-Hub-Database/docker/postgis),
+# on a development machine and a server alike: COMPOSE_PROFILES empty and WEATHER_DB_HOST=postgis, the
+# application using the database that stack made for it, and the backup being that stack's too.
+# COMPOSE_PROFILES=owndb with WEATHER_DB_HOST empty starts a PostGIS and backup for this stack alone
+# instead, for a stack running by itself.
 #
 # Being asked. The app joins the `apps` network, an external network created once per machine
 # (`docker network create apps`), which every stack's app joins too. On it this service answers at

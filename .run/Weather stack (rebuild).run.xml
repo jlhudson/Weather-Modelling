@@ -1,0 +1,21 @@
+<component name="ProjectRunConfigurationManager">
+    <!-- The whole stack as the server runs it, with the image rebuilt from this checkout through
+         compose.override.yaml and .env beside compose.yaml. The shared PostGIS (The-Hub-Database's
+         "PostGIS (shared)" configuration) and the `apps` network come first. -->
+    <configuration default="false" name="Weather stack (rebuild)" type="docker-deploy" factoryName="docker-compose.yml"
+                   server-name="Docker">
+        <deployment type="docker-compose.yml">
+            <settings>
+                <option name="commandLineOptions" value="--build"/>
+                <option name="secondarySourceFiles">
+                    <list>
+                        <option value="compose.override.yaml"/>
+                    </list>
+                </option>
+                <option name="sourceFilePath" value="compose.yaml"/>
+                <option name="upRemoveOrphans" value="true"/>
+            </settings>
+        </deployment>
+        <method v="2"/>
+    </configuration>
+</component>

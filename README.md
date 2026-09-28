@@ -41,18 +41,20 @@ limits in the `RateLimit-*` headers.
 
 ## Running it
 
-**With compose.** Once per machine, create the network every stack's app joins. Then copy
-`.env.development.example` to `.env`, which is set for the development profile and runs as copied, and start
-the stack; `compose.override.yaml` builds the image from this checkout:
+**In IntelliJ**, with the machine's shared PostGIS running from The-Hub-Database's **PostGIS (shared)**
+configuration ([Set up development](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development/setup.md)): copy `.env.development.example` to `.env` and run
+**Weather stack (rebuild)**. **From a terminal**, the same: the network every stack's app joins once,
+the copy, then the stack, which `compose.override.yaml` builds from this checkout:
 
 ```bash
 docker network create apps
+cp .env.development.example .env
 docker compose up -d --build
 ```
 
 The console is at <http://localhost:8082/console/map>, username `operator`, the 8-digit code from
-`.env`. The stack is standalone: the service and, under the `owndb` profile `.env.development.example` turns on, its
-own PostGIS and nightly backup. Two Spring profiles: `development` on your own machine, `production` on a
+`.env`. The stack is standalone: the service, against the machine's shared PostGIS (the `owndb` profile gives it
+its own instead, for a stack running alone). Two Spring profiles: `development` on your own machine, `production` on a
 server (JSON logs, and the service refuses to start on a default code or password). The Hub reaches it
 at `http://weather-app:8082` on the `apps` network when the two stacks share a server (its
 `HUB_WEATHER_URL` default), or at `http://vps-1:8082` over Tailscale from the other, with the pre-shared
