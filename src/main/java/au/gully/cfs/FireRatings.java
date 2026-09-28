@@ -30,7 +30,8 @@ import java.util.Optional;
  * <p>
  * Read when asked and held {@link #LIFE}, never on a clock (W-15). Outside the fire danger season the CFS
  * stops publishing and the feed keeps the last day it did - in September 2026, "No Rating" for 1 May - so
- * every day carries its date, and a day before today is never passed off as today's.
+ * every day carries its date, and a day before today is never passed off as today's. Every good read is
+ * also written to the ledger of district-days (W-45, {@link FireDangerDays}), which outlives the feed.
  */
 @Slf4j
 @Component
@@ -43,6 +44,7 @@ public class FireRatings {
 
     private final HttpFetcher http;
     private final Ledger ledger;
+    private final FireDangerDays days;
     private final boolean enabled;
     private final JsonMapper mapper = JsonMapper.builder().build();
     private volatile Map<String, DistrictRating> byDistrict = Map.of();
@@ -50,9 +52,10 @@ public class FireRatings {
     private volatile Instant triedAt;
     private volatile String failure;
 
-    public FireRatings(HttpFetcher http, Ledger ledger, au.gully.platform.GullyProperties properties) {
+    public FireRatings(HttpFetcher http, Ledger ledger, FireDangerDays days, au.gully.platform.GullyProperties properties) {
         this.http = http;
         this.ledger = ledger;
+        this.days = days;
         this.enabled = properties.enabled();
     }
 
@@ -107,6 +110,7 @@ public class FireRatings {
                 readAt = now;
                 failure = null;
                 ledger.record(FireDistricts.ID, 0, true, Duration.ofNanos(System.nanoTime() - started), "fire danger ratings, " + fresh.size() + " districts");
+                keep(fresh, now);
             } catch (UpstreamException | RuntimeException e) {
                 failure = e.getMessage();
                 ledger.record(FireDistricts.ID, 0, false, Duration.ofNanos(System.nanoTime() - started), "fire danger ratings: " + e.getMessage());
@@ -114,6 +118,18 @@ public class FireRatings {
             }
         }
         return byDistrict;
+    }
+
+    /**
+     * A good read into the ledger. A ledger that cannot be written leaves the ratings answering: the
+     * day is simply not kept, which the ledger reads as "not read", never as "no rating".
+     */
+    private void keep(Map<String, DistrictRating> fresh, Instant now) {
+        try {
+            days.record(fresh, now);
+        } catch (RuntimeException e) {
+            log.warn("cfs: the fire danger ratings were read but not kept: {}", e.getMessage());
+        }
     }
 
     Map<String, DistrictRating> parse(byte[] json) {

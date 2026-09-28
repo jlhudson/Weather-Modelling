@@ -15,7 +15,7 @@ equations come from, how it was checked, and what it cannot tell you. The mechan
 | **AFDRS grass FBI + rating** | `fire.grass.fbi`, `afdrsRating` | weather + curing + fuel load | AFDRS Grassland guide v2024.6.0, 10 reference tests | the public rating in grass - **only where curing is entered** |
 | **AFDRS forest FBI + rating** | `fire.forest`, `forestFbi`, `forestFbiMax` | weather + drought factor + **provisional** fuel | AFDRS Forest guide v2024.6.0 and the official code | forest behaviour; the fuel is not the AFDRS's own default |
 | **AFDRS rating here** | `afdrs`, each day's `pointFbiMax` | the land cover's fuel: forest or grass | DEA land cover, classes tested | the rating of the fuel actually on the ground |
-| **CFS published rating** | `fireBan.today`, `fireBan.days` | what the CFS told the public | the CFS's own feed | **the official rating** - in season |
+| **CFS published rating** | `fireBan.today`, `fireBan.days`; every past day on `/api/v1/fire-danger` (W-45) | what the CFS told the public | the CFS's own feed | **the official rating** - in season |
 | **Wind change** | `forecast.windChanges` | the hourly forecast wind and temperature | synthetic cases | the hour a change arrives |
 
 **The one rule:** the CFS's published rating (`fireBan`) is the official one. Everything else here is computed by this

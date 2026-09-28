@@ -37,6 +37,7 @@ limits in the `RateLimit-*` headers.
 | `GET /api/v1/reach.geojson` | Every station's reach under the rule in force, as polygons. |
 | `GET /api/v1/reading?lat=&lon=` | The weather now and the drought at a point, blended from the stations in reach or from a point of ours, and the FFDI; every value names its stations. `&force=true` asks the upstreams first - the Bureau's file now, the days the stations in reach are missing, a point of ours' current again - and `grabbed` says what came. |
 | `GET /api/v1/stations/at?lat=&lon=` | The stations that speak for a point: those whose reach contains it, and the nearest three that do not, with why. |
+| `GET /api/v1/fire-danger?from=&to=` | The CFS's published rating, Fire Behaviour Index and total fire ban for every fire ban district on each day (today when absent, at most 93 days), kept for ever (W-45); `published` says the day was read as the day, not only forecast. |
 | `GET /api/diagnostics`, `/logs`, `/logs/{id}`, the two `DELETE`s | The shape The Hub's morning agent reads. |
 
 ## Running it

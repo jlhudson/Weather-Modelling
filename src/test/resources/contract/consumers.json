@@ -1,10 +1,16 @@
 {
-  "readMe": "The fields the other applications read off this service, by answer. A path is a key that must be present (its value may be null); a[] is every element of the list a. The Hub passes the reading through untouched, so its readers and IncidentWatch's pages read these names directly: renaming or removing one breaks them. Change them together - IncidentWatch's iw-incidents.js, iw-outages.js and agency.html; the Hub's WeatherPanel, FireBuddyPackage, MetricsManager, WeatherManager and layer-renderers.js - then this file.",
+  "readMe": "The fields the other applications read off this service, by answer. A path is a key that must be present (its value may be null); a[] is every element of the list a. The Hub passes the reading through untouched, so its readers and IncidentWatch's pages read these names directly: renaming or removing one breaks them. Change them together - IncidentWatch's iw-incidents.js, iw-outages.js and agency.html; the Hub's WeatherPanel, FireBuddyPackage, MetricsManager, WeatherManager, FireDangerDays and layer-renderers.js - then this file.",
   "reading": [
     "at", "from", "point", "stations",
     "current.at", "current.temperatureC", "current.apparentTemperatureC", "current.humidityPct",
     "current.windSpeedKmh", "current.windGustKmh", "current.windDirectionDeg", "current.pressureMslHpa",
-    "drought", "fire", "fire.ffdi", "fire.ffdiRating", "forecast"
+    "drought", "fire", "fire.ffdi", "fire.ffdiRating", "forecast", "afdrs", "fireBan"
+  ],
+  "fire-danger": [
+    "from", "to", "readAt", "districts",
+    "districts[].district", "districts[].name", "districts[].number",
+    "districts[].days[].date", "districts[].days[].rating", "districts[].days[].fbi",
+    "districts[].days[].totalFireBan", "districts[].days[].published"
   ],
   "forecast": [
     "upstream", "model", "fetchedAt", "station",

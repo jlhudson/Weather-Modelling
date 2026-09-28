@@ -344,6 +344,10 @@ is what a click on a station opens and `/api/v1/stations/at?lat=&lon=` what a cl
 its units since a moment; `/api/v1/upstreams/{id}/spend/daily?from=&to=` its spend day by day, at most 93 days -
 the ledger the Upstreams page draws, for a consumer's own usage page.
 
+**Fire danger by day** (W-45). `/api/v1/fire-danger?from=&to=` is the CFS's published rating for every fire ban
+district on each day, kept from every read of its feed: what the public were told, for reading an incident against
+the danger of its day. The admin reset keeps it.
+
 ## 9. Storage
 
 Fifteen tables: `api_key`, `console_user`, `api_access_log` (kept thirty days), `log_event`, `setting`

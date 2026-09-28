@@ -35,7 +35,7 @@ class FireBanTest {
     @Test
     void aDayBeforeTodayIsNeverTakenForToday() throws Exception {
         // The feed as it stood out of season: every district "No Rating", published for 1 May 2026.
-        Map<String, FireRatings.DistrictRating> r = new FireRatings(null, null, props()).parse(fixture("cfs-fire-danger-ratings.json"));
+        Map<String, FireRatings.DistrictRating> r = new FireRatings(null, null, null, props()).parse(fixture("cfs-fire-danger-ratings.json"));
         assertThat(r).hasSize(15);
         FireRatings.DistrictRating lofty = r.get(FireRatings.key("Mount Lofty Ranges"));
         assertThat(lofty.aac()).isEqualTo("SA_FW015");
