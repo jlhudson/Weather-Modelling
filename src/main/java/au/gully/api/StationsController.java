@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 /**
@@ -27,6 +30,12 @@ import java.util.Map;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class StationsController {
+
+    /**
+     * The most days one ask of the fire danger ledger may span, as the upstream spend does.
+     */
+    static final int LEDGER_DAYS = 93;
+    static final ZoneId ADELAIDE = ZoneId.of("Australia/Adelaide");
 
     private final StationsFeed feed;
     private final Reaches reaches;
@@ -66,6 +75,35 @@ public class StationsController {
     @GetMapping(value = "/districts.geojson", produces = {"application/geo+json", "application/json"})
     public Map<String, Object> districts() {
         return fireBan.geojson(Instant.now());
+    }
+
+    /**
+     * The fire danger ledger (W-45): every district's published rating, index and total fire ban for each
+     * day from {@code from} to {@code to} (ISO dates, Adelaide days, both today when absent, at most
+     * {@link #LEDGER_DAYS} days), kept for ever. A day with no row is a day the feed was not read.
+     */
+    @GetMapping(value = "/fire-danger", produces = "application/json")
+    public Map<String, Object> fireDanger(@RequestParam(required = false) String from, @RequestParam(required = false) String to) {
+        Instant now = Instant.now();
+        LocalDate first = date(from, now.atZone(ADELAIDE).toLocalDate(), "from");
+        LocalDate last = date(to, first, "to");
+        if (last.isBefore(first) || ChronoUnit.DAYS.between(first, last) >= LEDGER_DAYS) {
+            throw new ErrorResponseException(HttpStatus.BAD_REQUEST, ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                    "to must be on or after from, and at most " + LEDGER_DAYS + " days on"), null);
+        }
+        return fireBan.days(first, last, now);
+    }
+
+    private static LocalDate date(String value, LocalDate otherwise, String name) {
+        if (value == null || value.isBlank()) {
+            return otherwise;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (RuntimeException e) {
+            throw new ErrorResponseException(HttpStatus.BAD_REQUEST, ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                    name + " must be an ISO date, e.g. 2026-09-28"), null);
+        }
     }
 
     @GetMapping(value = "/reach.geojson", produces = {"application/geo+json", "application/json"})

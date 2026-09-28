@@ -65,7 +65,15 @@ them with `?calls=all`.
 - *Finding:* it writes district names in capitals ("ADELAIDE METROPOLITAN"); the ratings feed writes them in title case.
   Names are matched without regard to case and shown as the ratings feed writes them.
 
-**Fire danger ratings** - the CFS GeoHub's `South_Australia_Fire_Danger_Ratings_Read` layer, without geometry.
+**Fire danger ratings** - the file the CFS's fire danger map viewer draws,
+`dx3673gl4rx5p.cloudfront.net/South_Australia_Fire_Danger_Ratings_Day_0.geojson` (W-45); the GeoHub's
+`South_Australia_Fire_Danger_Ratings_Read` layer until 28 September 2026.
+
+- *Finding (20 September 2026, The Hub's):* the CFS's ratings page embeds a viewer whose bundle names the CloudFront
+  host and `_Day_0` to `_Day_4`; the five files are byte-identical, each with all five days, the GeoHub layer's field
+  names under `properties`, `fbiN` as a string and `tfbN` spelt `No`/`Yes`. Served as `binary/octet-stream`, about
+  200 KB with the districts' shapes. The GeoHub had begun timing out one poll in four.
+- *Finding (28 September 2026):* in season: Mount Lofty Ranges Moderate, FBI 14, for 28 September.
 
 - Today and the next four days per district: `firedangerrating_n`, `fbin`, `tfbn`, with local and UTC start and end
   times; `aac` is the district's Bureau fire weather code.

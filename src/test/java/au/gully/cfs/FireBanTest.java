@@ -35,7 +35,7 @@ class FireBanTest {
     @Test
     void aDayBeforeTodayIsNeverTakenForToday() throws Exception {
         // The feed as it stood out of season: every district "No Rating", published for 1 May 2026.
-        Map<String, FireRatings.DistrictRating> r = new FireRatings(null, null, props()).parse(fixture("cfs-fire-danger-ratings.json"));
+        Map<String, FireRatings.DistrictRating> r = new FireRatings(null, null, null, props()).parse(fixture("cfs-fire-danger-ratings.json"));
         assertThat(r).hasSize(15);
         FireRatings.DistrictRating lofty = r.get(FireRatings.key("Mount Lofty Ranges"));
         assertThat(lofty.aac()).isEqualTo("SA_FW015");
@@ -48,6 +48,31 @@ class FireBanTest {
         Map<String, Object> may = FireBan.view("Mount Lofty Ranges", lofty, Instant.parse("2026-05-01T02:00:00Z"));
         assertThat(may).containsEntry("current", true);
         assertThat((Map<String, Object>) may.get("today")).containsEntry("rating", "No Rating").containsEntry("totalFireBan", false);
+    }
+
+    /**
+     * The CFS map viewer's file (W-45): GeoJSON, the layer's names under {@code properties}, {@code fbi0}
+     * a string and {@code tfb0} spelt {@code No}. Kangaroo Island's feature as it stood out of season,
+     * the geometry left out - the test the Hub kept for this file until 28 September 2026.
+     */
+    @Test
+    void theViewersGeoJsonReadsAsTheLayerDid() {
+        String file = "{\"type\":\"FeatureCollection\",\"features\":[{\"id\":\"feature_01\",\"type\":\"Feature\",\"properties\":{\"objectid\":2,"
+                + "\"firebandistrict\":\"Kangaroo Island\",\"firedangerrating\":\"No Rating\",\"issuingauthority\":\"Australian Bureau of Meteorology\",\"aac\":\"SA_FW003\","
+                + "\"ratingdate\":\"01/05/2026\",\"firedangerrating_0\":\"No Rating\",\"fbi0\":\"0\",\"tfb0\":\"No\",\"ratingdate_0\":\"1/5/2026\","
+                + "\"sttmloc0\":\"2026-05-01T00:00:00+09:30\",\"endtmloc0\":\"2026-05-02T00:00:00+09:30\",\"sttmutc0\":\"2026-04-30T14:30:00Z\",\"endtmutc0\":\"2026-05-01T14:30:00Z\","
+                + "\"distnumb\":\"3\",\"tfb\":\"No\",\"tfb_override\":null,\"areaaff1\":\"Kangaroo Island\",\"areaaff2\":\"\"},\"geometry\":null}]}";
+        FireRatings.DistrictRating ki = new FireRatings(null, null, null, props()).parse(file.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .get(FireRatings.key("Kangaroo Island"));
+        assertThat(ki).isNotNull();
+        assertThat(ki.number()).isEqualTo(3);
+        assertThat(ki.aac()).isEqualTo("SA_FW003");
+        assertThat(ki.days()).singleElement().satisfies(d -> {
+            assertThat(d.date()).isEqualTo(LocalDate.parse("2026-05-01"));
+            assertThat(d.rating()).isEqualTo("No Rating");
+            assertThat(d.fbi()).isZero();
+            assertThat(d.totalFireBan()).isFalse();
+        });
     }
 
     static au.gully.platform.GullyProperties props() {

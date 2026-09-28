@@ -671,3 +671,26 @@ while Weather held seventy-two and seven. "Yes, send the full 72 hours and 7 day
 grows from about 6 KB to 38 KB, measured on the first live one (the whole reading 45 KB); the Hub and its readers (IncidentWatch, FireBuddy) take the arrays as they come -
 they pick the nearest hour, list twelve, or show five days. Google, the fallback, still gives its first page of 24 hours.
 — James, 27 September 2026.
+
+### W-45 · The fire danger of every day, kept here
+
+**The decision.** Every good read of the CFS ratings feed (W-23) is also written to `fire_danger_day`: one row per fire
+ban district per day, holding the newest rating, Fire Behaviour Index and total fire ban seen for it, when it was first
+and last seen, and whether it was ever the feed's first day (`published`: the rating of the day, not only a forecast of
+it). An older read never overwrites a newer one. `No Rating` is kept as a rating; a day with no row is a day the feed
+was not read. `/api/v1/fire-danger?from=&to=` answers the rows by district, Adelaide days, both today when absent, at
+most 93 days; a range reaching today reads the feed first when its hour is up. The feed is still read only when asked
+(W-15), so the ledger has a row for every day somebody asked about the danger, which with The Hub subscribed is every
+day. The admin reset keeps the ledger: it is what the public were told, not the weather.
+
+The ratings are read from the file the CFS's own fire danger map draws
+(`dx3673gl4rx5p.cloudfront.net/South_Australia_Fire_Danger_Ratings_Day_0.geojson`), no longer the GeoHub layer: the
+same fields under GeoJSON `properties`, all five days in one anonymous CloudFront file with an ETag. The Hub had read
+it since 20 September 2026, the week the GeoHub began timing out one poll in four.
+
+**Why.** James, 28 September 2026: "fire danger day should be in the weather model." The Hub kept this ledger itself,
+from its own copy of the CFS feed, so an incident could be read against the danger of its day; the Hub is now an API
+and a cache for weather, and the published rating is this service's. The Hub asks this route and keeps nothing. Its
+rows from 14 September 2026 are copied here once, by hand, with `name` left empty (the Hub kept the district in
+capitals only); the route titles those.
+— James, 28 September 2026.

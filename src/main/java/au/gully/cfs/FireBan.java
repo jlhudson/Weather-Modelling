@@ -22,10 +22,12 @@ public class FireBan {
 
     private final FireDistricts districts;
     private final FireRatings ratings;
+    private final FireDangerDays ledger;
 
-    public FireBan(FireDistricts districts, FireRatings ratings, StationsFeed feed) {
+    public FireBan(FireDistricts districts, FireRatings ratings, FireDangerDays ledger, StationsFeed feed) {
         this.districts = districts;
         this.ratings = ratings;
+        this.ledger = ledger;
         // Every station wears its district on the map and in the API, and today's published rating where there is one.
         feed.decorate((s, p) -> {
             Optional<String> d = districts.of(s.lat(), s.lon());
@@ -95,6 +97,25 @@ public class FireBan {
         for (org.locationtech.jts.geom.Coordinate c : coords) {
             out.add(List.of(Math.round(c.x * 1e4) / 1e4, Math.round(c.y * 1e4) / 1e4));
         }
+        return out;
+    }
+
+    /**
+     * The ledger (W-45) for every district from {@code from} to {@code to}: each day's rating, index and
+     * total fire ban as last read, and whether it was ever the feed's first day. A range reaching today or
+     * later reads the feed first when its hour is up, so today's row is today's.
+     */
+    public Map<String, Object> days(LocalDate from, LocalDate to, Instant now) {
+        if (!to.isBefore(now.atZone(FireRatings.ADELAIDE).toLocalDate())) {
+            ratings.ensure(now);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("from", from.toString());
+        out.put("to", to.toString());
+        out.put("readAt", ratings.readAt() == null ? null : ratings.readAt().toString());
+        out.put("failure", ratings.failure());
+        out.put("districts", FireDangerDays.byDistrict(ledger.between(from, to)));
+        out.put("source", "CFS, South Australia Fire Danger Ratings");
         return out;
     }
 

@@ -537,6 +537,45 @@ class EndToEndTest {
         assertThat(client().get().uri(q + "&at=yesterday").header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
+    @Test
+    @org.junit.jupiter.api.Order(11)
+    @SuppressWarnings("unchecked")
+    void theFireDangerLedgerKeepsEachDayAndServesItByDistrict() {
+        issueHubKey();
+        java.time.LocalDate monday = java.time.LocalDate.parse("2026-11-02");
+        java.time.LocalDate tuesday = monday.plusDays(1);
+        Instant sunday = Instant.parse("2026-11-01T01:00:00Z");
+        // Sunday's read carries Monday as a forecast; Monday's read carries it as the day, and Tuesday ahead.
+        fireDangerDays.record(Map.of("MOUNT LOFTY RANGES", new au.gully.cfs.FireRatings.DistrictRating("Mount Lofty Ranges", 3, "SA_FW015", List.of(
+                new au.gully.cfs.FireRatings.RatingDay(monday.minusDays(1), "Moderate", 14, false),
+                new au.gully.cfs.FireRatings.RatingDay(monday, "High", 30, false)))), sunday);
+        fireDangerDays.record(Map.of("MOUNT LOFTY RANGES", new au.gully.cfs.FireRatings.DistrictRating("Mount Lofty Ranges", 3, "SA_FW015", List.of(
+                new au.gully.cfs.FireRatings.RatingDay(monday, "Extreme", 55, true),
+                new au.gully.cfs.FireRatings.RatingDay(tuesday, "High", 28, false)))), sunday.plusSeconds(86_400));
+        // A replay of the older read changes nothing.
+        fireDangerDays.record(Map.of("MOUNT LOFTY RANGES", new au.gully.cfs.FireRatings.DistrictRating("Mount Lofty Ranges", 3, "SA_FW015", List.of(
+                new au.gully.cfs.FireRatings.RatingDay(monday, "High", 30, false)))), sunday);
+
+        Map<String, Object> r = client().get().uri("/api/v1/fire-danger?from=" + monday + "&to=" + tuesday).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(ConsumerContract.missing(r, "fire-danger")).isEmpty();
+        List<Map<String, Object>> districts = (List<Map<String, Object>>) r.get("districts");
+        assertThat(districts).singleElement().satisfies(d -> {
+            assertThat(d).containsEntry("district", "MOUNT LOFTY RANGES").containsEntry("name", "Mount Lofty Ranges").containsEntry("number", 3);
+            List<Map<String, Object>> days = (List<Map<String, Object>>) d.get("days");
+            assertThat(days).hasSize(2);
+            assertThat(days.get(0)).containsEntry("date", monday.toString()).containsEntry("rating", "Extreme").containsEntry("totalFireBan", true)
+                    .containsEntry("published", true);
+            assertThat(days.get(1)).containsEntry("date", tuesday.toString()).containsEntry("published", false);
+        });
+        assertThat(client().get().uri("/api/v1/fire-danger?from=" + tuesday + "&to=" + monday).header("X-Api-Key", HUB_KEY).retrieve()
+                .toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        // The admin reset empties the weather, not the ledger.
+        assertThat(au.gully.platform.Reset.TABLES).doesNotContain("fire_danger_day");
+    }
+
+    @Autowired
+    au.gully.cfs.FireDangerDays fireDangerDays;
+
     private static String firstCookie(HttpHeaders headers) {
         java.util.List<String> set = headers.get(HttpHeaders.SET_COOKIE);
         assertThat(set).as("a session cookie").isNotEmpty();
