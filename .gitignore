@@ -6,7 +6,7 @@ target/
 # Secrets: D-101, never in code, never in git
 .env
 .env.*
-!.env.example
+!.env.*.example
 
 # Local runtime state
 data/
