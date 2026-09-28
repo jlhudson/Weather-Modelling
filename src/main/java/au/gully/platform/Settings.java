@@ -29,8 +29,6 @@ public class Settings {
         m.put("gully.console.lockout-after", gully.console().lockoutAfter());
         m.put("gully.console.lockout-for", gully.console().lockoutFor());
         m.put("gully.api.cors-origins", gully.api().corsOrigins());
-        m.put("gully.api.requests-per-minute-per-key", gully.api().requestsPerMinutePerKey());
-        m.put("gully.api.requests-per-day-per-key", gully.api().requestsPerDayPerKey());
         m.put("gully.diagnostics.keep-errors", diagnostics.keepErrors());
         m.put("gully.diagnostics.keep-warnings", diagnostics.keepWarnings());
         return m;

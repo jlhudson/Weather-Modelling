@@ -27,8 +27,8 @@ Port **8082**, inside the container and on your PC.
 
 Every `/api/**` route needs an API key (`X-Api-Key` or `Authorization: Bearer`), issued on
 `/console/api-keys` with a scope. Answers are JSON, times ISO-8601 UTC, errors RFC 9457 problem details,
-bodies compressed and fingerprinted (a weak `ETag` that only changes when the answer does), rate
-limits in the `RateLimit-*` headers.
+bodies compressed and fingerprinted (a weak `ETag` that only changes when the answer does). A valid
+key is never rate-limited.
 
 | Route | What it answers |
 |---|---|

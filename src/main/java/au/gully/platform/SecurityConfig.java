@@ -61,7 +61,7 @@ public class SecurityConfig {
         cfg.setAllowedOrigins(origins.stream().filter(o -> !o.isBlank() && !o.equals("*")).toList());
         cfg.setAllowedMethods(List.of("GET", "OPTIONS", "DELETE"));
         cfg.setAllowedHeaders(List.of(ApiKeyFilter.HEADER, "Authorization", "Content-Type", "If-None-Match"));
-        cfg.setExposedHeaders(List.of("ETag", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After"));
+        cfg.setExposedHeaders(List.of("ETag"));
         cfg.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", cfg);

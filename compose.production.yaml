@@ -1,8 +1,7 @@
-# Weather on a server, public at https://weather.cranklyradix.com.au through its Cloudflare tunnel.
-#
-# Run by Portainer: Stacks -> Add stack -> Repository, compose path compose.production.yaml, and
-# .env.production (written by The-Hub-Database/env/make-env.sh) loaded as the stack's environment
-# variables. Portainer saves those as stack.env beside this file. The image is the one CI built from main.
+# Weather on a server, run by Portainer: compose path compose.production.yaml, with .env.production
+# (The-Hub-Database/env/make-env.sh) loaded as the stack's variables, which Portainer saves as stack.env.
+# The image is the one CI built. What was left out on purpose, and why you might add it:
+# The-Hub-Database/docs/recommended.md.
 name: weather
 
 services:
@@ -26,8 +25,6 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: production
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/weather
-      TZ: UTC
-    mem_limit: 1g
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     depends_on:
@@ -42,12 +39,10 @@ services:
     environment:
       POSTGRES_HOST: db
       SCHEDULE: "@daily"
-      BACKUP_KEEP_DAYS: 14
     volumes:
       - weather-backups:/backups
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     restart: unless-stopped
 
   tunnel:

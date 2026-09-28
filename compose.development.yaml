@@ -1,8 +1,7 @@
-# Weather on your PC, public at https://weather.surefirehudson.com through its Cloudflare tunnel.
-#
-# Run: the ▶ beside `services:` in IntelliJ, or `docker compose -f compose.development.yaml up -d`.
-# Every run rebuilds Weather from this folder. The database keeps running and keeps its data.
-# Settings: .env.development, written by The-Hub-Database/env/make-env.sh. Never edit it by hand.
+# Weather on your PC: ▶ beside `services:` in IntelliJ, or `docker compose -f compose.development.yaml up -d`.
+# Every run rebuilds the app from this folder; the database keeps its data. Settings: .env.development,
+# written by The-Hub-Database/env/make-env.sh. What was left out on purpose, and why you might add it:
+# The-Hub-Database/docs/recommended.md.
 name: weather
 
 services:
@@ -28,7 +27,6 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: development
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/weather
-      TZ: UTC
     ports:
       - "127.0.0.1:8082:8082"
     depends_on:
@@ -43,12 +41,10 @@ services:
     environment:
       POSTGRES_HOST: db
       SCHEDULE: "@daily"
-      BACKUP_KEEP_DAYS: 7
     volumes:
       - ./backups:/backups
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     restart: unless-stopped
 
   tunnel:

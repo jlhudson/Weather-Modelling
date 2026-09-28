@@ -48,13 +48,8 @@ public record GullyProperties(
     }
 
     /**
-     * @param corsOrigins             empty by default: same-origin only until a consumer is actually named
-     * @param requestsPerMinutePerKey the per-minute ceiling on one key, answered with the RateLimit headers
-     * @param requestsPerDayPerKey    the daily cap on one key, so a runaway consumer stops at a number
-     *                                rather than at the month's allowance
+     * @param corsOrigins empty by default: same-origin only until a consumer is actually named
      */
-    public record Api(@DefaultValue List<String> corsOrigins,
-                      @DefaultValue("600") int requestsPerMinutePerKey,
-                      @DefaultValue("100000") int requestsPerDayPerKey) {
+    public record Api(@DefaultValue List<String> corsOrigins) {
     }
 }
