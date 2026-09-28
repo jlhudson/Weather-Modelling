@@ -11,9 +11,10 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Spend, breaker state and the stations' freshness as metrics, on the Prometheus endpoint the
- * actuator already exposes: {@code gully_upstream_spent_units{upstream,window}},
- * {@code gully_upstream_breaker_open{upstream}}, {@code gully_stations}, {@code gully_station_age_seconds}.
+ * Spend, breaker state and the stations' freshness as Micrometer meters:
+ * {@code gully_upstream_spent_units{upstream,window}}, {@code gully_upstream_breaker_open{upstream}},
+ * {@code gully_stations}, {@code gully_station_age_seconds}. The actuator exposes health alone (Uptime
+ * Kuma reads it); these are in the registry for the day a metrics endpoint is switched on.
  */
 @Component
 public class Metrics {

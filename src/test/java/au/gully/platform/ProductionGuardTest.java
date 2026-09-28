@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The prod profile's guard: a default or blank secret stops the start, naming the setting and never its value.
+ * The production profile's guard: a default or blank secret stops the start, naming the setting and never its value.
  */
 class ProductionGuardTest {
 

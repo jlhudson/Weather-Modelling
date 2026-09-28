@@ -34,6 +34,15 @@ public class ApiKeys {
      * on sight rather than after a hash and a lookup.
      */
     static final String PREFIX = "weather_";
+    /**
+     * Who a pre-shared key is recorded as created by, so a changed value in .env can find and revoke
+     * the one it replaces without touching keys issued on the console.
+     */
+    public static final String PRESHARED = "pre-shared";
+    /**
+     * The shortest string accepted as a key, pre-shared or not: anything shorter is not looked up.
+     */
+    public static final int MIN_LENGTH = 16;
     static final Duration DRAIN_EVERY = Duration.ofSeconds(5);
     /**
      * The most the access log holds waiting to be written; past it, rows are counted and dropped, so a flood
@@ -85,8 +94,60 @@ public class ApiKeys {
         });
     }
 
+    /**
+     * A pre-shared key: the value of {@code WEATHER_KEY_HUB}, which the Hub sends as it is. The row whose
+     * hash matches is kept (its scope brought up to date); every other active pre-shared row of the
+     * consumer is revoked, so changing the value in .env rotates the key on the next start; and when none
+     * matches, one is inserted. A row the console issued with the same value is reinstated as this
+     * consumer's rather than duplicated. Keys issued on the console are otherwise left alone.
+     */
+    @Transactional
+    public void ensurePreshared(String consumer, String plaintext, ApiKey.Scope scope) {
+        String hash = Hashing.sha256Hex(plaintext);
+        Instant now = Instant.now();
+        boolean present = false;
+        List<ApiKey> mine = db.sql("select * from api_key where consumer = :c and created_by = :by and revoked_at is null")
+                .param("c", consumer).param("by", PRESHARED).query().listOfRows().stream().map(ApiKeys::key).toList();
+        for (ApiKey k : mine) {
+            if (k.keyHash().equals(hash)) {
+                present = true;
+                if (!scope.name().equals(k.scope())) {
+                    db.sql("update api_key set scope = :s where id = :id").param("s", scope.name()).param("id", k.id()).update();
+                    byHash.invalidate(hash);
+                }
+            } else {
+                db.sql("update api_key set revoked_at = :at where id = :id").param("at", Db.ts(now)).param("id", k.id()).update();
+                byHash.invalidate(k.keyHash());
+                log.info("api key {} for {} revoked: the pre-shared value changed", k.keyPrefix(), consumer);
+            }
+        }
+        if (present) {
+            return;
+        }
+        String prefix = plaintext.substring(0, Math.min(12, plaintext.length()));
+        Optional<ApiKey> same = byHash(hash);
+        if (same.isPresent()) {
+            db.sql("update api_key set consumer = :c, key_prefix = :p, scope = :s, created_by = :by, revoked_at = null where id = :id")
+                    .param("c", consumer).param("p", prefix).param("s", scope.name()).param("by", PRESHARED)
+                    .param("id", same.get().id()).update();
+        } else {
+            db.sql("""
+                            insert into api_key (consumer, key_prefix, key_hash, scope, created_at, created_by)
+                            values (:consumer, :prefix, :hash, :scope, :at, :by)""")
+                    .param("consumer", consumer).param("prefix", prefix).param("hash", hash).param("scope", scope.name())
+                    .param("at", Db.ts(now)).param("by", PRESHARED).update();
+        }
+        byHash.invalidate(hash);
+        log.info("api key {} pre-shared with {} ({})", prefix, consumer, scope);
+    }
+
+    /**
+     * The key a request carries, if it is one this service knows and has not revoked. A console-issued key
+     * starts with {@value #PREFIX}; a pre-shared one is whatever the two .env files hold, so the only check
+     * before the lookup is that it is long enough to be a key at all.
+     */
     public Optional<ApiKey> authenticate(String plaintext) {
-        if (plaintext == null || !plaintext.startsWith(PREFIX)) {
+        if (plaintext == null || plaintext.length() < MIN_LENGTH) {
             return Optional.empty();
         }
         String hash = Hashing.sha256Hex(plaintext);
