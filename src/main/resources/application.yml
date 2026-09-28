@@ -13,7 +13,7 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5435/weather}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/weather}
     username: ${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:weather}}
     password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:change-me}}
     hikari:

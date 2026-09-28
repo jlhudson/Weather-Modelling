@@ -56,7 +56,7 @@ refuses to start on a default code or password). The Hub reaches it with the pre
 `WEATHER_KEY_HUB` here and `HUB_WEATHER_API_KEY` there.
 
 **From the IDE.** Stop the `weather-app` container and run `au.gully.Application`; it finds the
-database on `localhost:5435`. Flyway creates the schema on first boot.
+database on `localhost:5434`. Flyway creates the schema on first boot.
 
 **The build.** `./mvnw -B -ntp verify`. The unit tests need nothing; the one end-to-end test starts a
 throwaway Postgres with Testcontainers and is skipped where Docker is not available.
