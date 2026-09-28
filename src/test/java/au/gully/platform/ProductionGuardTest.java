@@ -24,4 +24,17 @@ class ProductionGuardTest {
                 .withProperty("gully.console.code", "80417365")
                 .withProperty("spring.datasource.password", "a long random one")::getProperty, ProductionGuard.REFUSED)).isEmpty();
     }
+
+    @Test
+    void aDevKeyFromTheExampleIsRefusedByNameAndABlankKeyIsNot() {
+        java.util.Map<String, String> real = new java.util.HashMap<>();
+        real.put("gully.console.code", "56325632");
+        real.put("spring.datasource.password", "3f9a1c2b7e0d4c6a8b1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a");
+        assertThat(ProductionGuard.devKeys(real::get, ProductionGuard.KEYS)).isEmpty();
+        real.put("gully.keys.hub", "");
+        assertThat(ProductionGuard.devKeys(real::get, ProductionGuard.KEYS)).isEmpty();
+        real.put("gully.keys.hub", "dev-key-something-0123456789");
+        assertThat(ProductionGuard.devKeys(real::get, ProductionGuard.KEYS))
+                .singleElement().asString().startsWith("gully.keys.hub");
+    }
 }
