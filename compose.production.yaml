@@ -11,10 +11,14 @@ services:
     env_file: stack.env
     volumes:
       - weather-db:/var/lib/postgresql
+    # Every 2 s while it starts, so the app isn't kept waiting, then once a minute: each check is a shell,
+    # pg_isready and a new Postgres backend, and every 5 s that was nearly all the database's CPU.
     healthcheck:
       test: pg_isready -U weather -d weather
-      interval: 5s
-      retries: 20
+      interval: 60s
+      start_period: 2m
+      start_interval: 2s
+      retries: 3
     restart: unless-stopped
 
   app:
