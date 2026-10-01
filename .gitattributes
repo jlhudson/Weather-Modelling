@@ -1,2 +1,4 @@
+/mvnw text eol=lf
+*.cmd text eol=crlf
 # Shell scripts run inside Linux containers: never CRLF, whatever the checkout.
 *.sh text eol=lf

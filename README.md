@@ -64,7 +64,7 @@ throwaway Postgres with Testcontainers and is skipped where Docker is not availa
 ## Configuring it
 
 Every setting carries its default in `GullyProperties` and is printed once at startup; the shipped
-`application.yml` is the handful that differ between machines, each from an environment variable
+`application.yaml` is the handful that differ between machines, each from an environment variable
 that `env/make-env.sh` writes into `.env.development` and `.env.production`.
 
 ## The docs

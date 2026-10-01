@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * The settings — every one of them. One group per thing a deployment genuinely varies; everything
  * else is a constant beside the code that knows why. Each value carries its default here, so the
- * shipped {@code application.yml} is the handful that differ between one machine and the next, and
+ * shipped {@code application.yaml} is the handful that differ between one machine and the next, and
  * {@link Settings} prints every effective value once at startup.
  *
  * @param enabled off, nothing is fetched and nothing is polled; the console shows what is held
