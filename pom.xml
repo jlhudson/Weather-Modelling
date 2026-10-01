@@ -32,7 +32,7 @@
         <testcontainers.version>1.21.4</testcontainers.version>
         <webjar.leaflet.version>1.9.4</webjar.leaflet.version>
         <!-- Bootstrap 5.3.5, the one front-end library; the templates name this version in their webjar paths. -->
-        <webjar.bootstrap.version>5.3.5</webjar.bootstrap.version>
+        <webjar.bootstrap.version>5.3.8</webjar.bootstrap.version>
     </properties>
 
     <dependencies>
