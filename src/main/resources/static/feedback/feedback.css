@@ -3,10 +3,12 @@
  * copy the others are taken from, served by each as /feedback/feedback.css. Change it there and copy it out.
  *
  * It takes the page's font and colours and adds only the shape of the form, so it sits inside any of the
- * applications' layouts, light or dark. An application that wants its own accent sets --feedback-accent.
+ * applications' layouts, light or dark. An application that wants its own accent sets --feedback-accent, and
+ * --feedback-accent-text to a colour that reads on it (4.5:1 at least) for the button's words.
  */
 .feedback {
     --feedback-accent-default: #2563eb;
+    --feedback-accent-text-default: #fff;
     --feedback-error: #c0262d;
     --feedback-line: color-mix(in srgb, currentColor 30%, transparent);
     max-width: 40rem;
@@ -168,7 +170,7 @@ form[data-feedback][hidden],
     border: 0;
     border-radius: .5rem;
     background: var(--feedback-accent, var(--feedback-accent-default));
-    color: #fff;
+    color: var(--feedback-accent-text, var(--feedback-accent-text-default));
     font: inherit;
     font-weight: 600;
     cursor: pointer;
@@ -213,6 +215,7 @@ form[data-feedback][hidden],
 @media (prefers-color-scheme: dark) {
     .feedback {
         --feedback-accent-default: #60a5fa;
+        --feedback-accent-text-default: #0b1220;
         --feedback-error: #f87171;
     }
 }
@@ -220,11 +223,13 @@ form[data-feedback][hidden],
 [data-bs-theme="dark"] .feedback,
 [data-theme="dark"] .feedback {
     --feedback-accent-default: #60a5fa;
+    --feedback-accent-text-default: #0b1220;
     --feedback-error: #f87171;
 }
 
 [data-bs-theme="light"] .feedback,
 [data-theme="light"] .feedback {
     --feedback-accent-default: #2563eb;
+    --feedback-accent-text-default: #fff;
     --feedback-error: #c0262d;
 }
