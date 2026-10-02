@@ -75,6 +75,35 @@ class FireBanTest {
         });
     }
 
+    /**
+     * The Bureau's South Australian fire weather districts (IDM00007, W-50) are the CFS's fire ban districts: the code the
+     * CFS's ratings give each district names the Bureau's shape of that name, and the two shapes are the same ground but
+     * for the water - the Bureau's leave Lake Alexandrina, Lake Albert and the Coorong to a marine zone of their own
+     * ({@code SA_MW017}, Murray Lakes), which the CFS's Murraylands and Upper South East take in - and the Bureau's coast
+     * drawn to half a kilometre.
+     */
+    @Test
+    void theBureausFireWeatherDistrictsAreTheCfssFireBanDistricts() throws Exception {
+        List<FireDistricts.District> cfs = new FireDistricts(null, null, props()).parse(fixture("cfs-fire-ban-districts.json"));
+        Map<String, FireRatings.DistrictRating> ratings = new FireRatings(null, null, null, props()).parse(fixture("cfs-fire-danger-ratings.json"));
+        au.gully.bureau.WarningAreas bureau = new au.gully.bureau.WarningAreas();
+        assertThat(ratings.values()).hasSize(15).allSatisfy(r -> {
+            au.gully.bureau.WarningAreas.Shape shape = bureau.of(r.aac()).orElseThrow();
+            assertThat(shape.name()).isEqualTo(r.district());
+            FireDistricts.District d = cfs.stream().filter(x -> x.name().equalsIgnoreCase(r.district())).findFirst().orElseThrow();
+            // The CFS's own rings cross themselves here and there, so they are mended before they are compared.
+            org.locationtech.jts.geom.Geometry theirs = org.locationtech.jts.geom.util.GeometryFixer.fix(new org.locationtech.jts.geom.GeometryFactory()
+                    .createMultiPolygon(d.polygons().toArray(org.locationtech.jts.geom.Polygon[]::new)));
+            double shared = shape.geometry().intersection(theirs).getArea(), either = shape.geometry().union(theirs).getArea();
+            assertThat(shared / either).as(r.district()).isGreaterThan(0.95);
+        });
+        // What the CFS's Murraylands holds and the Bureau's does not is the lakes.
+        org.locationtech.jts.geom.Geometry murraylands = org.locationtech.jts.geom.util.GeometryFixer.fix(new org.locationtech.jts.geom.GeometryFactory()
+                .createMultiPolygon(cfs.stream().filter(x -> x.name().equalsIgnoreCase("Murraylands")).findFirst().orElseThrow().polygons()
+                        .toArray(org.locationtech.jts.geom.Polygon[]::new))).difference(bureau.of("SA_FW007").orElseThrow().geometry());
+        assertThat(murraylands.intersection(bureau.of("SA_MW017").orElseThrow().geometry()).getArea() / murraylands.getArea()).isGreaterThan(0.9);
+    }
+
     static au.gully.platform.GullyProperties props() {
         return new org.springframework.boot.context.properties.bind.Binder(new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.of("gully.enabled", "false")))
                 .bindOrCreate("gully", au.gully.platform.GullyProperties.class);

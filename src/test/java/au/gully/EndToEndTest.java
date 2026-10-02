@@ -530,10 +530,15 @@ class EndToEndTest {
         // Another reference has nothing kept: the stations' own record answers, or says it cannot.
         Map<String, Object> other = client().get().uri("/api/v1/reading?lat=-34.93&lon=138.60&ref=incident-7&at=" + past).header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
         assertThat((Map<String, Object>) other.get("history")).containsKey("answeredFrom").containsKey("basis");
-        // The new routes answer (W-23, W-25, W-28).
-        for (String route : new String[]{"/api/v1/upstreams", "/api/v1/upstreams/open-meteo/spend", "/api/v1/upstreams/open-meteo/spend/daily", "/api/v1/warnings", "/api/v1/districts.geojson"}) {
+        // The new routes answer (W-23, W-25, W-28, W-50).
+        for (String route : new String[]{"/api/v1/upstreams", "/api/v1/upstreams/open-meteo/spend", "/api/v1/upstreams/open-meteo/spend/daily", "/api/v1/warnings", "/api/v1/warnings.geojson", "/api/v1/districts.geojson"}) {
             assertThat(client().get().uri(route).header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class).getStatusCode()).as(route).isEqualTo(HttpStatus.OK);
         }
+        // Every warning as a shape (W-50): a FeatureCollection beside the list, under the same key, refused without one.
+        Map<String, Object> shapes = client().get().uri("/api/v1/warnings.geojson").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
+        assertThat(shapes).containsOnlyKeys("type", "features", "readAt").containsEntry("type", "FeatureCollection");
+        assertThat((List<?>) shapes.get("features")).hasSameSizeAs((List<?>) client().get().uri("/api/v1/warnings").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class).get("warnings"));
+        assertThat(client().get().uri("/api/v1/warnings.geojson").retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(client().get().uri("/api/v1/upstreams/open-meteo/spend/daily?from=2026-01-01&to=2026-09-01").header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         // The future is not history, and a moment has to be one.
         assertThat(client().get().uri(q + "&at=" + Instant.now().plusSeconds(7200)).header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);

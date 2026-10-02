@@ -257,7 +257,7 @@ reading is under it when it names the public district of
 the nearest Bureau station in reach (or the nearest at all) or the point's fire weather district, and every
 other warning in force in the state is listed beside it by title, so a flood warning filed by river basin
 is never dropped for want of a district to match. The map's side panel carries a banner while any is in
-force; `/api/v1/warnings` lists them.
+force; `/api/v1/warnings` lists them, and `/api/v1/warnings.geojson` gives each its shape (W-50).
 
 **Flood weather** (W-26). A reading carries the rain already down at the forecast station - today so far and
 the last three, seven and thirty Bureau days from its own record - the rain coming in the next twenty-four
@@ -350,8 +350,8 @@ FFDI is; which fuel is on the ground at a point is the fuel map's question, not 
 
 **Warnings and the fire outlook on the map** (W-30, W-31). A fire weather warning shades and outlines its fire
 ban district - the CFS's feed gives each district its Bureau fire weather code - and a warning for a public forecast
-district, whose shapes the Bureau does not publish openly, rings the stations in it; both on the Warnings toggle,
-on by default. Colour by *FFDI today*, *tomorrow* or *day 3* colours every station by its forecast's worst hour of
+district rings the stations in it; both on the Warnings toggle, on by default. (The map does not draw the Bureau's own
+shapes of the districts, which the API serves since W-50.) Colour by *FFDI today*, *tomorrow* or *day 3* colours every station by its forecast's worst hour of
 the forest index that day: what is held shows at once, and any station whose forecast is missing or older than
 three hours is fetched behind it, four at a time, while someone is looking - about three units a station.
 
@@ -369,6 +369,12 @@ is what a click on a station opens and `/api/v1/stations/at?lat=&lon=` what a cl
 its units since a moment; `/api/v1/upstreams/{id}/spend/daily?from=&to=` its spend day by day, at most 93 days -
 the ledger the Upstreams page draws, for a consumer's own usage page.
 
+**Warnings as shapes** (W-50). `/api/v1/warnings` lists the Bureau's warnings in force in both states;
+`/api/v1/warnings.geojson` gives the same ones, in the same order, as a FeatureCollection: each warning's properties as
+the list gives them, its geometry the union of its areas' shapes - the Bureau's forecast districts, fire weather districts
+and marine zones, drawn from its shapefiles into a resource of the build by `tools/WarningAreasGen.java` and read at the
+start - or null where none of its areas has one.
+
 **Fire danger by day** (W-45). `/api/v1/fire-danger?from=&to=` is the CFS's published rating for every fire ban
 district on each day, kept from every read of its feed: what the public were told, for reading an incident against
 the danger of its day. The admin reset keeps it.
@@ -380,6 +386,7 @@ Fifteen tables: `api_key`, `console_user`, `api_access_log` (kept thirty days), 
 `inland_km` since `V6`), `station_hour6` and `station_day` (`V3`), `station_reading` (`V5`),
 `station_forecast` (`V7`, a day), `grass_curing` (`V8`, the operator's entries), `reading_snapshot` (`V9`, 548 days)
 and `land_cover` (`V10`, kept). Held in memory as well, and read back at start: the stations with their latest
-readings, their terrain, their days, their forecasts, the curing and the land cover. The admin reset empties the
+readings, their terrain, their days, their forecasts, the curing and the land cover; and, from the build rather than
+the database, the shapes of the areas the Bureau's warnings name (W-50). The admin reset empties the
 weather - stations, readings, windows, days, forecasts, kept readings, terrain - and keeps the rest, curing and land
 cover among it.

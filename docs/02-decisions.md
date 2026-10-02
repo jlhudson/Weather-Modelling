@@ -783,3 +783,30 @@ whole next time, so the page is tried again. On the map marine wind is teal and 
 and nothing could draw it. The title names the districts; the page's product names them by code and says which are
 cancelled, which the title cannot - so the product is read first and the title stands only when it cannot be.
 — James, 2 October 2026.
+
+### W-50 · Every warning as a shape
+
+**The decision.** `GET /api/v1/warnings.geojson` answers the warnings in force - the same ones as `/api/v1/warnings`,
+both states, in the same order - as a FeatureCollection with `readAt` beside it: each warning a Feature whose `id` is the
+warning's, whose `properties` are the warning exactly as the list gives it, and whose `geometry` is the union of its areas'
+shapes, a Polygon or a MultiPolygon in longitude and latitude, or null where none of its areas has a shape (a flood
+warning filed by river basin, a page whose areas are not known). The shapes are the Bureau's own public spatial data
+(`ftp://ftp.bom.gov.au/anon/home/adfd/spatial/`): South Australia's and Tasmania's public weather forecast districts
+(`IDM00001`, `SA_PW…`, `TAS_PW…`), fire weather districts (`IDM00007`, `SA_FW…`, `TAS_FW…`) and marine zones - coastal,
+local and inland waters (`IDM00003`, `SA_MW…`, `TAS_MW…`) - 79 areas under the codes the warnings name them by.
+`tools/WarningAreasGen.java` reads the shapefiles (the .shp polygons and the .dbf table read directly, no GIS library),
+simplifies each product's districts together to about half a kilometre, so neighbours keep one shared edge and a union of
+them has no seams, rounds them to four decimal places, and writes `src/main/resources/bureau/warning-areas.geojson`
+(382 KB), which the service reads at the start; it is run again by hand when the Bureau changes a file. A union is made
+once for each set of codes. The three warnings in force on the evening of 2 October 2026 - the sheep graziers' and both
+marine wind summaries - answer in 39 KB. The route is under `/api/v1/`, so the Hub's key, and any key with the readings
+scope, reaches it as it reaches `/api/v1/warnings`. The console map is as it was: a fire weather warning shades its CFS
+district, a public-district warning rings the stations in it (W-30).
+
+**Why.** A warning's areas are codes, and only someone holding the codes' shapes can draw it; the Hub and IncidentWatch
+behind it hold none. W-30 took it that the Bureau does not publish its forecast districts' shapes; it does, beside every
+other area a warning names, keyed by the same codes. The CFS's fire ban districts were the only shapes held here; the
+Bureau's fire weather districts are the same fifteen, by name and code, and the same ground but for the water - the Bureau
+leaves Lake Alexandrina, Lake Albert and the Coorong to a marine zone of their own (`SA_MW017`, Murray Lakes) - so the
+Bureau's files serve both states and every kind of area alike.
+— James, 2 October 2026.

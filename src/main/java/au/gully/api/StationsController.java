@@ -44,6 +44,7 @@ public class StationsController {
     private final Readings readings;
     private final au.gully.cfs.FireBan fireBan;
     private final au.gully.bureau.Warnings warnings;
+    private final au.gully.bureau.WarningAreas warningAreas;
 
     @GetMapping(value = "/stations.geojson", produces = {"application/geo+json", "application/json"})
     public Map<String, Object> stations() {
@@ -64,9 +65,22 @@ public class StationsController {
      */
     @GetMapping(value = "/warnings", produces = "application/json")
     public Map<String, Object> warnings() {
-        Instant now = Instant.now();
-        return Map.of("warnings", warnings.ensure(now).stream().filter(w -> w.until() == null || w.until().isAfter(now)).map(au.gully.bureau.Warnings::view).toList(),
+        return Map.of("warnings", inForce(Instant.now()).stream().map(au.gully.bureau.Warnings::view).toList(),
                 "readAt", String.valueOf(warnings.readAt()));
+    }
+
+    /**
+     * The same warnings, in the same order, each as a shape (W-50): a Feature whose id is the warning's, whose properties
+     * are the warning as {@link #warnings()} gives it, and whose geometry is the union of its areas' shapes - the Bureau's
+     * forecast districts, fire weather districts and marine zones - or null where none of its areas has one.
+     */
+    @GetMapping(value = "/warnings.geojson", produces = {"application/geo+json", "application/json"})
+    public Map<String, Object> warningShapes() {
+        return warningAreas.geojson(inForce(Instant.now()), warnings.readAt());
+    }
+
+    private java.util.List<au.gully.bureau.Warnings.Warning> inForce(Instant now) {
+        return warnings.ensure(now).stream().filter(w -> w.until() == null || w.until().isAfter(now)).toList();
     }
 
     /**

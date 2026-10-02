@@ -11,6 +11,7 @@ the sources change, so a finding is what was true that day.
 |---|---|---|---|---|
 | Bureau station files `IDS60920`, `IDT60920` (W-47) | every SA and Tasmanian station's latest observation | every 10 min, conditional GET | free | readings 3 days, windows and days 548 |
 | Bureau warnings `IDZ00057`, `IDZ00058` + products, and the pages they link (W-49) | SA and Tasmanian warnings and the areas they cover | when asked, held 10 min; a product or page while listed at the same time | free | memory |
+| Bureau spatial data `IDM00001`, `IDM00007`, `IDM00003` (W-50) | SA and Tasmanian forecast districts, fire weather districts and marine zones as shapes | by hand, when the Bureau changes a file (`tools/WarningAreasGen.java`) | free | a resource of the build (382 KB) |
 | CFS fire ban districts | the 15 districts' shapes | when asked, held a day | free (230 KB) | memory |
 | CFS fire danger ratings | AFDRS rating, FBI, total fire ban, 4 days | when asked, held an hour | free (32 KB) | memory |
 | Open-Meteo forecast | now, 7 days hourly and daily (W-44), 48 h behind | when asked, held 3 h (now: 1 h) | 3 units | `station_forecast`, a day |
@@ -72,9 +73,25 @@ takes - and the rest of that state's are listed beside, never the other state's.
   river basin (`VIC_RC024`, type `river-basin`) beside every river site and gauge. An item linked that way is neither a
   product nor a page to this reader and is left out. South Australia's and Tasmania's listings held no flood warning that
   day to check theirs against.
-- The Bureau does not publish its public forecast districts as open shapes, so on the map a public-district warning
-  rings the stations in it; a fire weather district is a CFS district (the CFS feed carries its `SA_FW` code), and is
-  shaded.
+- On the console map a public-district warning rings the stations in it, and a fire weather district - a CFS district,
+  the CFS feed carrying its `SA_FW` code - is shaded (W-30). That was done believing the Bureau did not publish its
+  districts' shapes; it does (below), and since W-50 the API gives every warning its shape.
+
+**Spatial data** - `ftp://ftp.bom.gov.au/anon/home/adfd/spatial/`, anonymous FTP (curl reads it), one zip of a shapefile
+per product and a user guide (`Bureau_of_Meteorology_spatial_data_user_guide.pdf`). Read by hand, not by the service:
+`tools/WarningAreasGen.java` turns three products into `src/main/resources/bureau/warning-areas.geojson` (W-50).
+
+- *Finding (2 October 2026, W-50):* every area a warning names by code has its shape there, under the same code:
+  public weather forecast districts `IDM00001` (`PW`; the file written 23 November 2016, its codes and names still the
+  warnings'), marine zones `IDM00003` (`MW`, each coastal, local or inland waters; 5 January 2024), fire weather districts
+  `IDM00007` (`FW`; 18 June 2026), and for floods the flood warning catchments `IDM00017` (`RC`) and flood watch areas
+  `IDM00020` (`FL`), which are not taken. GDA94 longitude and latitude; a change is placed in `pending/` before it is made.
+- *Finding (2 October 2026):* the Bureau's South Australian fire weather districts are the CFS's fire ban districts, the
+  same fifteen by name and code, but the Bureau's leave Lake Alexandrina, Lake Albert and the Coorong to the Murray Lakes
+  marine zone (`SA_MW017`): the CFS's Murraylands is 2 % larger and its Upper South East 5 %.
+- *Finding (2 October 2026):* simplified as coverages to 0.005° and rounded to four places, the 79 South Australian and
+  Tasmanian areas are 382 KB, 18,474 points from 151,235; one area is 1 to 18 KB, Tasmania's ragged west and south-east
+  the largest.
 
 ## The CFS
 
