@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html th:replace="~{layout :: page('Feedback', ~{::section})}" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- The form is the fleet's own fragment (fragments/feedback.html); the layout links its sheet for this title. -->
+<section>
+    <div th:replace="~{fragments/feedback :: feedback}"></div>
+    <script defer th:src="@{/feedback/feedback.js}"></script>
+</section>
+</body>
+</html>

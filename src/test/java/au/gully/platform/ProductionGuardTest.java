@@ -37,4 +37,16 @@ class ProductionGuardTest {
         assertThat(ProductionGuard.devKeys(real::get, ProductionGuard.KEYS))
                 .singleElement().asString().startsWith("gully.keys.hub");
     }
+
+    @Test
+    void theKeyForTheHubIsCheckedForADevKeyButMayBeBlank() {
+        java.util.Map<String, String> real = new java.util.HashMap<>();
+        real.put("gully.hub.url", "");
+        real.put("gully.hub.api-key", "");
+        assertThat(ProductionGuard.devKeys(real::get, ProductionGuard.KEYS)).isEmpty();
+        assertThat(ProductionGuard.refused(real::get, ProductionGuard.REFUSED)).doesNotContain("gully.hub.url", "gully.hub.api-key");
+        real.put("gully.hub.api-key", "dev-key-weather-to-hub-0123456789");
+        assertThat(ProductionGuard.devKeys(real::get, ProductionGuard.KEYS))
+                .singleElement().asString().startsWith("gully.hub.api-key");
+    }
 }

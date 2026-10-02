@@ -54,7 +54,9 @@ weather.surefirehudson.com tunnel. The console is at <http://localhost:8082/cons
 
 Two Spring profiles: `development` on your PC, `production` on a server (JSON logs, and the service
 refuses to start on a default code or password). The Hub reaches it with the pre-shared key
-`WEATHER_KEY_HUB` here and `HUB_WEATHER_API_KEY` there.
+`WEATHER_KEY_HUB` here and `HUB_WEATHER_API_KEY` there. The one call the other way is the console's Feedback
+page, which hands a message to the Hub's `/api/feedback` at `WEATHER_HUB_URL` with `WEATHER_HUB_API_KEY`;
+either blank, the page says it cannot send and the message is logged instead.
 
 **From the IDE.** Stop the `weather-app` container and run `au.gully.Application`; it finds the
 database on `localhost:5434`. Flyway creates the schema on first boot.

@@ -225,7 +225,7 @@ class WarningsTest {
         }
     }
 
-    static final au.gully.platform.GullyProperties PROPS = new au.gully.platform.GullyProperties(true, "test", "Australia/Adelaide", null, null, null);
+    static final au.gully.platform.GullyProperties PROPS = new au.gully.platform.GullyProperties(true, "test", "Australia/Adelaide", null, null, null, null);
 
     static byte[] listing(String sheepPublished) {
         return ("<rss version=\"2.0\"><channel>"

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!--
+  The feedback form, the same fragment in every application: The-Hub-Database/docs/feedback/feedback-fragment.html
+  is the copy the others are taken from, kept by each as templates/fragments/feedback.html and placed by its own
+  feedback.html inside its layout with th:replace="~{fragments/feedback :: feedback}". Change it there and copy it out.
+
+  What it reads from the model (README.md in this folder):
+    feedbackApp      the application's name as people know it
+    feedbackName     the signed-in person's name, or what they typed before a failed send; may be null
+    feedbackEmail    the signed-in person's email, or what they typed; may be null
+    feedbackPage     the page they came from (?from=), a path on this site; may be null
+    feedbackKind     what they chose before a failed send; may be null
+    feedbackMessage  what they wrote before a failed send; may be null
+    feedbackSent     true after a send without JavaScript
+    feedbackError    why a send without JavaScript failed; may be null
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section class="feedback" aria-labelledby="feedback-title" th:fragment="feedback">
+    <h1 id="feedback-title">Feedback</h1>
+    <p class="feedback-lead">
+        Something broken, confusing or missing? An idea, or something you like? It goes straight to the person
+        who builds <span th:text="${feedbackApp}">this app</span>.
+    </p>
+
+    <div class="feedback-done" data-feedback-done tabindex="-1" th:hidden="${feedbackSent != true}">
+        <h2>Thank you</h2>
+        <p>Your feedback has been sent.</p>
+        <a th:href="${feedbackPage != null and !#strings.isEmpty(feedbackPage)} ? ${feedbackPage} : @{/}">Back to
+            <span th:text="${feedbackApp}">the app</span></a>
+    </div>
+
+    <form class="feedback-form" data-feedback method="post" th:action="@{/feedback}" th:hidden="${feedbackSent == true}">
+        <fieldset class="feedback-kinds">
+            <legend>What is it about?</legend>
+            <div class="feedback-kinds-options">
+                <label><input name="kind" type="radio" value="problem" th:checked="${feedbackKind == 'problem'}">
+                    Something's wrong</label>
+                <label><input name="kind" type="radio" value="idea" th:checked="${feedbackKind == 'idea'}">
+                    An idea</label>
+                <label><input name="kind" type="radio" value="praise" th:checked="${feedbackKind == 'praise'}">
+                    Something I like</label>
+                <label><input name="kind" type="radio" value="other" th:checked="${feedbackKind == 'other'}">
+                    Something else</label>
+            </div>
+        </fieldset>
+
+        <div class="feedback-field">
+            <label for="feedback-message">Your feedback <span aria-hidden="true">*</span></label>
+            <textarea aria-describedby="feedback-message-count feedback-message-error" id="feedback-message"
+                      maxlength="4000" name="message" required rows="7"
+                      th:text="${feedbackMessage}"></textarea>
+            <div class="feedback-hint" id="feedback-message-count" data-feedback-count>0 / 4000</div>
+            <div class="feedback-error" id="feedback-message-error"><span aria-hidden="true">⚠</span> Write a few
+                words before sending.
+            </div>
+        </div>
+
+        <div class="feedback-pair">
+            <div class="feedback-field">
+                <label for="feedback-name">Your name</label>
+                <input autocomplete="name" id="feedback-name" maxlength="100" name="name" type="text"
+                       th:value="${feedbackName}">
+            </div>
+            <div class="feedback-field">
+                <label for="feedback-email">Your email</label>
+                <input aria-describedby="feedback-email-hint feedback-email-error" autocomplete="email"
+                       id="feedback-email" maxlength="200" name="email" type="email" th:value="${feedbackEmail}">
+                <div class="feedback-hint" id="feedback-email-hint">Optional: only if you would like a reply.</div>
+                <div class="feedback-error" id="feedback-email-error"><span aria-hidden="true">⚠</span> That does not
+                    look like an email address.
+                </div>
+            </div>
+        </div>
+
+        <div aria-hidden="true" class="feedback-trap">
+            <label for="feedback-website">Leave this empty</label>
+            <input autocomplete="off" id="feedback-website" name="website" tabindex="-1" type="text">
+        </div>
+        <input name="page" type="hidden" th:value="${feedbackPage}">
+
+        <div class="feedback-actions">
+            <button type="submit">Send feedback</button>
+            <p class="feedback-status" data-feedback-status role="status"
+               th:classappend="${feedbackError != null} ? 'feedback-status-failed'"
+               th:text="${feedbackError}"></p>
+        </div>
+    </form>
+</section>
+</body>
+</html>

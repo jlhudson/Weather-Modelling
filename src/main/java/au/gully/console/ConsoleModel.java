@@ -1,5 +1,6 @@
 package au.gully.console;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 /**
- * What every console page needs: who is logged in, the map key, and the formatting helpers.
+ * What every console page needs: who is logged in, the map key, where the page is, and the formatting helpers.
  */
 @ControllerAdvice(basePackages = "au.gully.console")
 public class ConsoleModel {
@@ -39,6 +40,15 @@ public class ConsoleModel {
     @ModelAttribute("cartoKey")
     public String cartoKey() {
         return cartoKey;
+    }
+
+    /**
+     * The page being drawn, path and query: the navigation's Feedback link names it as {@code ?from=}.
+     */
+    @ModelAttribute("here")
+    public String here(HttpServletRequest request) {
+        String query = request.getQueryString();
+        return request.getRequestURI() + (query == null || query.isEmpty() ? "" : "?" + query);
     }
 
     @ModelAttribute("fmt")

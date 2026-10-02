@@ -21,6 +21,8 @@
     <link rel="stylesheet" th:href="@{/css/console.css}">
     <!-- The map page's own sheet, in the head with the rest: a sheet linked from the body would lay the map out twice. -->
     <link rel="stylesheet" th:href="@{/css/map.css}" th:if="${title == 'Map'}">
+    <!-- The feedback form's sheet, the same in every application (The-Hub-Database/docs/feedback). -->
+    <link rel="stylesheet" th:href="@{/feedback/feedback.css}" th:if="${title == 'Feedback'}">
     <!-- Deferred, in this order, so a page's own deferred script (map.js) runs after Leaflet and console.js. -->
     <script defer th:src="@{/webjars/bootstrap/5.3.5/dist/js/bootstrap.bundle.min.js}"></script>
     <script defer th:src="@{/webjars/leaflet/1.9.4/dist/leaflet.js}"></script>
@@ -45,6 +47,10 @@
                 <li class="nav-item"><a class="nav-link" th:classappend="${title == 'API keys'} ? 'active'" th:href="@{/console/api-keys}">API keys</a></li>
                 <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Curing'} ? 'active'" th:href="@{/console/curing}">Curing</a></li>
                 <li class="nav-item"><a class="nav-link" th:classappend="${title == 'Admin'} ? 'active'" th:href="@{/console/admin}">Admin</a></li>
+                <!-- Names the page it is on, so the message says where; on the feedback page, the page that led there. -->
+                <li class="nav-item" th:with="from=${title == 'Feedback'} ? ${feedbackPage} : ${here}">
+                    <a class="nav-link" th:classappend="${title == 'Feedback'} ? 'active'"
+                       th:href="${from != null} ? @{/feedback(from=${from})} : @{/feedback}">Feedback</a></li>
             </ul>
             <div class="d-flex align-items-center gap-2 right">
                 <span th:text="${operator}">operator</span>

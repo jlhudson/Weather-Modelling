@@ -42,7 +42,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @Testcontainers(disabledWithoutDocker = true)
 @org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestPropertySource(properties = {"gully.enabled=false", "gully.console.code=12345678", "spring.flyway.clean-disabled=true"})
+@TestPropertySource(properties = {"gully.enabled=false", "gully.console.code=12345678", "spring.flyway.clean-disabled=true",
+        "gully.hub.url=", "gully.hub.api-key="})
 class EndToEndTest {
 
     static final String HUB_KEY = "weather_end-to-end-test-key-for-the-hub";
@@ -485,6 +486,74 @@ class EndToEndTest {
         ResponseEntity<Void> anonymous = client().get().uri("/console/map").retrieve().toEntity(Void.class);
         assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(anonymous.getHeaders().getLocation().toString()).endsWith("/login");
+    }
+
+    /**
+     * The feedback page (The-Hub-Database/docs/feedback): behind the console's login like every page, its two files
+     * served as the console's own are, linked from every page with the page it is on, and a send that needs the
+     * CSRF token. The Hub is not linked here, so a real send answers 503 and nothing leaves the test.
+     */
+    @Test
+    @org.junit.jupiter.api.Order(12)
+    void theFeedbackPageIsBehindTheLoginAndItsFilesAreNot() {
+        ResponseEntity<Void> anonymous = client().get().uri("/feedback").retrieve().toEntity(Void.class);
+        assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(anonymous.getHeaders().getLocation().toString()).endsWith("/login");
+        assertThat(client().post().uri("/feedback").contentType(MediaType.APPLICATION_FORM_URLENCODED).body("message=hi&website=x")
+                .retrieve().toEntity(String.class).getStatusCode()).as("a post without the login or the token").isEqualTo(HttpStatus.FORBIDDEN);
+        for (String file : new String[]{"/feedback/feedback.css", "/feedback/feedback.js"}) {
+            ResponseEntity<String> r = client().get().uri(file).retrieve().toEntity(String.class);
+            assertThat(r.getStatusCode()).as(file).isEqualTo(HttpStatus.OK);
+            assertThat(r.getBody()).as(file).contains("The-Hub-Database/docs/feedback");
+        }
+
+        String session = logIn();
+        String curing = client().get().uri("/console/curing").header(HttpHeaders.COOKIE, session).retrieve().body(String.class);
+        assertThat(curing).contains("href=\"/feedback?from=/console/curing\"");
+        String upstreams = client().get().uri("/console/upstreams?calls=all").header(HttpHeaders.COOKIE, session).retrieve().body(String.class);
+        assertThat(upstreams).contains("href=\"/feedback?from=/console/upstreams?calls%3Dall\"");
+
+        ResponseEntity<String> page = client().get().uri("/feedback?from=/console/curing").header(HttpHeaders.COOKIE, session).retrieve().toEntity(String.class);
+        assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(page.getBody()).contains("<title>Feedback · Gully</title>").contains("/feedback/feedback.css").contains("/feedback/feedback.js")
+                .contains("bootstrap.min.css").contains("console.js").contains("/logout")
+                .contains("action=\"/feedback\"").contains("name=\"message\"").contains("name=\"website\"").contains("name=\"_csrf\"")
+                .contains("name=\"page\" type=\"hidden\" value=\"/console/curing\"").containsPattern("name=\"name\" type=\"text\"\\s+value=\"operator\"")
+                .contains("<span>Weather</span>")
+                // The link in the navigation keeps the page that led here, not the feedback page itself.
+                .contains("href=\"/feedback?from=/console/curing\"");
+        assertThat(client().get().uri("/feedback?from=https://evil.example/").header(HttpHeaders.COOKIE, session).retrieve().body(String.class))
+                .doesNotContain("evil.example");
+
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"|value=\"([^\"]+)\"[^>]*name=\"_csrf\"")
+                .matcher(page.getBody());
+        assertThat(m.find()).as("the form carries a CSRF token").isTrue();
+        String csrf = java.net.URLEncoder.encode(m.group(1) != null ? m.group(1) : m.group(2), java.nio.charset.StandardCharsets.UTF_8);
+        ResponseEntity<Map> trap = client().post().uri("/feedback").header(HttpHeaders.COOKIE, session).accept(MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED).body("message=hi&website=x&_csrf=" + csrf).retrieve().toEntity(Map.class);
+        assertThat(trap.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(trap.getBody()).containsExactlyEntriesOf(Map.of("sent", true));
+        ResponseEntity<Map> notLinked = client().post().uri("/feedback").header(HttpHeaders.COOKIE, session).accept(MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED).body("kind=problem&message=Testing+the+unlinked+path&_csrf=" + csrf)
+                .retrieve().toEntity(Map.class);
+        assertThat(notLinked.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(notLinked.getBody()).containsEntry("sent", false).containsKey("error");
+        ResponseEntity<String> withoutToken = client().post().uri("/feedback").header(HttpHeaders.COOKIE, session).accept(MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED).body("message=hi").retrieve().toEntity(String.class);
+        assertThat(withoutToken.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private String logIn() {
+        ResponseEntity<String> loginPage = client().get().uri("/login").retrieve().toEntity(String.class);
+        String cookie = firstCookie(loginPage.getHeaders());
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"|value=\"([^\"]+)\"[^>]*name=\"_csrf\"").matcher(loginPage.getBody());
+        assertThat(m.find()).isTrue();
+        ResponseEntity<Void> login = client().post().uri("/login").header(HttpHeaders.COOKIE, cookie)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body("username=operator&code=12345678&_csrf=" + (m.group(1) != null ? m.group(1) : m.group(2))).retrieve().toEntity(Void.class);
+        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        return login.getHeaders().containsHeader(HttpHeaders.SET_COOKIE) ? firstCookie(login.getHeaders()) : cookie;
     }
 
     /**

@@ -111,6 +111,9 @@ public class SecurityConfig {
     public SecurityFilterChain consoleChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(a -> a
                         .requestMatchers("/login", "/error", "/webjars/**", "/css/**", "/js/**", "/favicon.ico").permitAll()
+                        // The feedback form's two files, by name: /feedback/** would match the page itself, which
+                        // stays behind the login.
+                        .requestMatchers("/feedback/feedback.css", "/feedback/feedback.js").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .anyRequest().hasAuthority(ConsoleUsers.ROLE))
                 .formLogin(f -> f.loginPage("/login").loginProcessingUrl("/login")

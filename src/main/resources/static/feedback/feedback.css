@@ -1,0 +1,230 @@
+/*
+ * The feedback page, the same file in every application: The-Hub-Database/docs/feedback/feedback.css is the
+ * copy the others are taken from, served by each as /feedback/feedback.css. Change it there and copy it out.
+ *
+ * It takes the page's font and colours and adds only the shape of the form, so it sits inside any of the
+ * applications' layouts, light or dark. An application that wants its own accent sets --feedback-accent.
+ */
+.feedback {
+    --feedback-accent-default: #2563eb;
+    --feedback-error: #c0262d;
+    --feedback-line: color-mix(in srgb, currentColor 30%, transparent);
+    max-width: 40rem;
+    margin-inline: auto;
+    padding-block: 1rem 2rem;
+    padding-inline: 1rem;
+    line-height: 1.5;
+}
+
+.feedback h1 {
+    margin-block: 0 .5rem;
+    font-size: 1.6rem;
+}
+
+.feedback-lead {
+    margin-block: 0 1.5rem;
+    opacity: .85;
+}
+
+.feedback-form {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.feedback [hidden],
+.feedback[hidden],
+form[data-feedback][hidden],
+[data-feedback-done][hidden] {
+    display: none !important;
+}
+
+.feedback fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.feedback legend,
+.feedback-field > label {
+    display: block;
+    float: none;
+    width: auto;
+    margin-block-end: .35rem;
+    padding: 0;
+    font-size: inherit;
+    font-weight: 600;
+    line-height: inherit;
+}
+
+.feedback-kinds-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.feedback-kinds-options label {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    min-height: 2.75rem;
+    padding: .4rem .85rem;
+    border: 1px solid var(--feedback-line);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.feedback-kinds-options label:has(input:checked) {
+    border-color: var(--feedback-accent, var(--feedback-accent-default));
+    box-shadow: inset 0 0 0 1px var(--feedback-accent, var(--feedback-accent-default));
+}
+
+.feedback input[type="radio"] {
+    margin: 0;
+    accent-color: var(--feedback-accent, var(--feedback-accent-default));
+}
+
+.feedback textarea,
+.feedback input[type="text"],
+.feedback input[type="email"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: .65rem .75rem;
+    border: 1px solid var(--feedback-line);
+    border-radius: .5rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: max(1rem, 16px);
+}
+
+.feedback textarea {
+    min-height: 9rem;
+    resize: vertical;
+}
+
+.feedback textarea:focus-visible,
+.feedback input:focus-visible,
+.feedback button:focus-visible,
+.feedback-done:focus-visible {
+    outline: 3px solid var(--feedback-accent, var(--feedback-accent-default));
+    outline-offset: 2px;
+}
+
+.feedback-hint {
+    margin-block-start: .3rem;
+    font-size: .875rem;
+    opacity: .75;
+}
+
+.feedback-error {
+    display: none;
+    margin-block-start: .3rem;
+    color: var(--feedback-error);
+    font-size: .875rem;
+}
+
+.feedback textarea:user-invalid,
+.feedback input:user-invalid,
+.feedback [aria-invalid="true"] {
+    border-color: var(--feedback-error);
+}
+
+.feedback textarea:user-invalid ~ .feedback-error,
+.feedback input:user-invalid ~ .feedback-error,
+.feedback [aria-invalid="true"] ~ .feedback-error {
+    display: block;
+}
+
+.feedback-pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1.25rem;
+}
+
+/* The field people never see and robots fill in. */
+.feedback-trap {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    border: 0;
+    white-space: nowrap;
+}
+
+.feedback-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+}
+
+.feedback button[type="submit"] {
+    min-height: 2.75rem;
+    padding: .6rem 1.4rem;
+    border: 0;
+    border-radius: .5rem;
+    background: var(--feedback-accent, var(--feedback-accent-default));
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.feedback button[type="submit"]:disabled {
+    opacity: .6;
+    cursor: progress;
+}
+
+.feedback-status {
+    margin: 0;
+}
+
+.feedback-status:empty {
+    display: none;
+}
+
+.feedback-status-failed {
+    color: var(--feedback-error);
+}
+
+.feedback-done {
+    padding: 1.25rem;
+    border: 1px solid var(--feedback-line);
+    border-radius: .75rem;
+}
+
+.feedback-done h2 {
+    margin-block: 0 .5rem;
+    font-size: 1.25rem;
+}
+
+.feedback-done p {
+    margin-block: 0 1rem;
+}
+
+.feedback-done a {
+    color: var(--feedback-accent, var(--feedback-accent-default));
+}
+
+@media (prefers-color-scheme: dark) {
+    .feedback {
+        --feedback-accent-default: #60a5fa;
+        --feedback-error: #f87171;
+    }
+}
+
+[data-bs-theme="dark"] .feedback,
+[data-theme="dark"] .feedback {
+    --feedback-accent-default: #60a5fa;
+    --feedback-error: #f87171;
+}
+
+[data-bs-theme="light"] .feedback,
+[data-theme="light"] .feedback {
+    --feedback-accent-default: #2563eb;
+    --feedback-error: #c0262d;
+}

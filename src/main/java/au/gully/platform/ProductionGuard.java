@@ -29,7 +29,7 @@ public class ProductionGuard {
      * values that match across the five checkouts, so a development machine talks to itself out of the
      * box; production must replace each with a value of its own.
      */
-    static final List<String> KEYS = List.of("gully.keys.hub");
+    static final List<String> KEYS = List.of("gully.keys.hub", "gully.hub.api-key");
     static final String DEV_KEY_PREFIX = "dev-key-";
 
     public ProductionGuard(Environment environment) {

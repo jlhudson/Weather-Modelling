@@ -87,3 +87,8 @@ gully:
     hub: ${WEATHER_KEY_HUB:}
   console:
     code: ${WEATHER_CONSOLE_CODE:}
+  # The other way: where this service reaches the Hub, and the key it presents there, for the feedback page
+  # (POST /api/feedback). Blank, the page cannot send and logs the message instead.
+  hub:
+    url: ${WEATHER_HUB_URL:}
+    api-key: ${WEATHER_HUB_API_KEY:}

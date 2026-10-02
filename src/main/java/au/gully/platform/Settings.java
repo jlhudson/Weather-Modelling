@@ -29,6 +29,7 @@ public class Settings {
         m.put("gully.console.lockout-after", gully.console().lockoutAfter());
         m.put("gully.console.lockout-for", gully.console().lockoutFor());
         m.put("gully.api.cors-origins", gully.api().corsOrigins());
+        m.put("gully.hub.url", gully.hub().url() == null ? "" : gully.hub().url());
         m.put("gully.diagnostics.keep-errors", diagnostics.keepErrors());
         m.put("gully.diagnostics.keep-warnings", diagnostics.keepWarnings());
         return m;

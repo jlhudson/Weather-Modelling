@@ -320,7 +320,9 @@ the API keys page like any other, issued again on the next map page if revoked -
 operator watches is the flow a consumer gets, rate, access log and all. The Upstreams page is the
 allowance table, the spend chart, the breaker history, the Bureau's file and the recent calls. Diagnostics is the log signatures with the
 startup record. API keys issues and revokes keys with a scope. Curing (W-24) holds each fire ban district's grass curing and fuel load. Admin (W-18, for testing) deletes every station,
-reading, window, day and terrain and starts again from the Bureau's file.
+reading, window, day and terrain and starts again from the Bureau's file. Feedback, at `/feedback` and linked from every
+page with the page it was on, is the form every application in the fleet shares (The-Hub-Database/docs/feedback): a
+message for James, emailed and pushed to his phone by the Hub, at most five in a quarter of an hour from one address.
 
 **The AFDRS rating here** (W-38). Every reading carries `afdrs`: the fuel its land cover says the place carries -
 Digital Earth Australia's Landsat land cover, Collection 3, read once per ~200 m and kept in `land_cover` - and the

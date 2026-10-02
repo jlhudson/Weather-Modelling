@@ -25,7 +25,8 @@ public record GullyProperties(
         @DefaultValue("Australia/Adelaide") String zone,
         @DefaultValue Upstreams upstreams,
         @DefaultValue Console console,
-        @DefaultValue Api api
+        @DefaultValue Api api,
+        @DefaultValue Hub hub
 ) {
 
     public ZoneId zoneId() {
@@ -51,5 +52,20 @@ public record GullyProperties(
      * @param corsOrigins empty by default: same-origin only until a consumer is actually named
      */
     public record Api(@DefaultValue List<String> corsOrigins) {
+    }
+
+    /**
+     * The Hub as this service calls it, for the feedback page alone: everything else runs the other way, the Hub
+     * calling here with {@code gully.keys.hub}. Either blank and the service is not linked: the feedback page says
+     * it cannot send just now, and the message goes to the log instead.
+     *
+     * @param url    where the Hub answers, {@code WEATHER_HUB_URL}; {@code /api/feedback} is added to it
+     * @param apiKey the key this service presents there, {@code WEATHER_HUB_API_KEY}
+     */
+    public record Hub(String url, String apiKey) {
+
+        public boolean linked() {
+            return url != null && !url.isBlank() && apiKey != null && !apiKey.isBlank();
+        }
     }
 }
