@@ -744,8 +744,9 @@
         return '<b>' + esc(p.district) + '</b> <span class="muted">fire ban district ' + esc(p.number) + '</span><br>'
             + (t ? esc(t.rating) + (t.fbi != null ? ' · FBI ' + esc(t.fbi) : '') + (t.totalFireBan ? ' · <b>TOTAL FIRE BAN</b>' : '') : '<span class="muted">' + esc(p.note || 'no rating') + '</span>');
     }
-    // ---- the warnings (W-25): in force here in full, the rest of the state by title
-    var WARN_COLOURS = {'fire weather': '#f36c21', 'severe weather': '#eab308', 'severe thunderstorm': '#a855f7', 'flood': '#0ea5e9', 'other': '#9ca3af'};
+    // ---- the warnings (W-25): in force here in full, the rest of the state by title; marine wind and sheep graziers their own (W-49)
+    var WARN_COLOURS = {'fire weather': '#f36c21', 'severe weather': '#eab308', 'severe thunderstorm': '#a855f7', 'flood': '#0ea5e9',
+        'marine wind': '#14b8a6', 'sheep graziers': '#ec4899', 'other': '#9ca3af'};
     function warningsSection(w) {
         var html = '<h2>Warnings <span class="muted">the Bureau\x27s, in force' + (w && w.areas && w.areas.length ? ' for ' + esc(w.areas.join(', ')) : '') + '</span></h2>';
         if (!w) return html + '<p class="muted mb-1">Not read.</p>';

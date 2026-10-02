@@ -10,7 +10,7 @@ the sources change, so a finding is what was true that day.
 | Source | What we take | When | Cost | Held |
 |---|---|---|---|---|
 | Bureau station files `IDS60920`, `IDT60920` (W-47) | every SA and Tasmanian station's latest observation | every 10 min, conditional GET | free | readings 3 days, windows and days 548 |
-| Bureau warnings `IDZ00057`, `IDZ00058` + products | SA and Tasmanian warnings and the areas they cover | when asked, held 10 min | free | memory |
+| Bureau warnings `IDZ00057`, `IDZ00058` + products, and the pages they link (W-49) | SA and Tasmanian warnings and the areas they cover | when asked, held 10 min; a product or page while listed at the same time | free | memory |
 | CFS fire ban districts | the 15 districts' shapes | when asked, held a day | free (230 KB) | memory |
 | CFS fire danger ratings | AFDRS rating, FBI, total fire ban, 4 days | when asked, held an hour | free (32 KB) | memory |
 | Open-Meteo forecast | now, 7 days hourly and daily (W-44), 48 h behind | when asked, held 3 h (now: 1 h) | 3 units | `station_forecast`, a day |
@@ -59,8 +59,19 @@ takes - and the rest of that state's are listed beside, never the other state's.
 - *Finding (25 September 2026):* the marine and surf summaries link to pages, not products, and carry no areas; when a
   warning is not current its product URL returns 404. *Finding (2 October 2026):* a warning to sheep graziers is a page
   too, and on that day the South Australian listing held only pages, so leaving them out left no warnings at all; since
-  W-48 each page is a warning of its own, with no areas. There were no warnings in force anywhere in Australia that day, so
+  W-48 each page is a warning of its own. There were no warnings in force anywhere in Australia that day, so
   the parser was tested on a real Tasmanian severe weather warning kept from before the start-over.
+- *Finding (2 October 2026, W-49):* a page names the product it shows at its head - `<p class="p-id">IDS20201</p>` - and
+  that product's XML is at `fwo/IDS20201.xml` like any other's. The marine wind summaries (`IDS20201`, `IDT20100`) list
+  every coastal waters zone under warning by code, type `coast`, one hazard a day; the warning to sheep graziers
+  (`IDS20242`) its forecast districts, type `public-district`. One product can renew a warning for some areas and cancel
+  it for others: the cancelled hazard and its areas carry `phase="CAN"` (severity `CAN`), and the listing's title names
+  only the renewed ones. The pages are HTML (Tasmania's in ISO-8859-1), so only the product's code is taken from them.
+- *Finding (2 October 2026):* Victoria's listing links its flood products through the Bureau's wrapper,
+  `cgi-bin/wrap_fwo.pl?IDV36330.html`, not `products/IDV36330.shtml`; the XML is still `fwo/IDV36330.xml`, and names the
+  river basin (`VIC_RC024`, type `river-basin`) beside every river site and gauge. An item linked that way is neither a
+  product nor a page to this reader and is left out. South Australia's and Tasmania's listings held no flood warning that
+  day to check theirs against.
 - The Bureau does not publish its public forecast districts as open shapes, so on the map a public-district warning
   rings the stations in it; a fire weather district is a CFS district (the CFS feed carries its `SA_FW` code), and is
   shaded.

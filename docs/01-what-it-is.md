@@ -250,7 +250,9 @@ entry, not the weather: the admin reset keeps it.
 **The warnings** (W-25). The Bureau's South Australian and Tasmanian (W-47) warnings - fire weather, severe
 weather, severe thunderstorms, floods - from each state's listing and each product it names, read when asked and held ten
 minutes; an item linking to a page rather than a product - the marine wind summary, a warning to sheep graziers - is a
-warning too, with no areas, in force while listed (W-48). A warning carries its state and every area it covers; a
+warning too, in force while listed (W-48), covering the areas of the product the page names: a marine wind summary's
+coastal waters, a sheep graziers' warning's districts - or, while the page cannot be read, the forecast districts its
+title names (W-49). A warning carries its state and every area it covers, none that its product cancels; a
 reading is under it when it names the public district of
 the nearest Bureau station in reach (or the nearest at all) or the point's fire weather district, and every
 other warning in force in the state is listed beside it by title, so a flood warning filed by river basin

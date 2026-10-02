@@ -760,3 +760,26 @@ for five districts - both pages, so this service said there were none. W-25 left
 area to match a place against; a list of what is in force needs none. A consumer listing both states' warnings needs
 to tell them apart, hence the state.
 — James, 2 October 2026.
+
+### W-49 · A page's warning covers the areas its product names
+
+**The decision.** A warning the listing links to as a page (W-48) covers areas. The page names the product it shows at
+its head - `IDS20201`, South Australia's marine wind summary; `IDT20100`, Tasmania's; `IDS20242`, the warning to sheep
+graziers - and that product's XML, kept where every product's is, names its areas as any warning's does: the marine wind
+summary each coastal waters zone under warning (`SA_MW009`, Upper South East Coast, type `coast`), the sheep graziers'
+warning its forecast districts. The page's warning keeps its name, title and link (`sa:sheep`) and takes the product's
+areas, hazard, severity and times. The page and its product are read when the listing names the page at a new time and
+held while it names it at the same one, as a product is. An area a product cancels is not one it covers: the sheep
+graziers' warning of 5:29 pm on 2 October 2026 was renewed for the Murraylands, Upper South East and Lower South East and
+cancelled for the Mount Lofty Ranges and Kangaroo Island in the same file, and a place in the Hills is not under it. A
+product that cancels every area it names covers none and is still listed. Where the page or its product cannot be read,
+the warning covers the forecast districts its title names, matched against the Bureau's own names for the state's
+districts (its public weather forecast districts, `IDM00001`: fifteen in South Australia, eleven in Tasmania) - "parts
+of" a district is the district, as the products list it; a name that is not one is left out - and the listing is read
+whole next time, so the page is tried again. On the map marine wind is teal and sheep graziers pink, where both were
+`other` grey.
+
+**Why.** A sheep graziers' warning for five districts was in the list (W-48) but never *here* at a place in any of them,
+and nothing could draw it. The title names the districts; the page's product names them by code and says which are
+cancelled, which the title cannot - so the product is read first and the title stands only when it cannot be.
+— James, 2 October 2026.
