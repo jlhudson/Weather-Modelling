@@ -57,7 +57,9 @@ takes - and the rest of that state's are listed beside, never the other state's.
   and flood warnings matched nothing and vanished. Now every area is kept, and a warning that matches nothing at a place
   is still listed as elsewhere in the state.
 - *Finding (25 September 2026):* the marine and surf summaries link to pages, not products, and carry no areas; when a
-  warning is not current its product URL returns 404. There were no warnings in force anywhere in Australia that day, so
+  warning is not current its product URL returns 404. *Finding (2 October 2026):* a warning to sheep graziers is a page
+  too, and on that day the South Australian listing held only pages, so leaving them out left no warnings at all; since
+  W-48 each page is a warning of its own, with no areas. There were no warnings in force anywhere in Australia that day, so
   the parser was tested on a real Tasmanian severe weather warning kept from before the start-over.
 - The Bureau does not publish its public forecast districts as open shapes, so on the map a public-district warning
   rings the stations in it; a fire weather district is a CFS district (the CFS feed carries its `SA_FW` code), and is

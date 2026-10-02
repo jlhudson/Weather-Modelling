@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+	<channel>
+		<title>Weather Warnings for South Australia. Issued by the Australian Bureau of Meteorology</title>
+		<link>https://reg.bom.gov.au/fwo/IDZ00057.warnings_sa.xml</link>
+		<atom:link href="https://reg.bom.gov.au/fwo/IDZ00057.warnings_sa.xml" rel="self" type="application/rss+xml" />
+		<description>Current weather warnings for South Australia, Australia.</description>
+		<language>en-au</language>
+		<generator>Australian Bureau of Meteorology</generator>
+		<ttl>10</ttl>
+		<!-- The two items South Australia's listing held on 2 October 2026, both pages; the product item between them is set in for the test. -->
+		<item>
+			<title>02/03:40 CST Marine Wind Warning Summary for South Australia</title>
+			<link>http://reg.bom.gov.au/sa/warnings/marine-wind.shtml</link>
+			<pubDate>Thu, 01 Oct 2026 18:10:15 GMT</pubDate>
+			<guid isPermaLink="false">http://reg.bom.gov.au/sa/warnings/marine-wind.shtml</guid>
+		</item>
+		<item>
+			<title>02/04:58 CST Severe Weather Warning for Mount Lofty Ranges and Kangaroo Island forecast districts.</title>
+			<link>http://reg.bom.gov.au/products/IDS21037.shtml</link>
+			<pubDate>Thu, 01 Oct 2026 19:28:00 GMT</pubDate>
+			<guid isPermaLink="false">http://reg.bom.gov.au/products/IDS21037.shtml</guid>
+		</item>
+		<item>
+			<title>02/04:44 CST Warning to Sheep Graziers
+for Mount Lofty Ranges, Kangaroo Island, Murraylands, Upper South East and Lower South East forecast districts</title>
+			<link>http://reg.bom.gov.au/sa/warnings/sheep.shtml</link>
+			<pubDate>Thu, 01 Oct 2026 19:14:12 GMT</pubDate>
+			<guid isPermaLink="false">http://reg.bom.gov.au/sa/warnings/sheep.shtml</guid>
+		</item>
+	</channel>
+</rss>

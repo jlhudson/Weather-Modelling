@@ -742,3 +742,21 @@ outlook asks for 137 forecasts where it asked for 82. Two small files every ten 
 assumptions played out!" - the reach rule, the coast and the drought were all drawn on South Australia; Tasmania's
 wet west, its ranges and its islands test them. Asked, he chose its warnings too, and a state switch on the map.
 — James, 29 September 2026.
+
+### W-48 · Every warning the Bureau lists, the pages too
+
+**The decision.** A listing item that links to a page rather than a product - the marine wind warning summary, a
+warning to sheep graziers - is a warning of its own, where it was left out. It is named by its state and its page
+(`sa:marine-wind`, `sa:sheep`), titled as listed without the Bureau's time stamp at its head, issued when listed, and
+covers no area: no product is fetched, there being none, and it is in force for as long as the listing names it, as
+every other warning is. Having no area it is never *here* at a place, only listed beside in the state, as a flood
+warning filed by river basin is. Its kind reads `marine wind` or `sheep graziers` from the title, any other page
+`other`. A product is read as before. Every warning now carries its state, `sa` or `tas` - the listing that names it -
+in `/api/v1/warnings`, in a reading's warnings here and on the map.
+
+**Why.** IncidentWatch, through the Hub, is to list every warning the Bureau has in force for South Australia. On 2
+October 2026 the Bureau's South Australian listing held two - the marine wind summary and a warning to sheep graziers
+for five districts - both pages, so this service said there were none. W-25 left the pages out because they name no
+area to match a place against; a list of what is in force needs none. A consumer listing both states' warnings needs
+to tell them apart, hence the state.
+— James, 2 October 2026.

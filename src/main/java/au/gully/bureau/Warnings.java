@@ -35,7 +35,9 @@ import java.util.regex.Pattern;
  * points at, which carries the areas the warning covers - public districts ({@code SA_PW…}, {@code TAS_PW…}), fire
  * weather districts ({@code SA_FW…}), river basins for a flood - and the hazard's own times. Read when asked and held
  * {@link #LIFE}, never on a clock (W-15); each listing by conditional GET, each product once for as long as its listing
- * names it at the same time. A place is under its own state's warnings, and the rest of that state's are listed beside.
+ * names it at the same time. An item linking to a page rather than a product - the marine wind summary, a warning to
+ * sheep graziers - is a warning of its own with no areas (W-48). A place is under its own state's warnings, and the rest
+ * of that state's are listed beside.
  */
 @Slf4j
 @Component
@@ -51,10 +53,17 @@ public class Warnings {
     public static final Duration LIFE = Duration.ofMinutes(10);
 
     /**
-     * A listing item names its product: {@code .../products/IDS21037.shtml}. The marine and surf summaries link to a
-     * page, not a product, and carry no areas: they are left out.
+     * A listing item names its product: {@code .../products/IDS21037.shtml}.
      */
     private static final Pattern PRODUCT = Pattern.compile("/(ID[A-Z]\\d{5})\\.shtml");
+    /**
+     * Or links to a page, not a product - {@code .../sa/warnings/sheep.shtml} - and carries no areas (W-48).
+     */
+    private static final Pattern PAGE = Pattern.compile("/([\\w-]+)\\.shtml$");
+    /**
+     * The Bureau's time stamp at the head of a listed title: {@code 02/04:44 CST }.
+     */
+    private static final Pattern STAMP = Pattern.compile("^\\d{2}/\\d{2}:\\d{2} [A-Z]{3,4} ");
 
     private final HttpFetcher http;
     private final Ledger ledger;
@@ -89,13 +98,15 @@ public class Warnings {
     /**
      * One warning.
      *
-     * @param kind  {@code fire weather}, {@code severe weather}, {@code flood}, {@code severe thunderstorm} or
-     *              {@code other}: from the hazard's code, else the title
-     * @param areas every area the warning covers: its code, name and type
+     * @param id    the product's identifier, or for a page the state and the page: {@code sa:sheep}
+     * @param state the Bureau's lower-case code for the state whose listing names it
+     * @param kind  {@code fire weather}, {@code severe weather}, {@code flood}, {@code severe thunderstorm},
+     *              {@code marine wind}, {@code sheep graziers} or {@code other}: from the hazard's code, else the title
+     * @param areas every area the warning covers: its code, name and type; none for a page
      * @param from  when the hazard begins, or the issue time
-     * @param until when it ends, or the product's expiry
+     * @param until when it ends, or the product's expiry; null for a page, in force while listed
      */
-    public record Warning(String id, String title, String headline, String phenomena, String kind, String hazardType, String severity,
+    public record Warning(String id, String state, String title, String headline, String phenomena, String kind, String hazardType, String severity,
                           List<Area> areas, Instant issued, Instant from, Instant until, String link, Instant listedAt) {
 
         public boolean covers(Collection<String> aacs) {
@@ -106,7 +117,12 @@ public class Warnings {
     public record Area(String aac, String name, String type) {
     }
 
-    public record Item(String productId, String title, String link, Instant publishedAt) {
+    /**
+     * One item of a state's listing.
+     *
+     * @param productId the product it names, or null where it links to a page
+     */
+    public record Item(String state, String productId, String title, String link, Instant publishedAt) {
     }
 
     /**
@@ -133,7 +149,11 @@ public class Warnings {
                 Fetched f = http.getIfChanged(l.uri);
                 if (!f.notModified()) {
                     List<Warning> fresh = new ArrayList<>();
-                    for (Item item : parseListing(f.body())) {
+                    for (Item item : parseListing(l.state, f.body())) {
+                        if (item.productId() == null) {
+                            fresh.add(page(item));
+                            continue;
+                        }
                         Warning w = l.products.get(item.productId());
                         if (w == null || !Objects.equals(w.listedAt(), item.publishedAt())) {
                             byte[] xml = http.get(URI.create("https://reg.bom.gov.au/fwo/" + item.productId() + ".xml")).body();
@@ -185,6 +205,7 @@ public class Warnings {
     public static Map<String, Object> view(Warning w) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", w.id());
+        m.put("state", w.state());
         m.put("kind", w.kind());
         m.put("title", w.title());
         m.put("headline", w.headline());
@@ -206,7 +227,7 @@ public class Warnings {
 
     // ---------------------------------------------------------------- the files
 
-    static List<Item> parseListing(byte[] rss) throws XMLStreamException {
+    static List<Item> parseListing(String state, byte[] rss) throws XMLStreamException {
         XMLStreamReader r = reader(rss);
         List<Item> out = new ArrayList<>();
         String title = null, link = null, pubDate = null;
@@ -230,9 +251,14 @@ public class Warnings {
                     }
                 } else if (event == XMLStreamConstants.END_ELEMENT && r.getLocalName().equals("item")) {
                     inItem = false;
-                    Matcher m = link == null ? null : PRODUCT.matcher(link);
-                    if (m != null && m.find()) {
-                        out.add(new Item(m.group(1), squash(title), link.trim(), rfc1123(pubDate)));
+                    if (link == null) {
+                        continue;
+                    }
+                    Matcher m = PRODUCT.matcher(link);
+                    if (m.find()) {
+                        out.add(new Item(state, m.group(1), squash(title), link.trim(), rfc1123(pubDate)));
+                    } else if (PAGE.matcher(link.trim()).find()) {
+                        out.add(new Item(state, null, squash(title), link.trim(), rfc1123(pubDate)));
                     }
                 }
             }
@@ -306,8 +332,20 @@ public class Warnings {
             return null;
         }
         String t = title == null ? item.title() : title;
-        return new Warning(id, t, headline, phenomena, kind(hazardType, t), hazardType, severity, new ArrayList<>(areas.values()),
+        return new Warning(id, item.state(), t, headline, phenomena, kind(hazardType, t), hazardType, severity, new ArrayList<>(areas.values()),
                 issued, from == null ? issued : from, until == null ? expiry : until, item.link(), item.publishedAt());
+    }
+
+    /**
+     * An item linking to a page as a warning of its own (W-48): named by its state and page, titled as listed without
+     * the Bureau's time stamp, issued when listed, covering no area, in force for as long as the listing names it.
+     */
+    static Warning page(Item item) {
+        Matcher m = PAGE.matcher(item.link());
+        String name = m.find() ? m.group(1) : item.link();
+        String title = STAMP.matcher(item.title()).replaceFirst("");
+        return new Warning(item.state() + ":" + name, item.state(), title, null, null, kind(null, title), null, null, List.of(),
+                item.publishedAt(), item.publishedAt(), null, item.link(), item.publishedAt());
     }
 
     /**
@@ -326,6 +364,12 @@ public class Warnings {
         }
         if ("SWW".equals(hazardType) || t.contains("severe weather")) {
             return "severe weather";
+        }
+        if (t.contains("marine wind")) {
+            return "marine wind";
+        }
+        if (t.contains("sheep graziers")) {
+            return "sheep graziers";
         }
         return "other";
     }
