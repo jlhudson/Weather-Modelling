@@ -25,6 +25,12 @@
     "features[].properties.windSpeedKmh", "features[].properties.windDirection", "features[].properties.windGustKmh",
     "features[].properties.rainSince9amMm", "features[].properties.droughtFactor"
   ],
+  "warnings": [
+    "warnings"
+  ],
+  "warnings.geojson": [
+    "features"
+  ],
   "reach.geojson": [
     "features[].properties.name", "features[].properties.reachKm", "features[].properties.areaKm2"
   ]

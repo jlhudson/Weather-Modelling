@@ -3,6 +3,7 @@ package au.gully.bureau;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -322,6 +323,41 @@ class WarningsTest {
         http.files.remove("https://reg.bom.gov.au/fwo/IDT21037.xml");
         assertThat(warnings.ensure(now.plus(Warnings.LIFE))).extracting(Warnings.Warning::id).containsExactly("IDT21037");
         assertThat(warnings.failure()).isNull();
+    }
+
+    @Test
+    void anUnreadListingSaysSoAndItsPagesAreDroppedOnceStale() throws Exception {
+        Files http = new Files();
+        http.files.put(Warnings.LISTINGS.get("sa"), listing("Fri, 02 Oct 2026 07:59:15 GMT"));
+        http.files.put(Warnings.LISTINGS.get("tas"), "<rss version=\"2.0\"><channel></channel></rss>".getBytes());
+        Warnings warnings = reading(http);
+        Instant now = Instant.parse("2026-10-02T08:50:00Z");
+        assertThat(warnings.stale(now)).as("never read").isTrue();
+
+        // Its pages unread, both stand on their titles, in force while listed.
+        assertThat(warnings.ensure(now)).extracting(Warnings.Warning::id).containsExactly("sa:marine-wind", "sa:sheep");
+        assertThat(warnings.failure()).isNull();
+        assertThat(warnings.stale(now)).isFalse();
+
+        // The listing down: the failure is said, and what it last said is held a while.
+        http.files.remove(Warnings.LISTINGS.get("sa"));
+        assertThat(warnings.ensure(now.plus(Warnings.LIFE))).hasSize(2);
+        assertThat(warnings.failure()).startsWith("sa: ");
+        assertThat(warnings.stale(now.plus(Warnings.LIFE))).isFalse();
+
+        // Unread for STALE, a page's warning is no longer in force: the listing no longer says it is.
+        Instant later = now.plus(Warnings.STALE);
+        assertThat(warnings.ensure(later)).isEmpty();
+        assertThat(warnings.at("sa", List.of("SA_PW007"), later).here()).isEmpty();
+        assertThat(warnings.stale(later)).isTrue();
+        assertThat(warnings.readAt()).isEqualTo(now);
+
+        // Back up: read again, and fresh.
+        http.files.put(Warnings.LISTINGS.get("sa"), listing("Fri, 02 Oct 2026 07:59:15 GMT"));
+        Instant back = later.plus(Duration.ofMinutes(5));
+        assertThat(warnings.ensure(back)).hasSize(2);
+        assertThat(warnings.failure()).isNull();
+        assertThat(warnings.stale(back)).isFalse();
     }
 
     @Test

@@ -52,6 +52,11 @@ public class Warnings {
             "sa", "https://reg.bom.gov.au/fwo/IDZ00057.warnings_sa.xml",
             "tas", "https://reg.bom.gov.au/fwo/IDZ00058.warnings_tas.xml");
     public static final Duration LIFE = Duration.ofMinutes(10);
+    /**
+     * How long a listing may go unread before what it last said is stale: a page's warning, in force only while listed, is
+     * then dropped rather than held through the outage, and the answer says so.
+     */
+    public static final Duration STALE = Duration.ofMinutes(30);
 
     /**
      * A listing item names its product: {@code .../products/IDS21037.shtml}.
@@ -173,7 +178,7 @@ public class Warnings {
             boolean due = l.readAt == null || Duration.between(l.readAt, now).compareTo(LIFE) >= 0;
             boolean resting = l.triedAt != null && l.failure != null && Duration.between(l.triedAt, now).compareTo(Duration.ofMinutes(5)) < 0;
             if (!enabled || !due || resting) {
-                return l.current;
+                return listed(l, now);
             }
             l.triedAt = now;
             long started = System.nanoTime();
@@ -240,8 +245,23 @@ public class Warnings {
                 ledger.record(ID, 0, false, Duration.ofNanos(System.nanoTime() - started), "warnings " + l.state + ": " + e.getMessage());
                 log.warn("bureau warnings {}: {}", l.state, e.getMessage());
             }
+            return listed(l, now);
+        }
+    }
+
+    /**
+     * A listing's warnings as last read, but its pages' when it has not been read for {@link #STALE}: a page is in force
+     * only while listed, and an unread listing no longer says it is.
+     */
+    private static List<Warning> listed(Listing l, Instant now) {
+        if (!stale(l, now)) {
             return l.current;
         }
+        return l.current.stream().filter(w -> w.until() != null).toList();
+    }
+
+    private static boolean stale(Listing l, Instant now) {
+        return l.readAt == null || Duration.between(l.readAt, now).compareTo(STALE) >= 0;
     }
 
     /**
@@ -585,6 +605,13 @@ public class Warnings {
     public Instant readAt(String state) {
         Listing l = listings.get(state);
         return l == null ? null : l.readAt;
+    }
+
+    /**
+     * Whether any state's listing has gone unread for {@link #STALE}, or was never read.
+     */
+    public boolean stale(Instant now) {
+        return listings.values().stream().anyMatch(l -> stale(l, now));
     }
 
     /**
