@@ -22,7 +22,7 @@ compose, the Hub and the env files. Port 8082.
   (`console/ConsoleModel`), `POSTGRES_*`, `TUNNEL_TOKEN`.
 - These live in `.env.development` / `.env.production`, written by The-Hub-Database's
   `env/make-env.sh` from `~/cranklyradix-env/secrets.env`. **Never hand-edit or commit them**
-  (`.gitignore` has `.env` and `.env.*`). A new variable is added to that script's Weather-Modelling block.
+  (`.gitignore` has `.env` and `.env.*`). A new variable is added to `env.template` in this repository's root, which make-env reads.
 
 ## 2. Build, test, run
 
@@ -113,7 +113,7 @@ packages; fixtures in `src/test/resources/fixtures`; contract in `src/test/resou
    - a decision → a new W-number in `docs/02-decisions.md`;
    - a fire danger figure → `docs/03-fire-danger.md`;
    - an outside source, its timing or cost → `docs/04-sources-and-findings.md`;
-   - an env var → the README's *Configuring it* and The-Hub-Database's `env/make-env.sh`;
+   - an env var → the README's *Configuring it* and `env.template`;
    - how to run or deploy → the README's *Run it* and, if shared, The-Hub-Database's docs.
 3. No secrets, keys, tokens or `.env*` files in the diff.
 4. Container, service, volume and image names (`weather-app`, `weather-db`, ...) unchanged.
