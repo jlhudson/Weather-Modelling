@@ -82,6 +82,10 @@ jobs:
         with:
           context: ${{ matrix.context }}
           push: true
+          # One manifest per image: an attestation adds untagged child manifests, and the pruning step
+          # below deleted them, leaving :main pointing at a manifest the registry no longer had.
+          provenance: false
+          sbom: false
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:main
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ github.sha }}
