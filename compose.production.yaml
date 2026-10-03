@@ -25,6 +25,9 @@ services:
     image: ghcr.io/jlhudson/weather-app:main
     pull_policy: always
     container_name: weather-app
+    # default reaches this stack's database; apps is the network the Hub, Operations and Weather share on
+    # their server (docker/server/bootstrap.sh in The-Hub-Database makes it), so they call each other by name.
+    networks: [default, apps]
     env_file: stack.env
     environment:
       SPRING_PROFILES_ACTIVE: production
@@ -55,6 +58,11 @@ services:
     command: tunnel run
     env_file: stack.env
     restart: unless-stopped
+
+networks:
+  apps:
+    name: apps
+    external: true
 
 volumes:
   weather-db: { name: weather-db }
