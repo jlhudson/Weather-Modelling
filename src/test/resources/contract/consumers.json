@@ -4,7 +4,8 @@
     "at", "from", "point", "stations",
     "current.at", "current.temperatureC", "current.apparentTemperatureC", "current.humidityPct",
     "current.windSpeedKmh", "current.windGustKmh", "current.windDirectionDeg", "current.pressureMslHpa",
-    "drought", "fire", "fire.ffdi", "fire.ffdiRating", "forecast", "afdrs", "fireBan"
+    "current.rainSince9amMm", "current.rain24hMm",
+    "drought", "fire", "fire.ffdi", "fire.ffdiRating", "forecast", "afdrs", "fireBan", "flood"
   ],
   "fire-danger": [
     "from", "to", "readAt", "districts",
@@ -17,7 +18,8 @@
     "hourly[].at", "hourly[].temperatureC", "hourly[].humidityPct", "hourly[].windSpeedKmh",
     "hourly[].windDirectionDeg", "hourly[].windGustKmh", "hourly[].precipitationMm", "hourly[].condition",
     "daily[].date", "daily[].condition", "daily[].minTemperatureC", "daily[].maxTemperatureC", "daily[].minHumidityPct",
-    "daily[].maxWindKmh", "daily[].maxGustKmh", "daily[].precipitationMm", "daily[].precipitationProbabilityPct"
+    "daily[].maxWindKmh", "daily[].maxGustKmh", "daily[].precipitationMm", "daily[].precipitationProbabilityPct",
+    "windChanges"
   ],
   "stations.geojson": [
     "features[].properties.id", "features[].properties.name", "features[].properties.at", "features[].properties.ageMinutes",
