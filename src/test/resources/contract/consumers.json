@@ -10,7 +10,7 @@
     "from", "to", "readAt", "districts",
     "districts[].district", "districts[].name", "districts[].number",
     "districts[].days[].date", "districts[].days[].rating", "districts[].days[].fbi",
-    "districts[].days[].totalFireBan", "districts[].days[].published"
+    "districts[].days[].totalFireBan", "districts[].days[].published", "districts[].days[].lastSeenAt"
   ],
   "forecast": [
     "upstream", "model", "fetchedAt", "station",
