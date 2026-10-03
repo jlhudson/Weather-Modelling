@@ -115,10 +115,11 @@ that `env/make-env.sh` writes into `.env.development` and `.env.production`.
 
 To change one:
 
-1. In The-Hub-Database, `env/make-env.sh` writes `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-   `TUNNEL_TOKEN`, `WEATHER_CONSOLE_CODE`, `WEATHER_KEY_HUB`, `GOOGLE_WEATHER_KEY` and `CARTO_API_KEY`.
-   For a key, code, password or token, edit `~/cranklyradix-env/secrets.env`; for a new variable, add it
-   to the script's Weather-Modelling block. Then run make-env there, as in *Run it*.
+1. The-Hub-Database's `env/make-env.sh` writes `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+   `TUNNEL_TOKEN`, `WEATHER_CONSOLE_CODE`, `WEATHER_KEY_HUB`, `GOOGLE_WEATHER_KEY` and `CARTO_API_KEY`, as
+   `env.template` in this repository says. For an account key or a tunnel token, edit
+   `~/cranklyradix-env/secrets.env`; for a new variable, add it to `env.template` (keys, codes and
+   passwords are made by the script). Then run make-env in The-Hub-Database, as in *Run it*.
 2. On your PC, press ▶ on `compose.development.yaml` again. On a server, follow
    [Production → Change a setting or secret](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/production.md#change-a-setting-or-secret).
    **Check:** <http://localhost:8082/actuator/health/readiness> says `UP`; the startup log prints every
