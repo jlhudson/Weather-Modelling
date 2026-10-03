@@ -61,12 +61,19 @@ public class StationsController {
     }
 
     /**
-     * The Bureau's warnings in force in South Australia (W-25) and Tasmania (W-47), each with the areas it covers.
+     * The Bureau's warnings in force in South Australia (W-25) and Tasmania (W-47), each with the areas it covers;
+     * {@code readAt} when the listing read longest ago was read, null until each has been, {@code failure} what is wrong
+     * reading them, null while every listing reads, and {@code stale} true while a listing has gone unread for
+     * {@link au.gully.bureau.Warnings#STALE} - its pages' warnings are then left out, and the rest are as last read.
      */
     @GetMapping(value = "/warnings", produces = "application/json")
     public Map<String, Object> warnings() {
-        return Map.of("warnings", inForce(Instant.now()).stream().map(au.gully.bureau.Warnings::view).toList(),
-                "readAt", String.valueOf(warnings.readAt()));
+        Instant now = Instant.now();
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("warnings", inForce(now).stream().map(au.gully.bureau.Warnings::view).toList());
+        Instant readAt = warnings.readAt();
+        out.put("readAt", readAt == null ? null : readAt.toString());
+        return health(out, now);
     }
 
     /**
@@ -76,11 +83,21 @@ public class StationsController {
      */
     @GetMapping(value = "/warnings.geojson", produces = {"application/geo+json", "application/json"})
     public Map<String, Object> warningShapes() {
-        return warningAreas.geojson(inForce(Instant.now()), warnings.readAt());
+        Instant now = Instant.now();
+        return health(warningAreas.geojson(inForce(now), warnings.readAt()), now);
     }
 
     private java.util.List<au.gully.bureau.Warnings.Warning> inForce(Instant now) {
         return warnings.ensure(now).stream().filter(w -> w.until() == null || w.until().isAfter(now)).toList();
+    }
+
+    /**
+     * The warnings' answer with whether they could be read: an outage is not "no warnings".
+     */
+    private Map<String, Object> health(Map<String, Object> out, Instant now) {
+        out.put("failure", warnings.failure());
+        out.put("stale", warnings.stale(now));
+        return out;
     }
 
     /**
