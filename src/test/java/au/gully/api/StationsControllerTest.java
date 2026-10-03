@@ -15,7 +15,7 @@ class StationsControllerTest {
     @Test
     void warningsNeverReadSayItRatherThanNoWarnings() {
         // Not enabled, the listings are never read: as on a cold start whose first read failed.
-        Warnings warnings = new Warnings(null, null, new GullyProperties(false, "test", "Australia/Adelaide", null, null, null));
+        Warnings warnings = new Warnings(null, null, new GullyProperties(false, "test", "Australia/Adelaide", null, null, null, null));
         StationsController c = new StationsController(null, null, null, null, null, null, warnings, new WarningAreas());
 
         Map<String, Object> list = c.warnings();
