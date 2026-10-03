@@ -284,6 +284,46 @@ class WarningsTest {
         assertThat(up.get(1).until()).isEqualTo(Instant.parse("2026-10-03T14:30:00Z"));
     }
 
+    static Warnings reading(Files http) {
+        au.gully.upstreams.Ledger ledger = new au.gully.upstreams.Ledger(null) {
+            @Override
+            public void record(String upstream, double units, boolean ok, java.time.Duration latency, String detail) {
+            }
+        };
+        return new Warnings(http, ledger, PROPS);
+    }
+
+    static byte[] tasListing(String... products) {
+        StringBuilder rss = new StringBuilder("<rss version=\"2.0\"><channel>");
+        for (String p : products) {
+            rss.append("<item><title>18/22:18 EST Severe Weather Warning</title><link>http://reg.bom.gov.au/products/").append(p)
+                    .append(".shtml</link><pubDate>Fri, 18 Sep 2026 12:18:39 GMT</pubDate></item>");
+        }
+        return rss.append("</channel></rss>").toString().getBytes();
+    }
+
+    @Test
+    void aProductThatCannotBeReadIsLeftOutAndTheRestOfTheListingTakenIn() throws Exception {
+        Files http = new Files();
+        http.files.put(Warnings.LISTINGS.get("sa"), "<rss version=\"2.0\"><channel></channel></rss>".getBytes());
+        http.files.put(Warnings.LISTINGS.get("tas"), tasListing("IDT99999", "IDT21037"));
+        http.files.put("https://reg.bom.gov.au/fwo/IDT21037.xml", fixture("IDT21037.xml"));
+        Warnings warnings = reading(http);
+        Instant now = Instant.parse("2026-09-18T13:00:00Z");
+
+        // IDT99999's XML is a 404: it is left out, the other taken in, and the listing forgotten so the next read tries again.
+        assertThat(warnings.ensure(now)).extracting(Warnings.Warning::id).containsExactly("IDT21037");
+        assertThat(warnings.failure()).isNull();
+        assertThat(warnings.readAt("tas")).isEqualTo(now);
+        assertThat(http.forgotten).containsExactly(Warnings.LISTINGS.get("tas"));
+
+        // Listed again at a new time, its product now down: it stands as last read.
+        http.files.put(Warnings.LISTINGS.get("tas"), new String(tasListing("IDT21037")).replace("12:18:39", "12:48:39").getBytes());
+        http.files.remove("https://reg.bom.gov.au/fwo/IDT21037.xml");
+        assertThat(warnings.ensure(now.plus(Warnings.LIFE))).extracting(Warnings.Warning::id).containsExactly("IDT21037");
+        assertThat(warnings.failure()).isNull();
+    }
+
     @Test
     void theKindIsTheHazardsCodeElseTheTitle() {
         assertThat(Warnings.kind("FWW", "Fire Weather Warning")).isEqualTo("fire weather");

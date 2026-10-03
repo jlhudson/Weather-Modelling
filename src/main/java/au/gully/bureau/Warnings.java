@@ -201,11 +201,23 @@ public class Warnings {
                         }
                         Warning w = l.held.get(item.productId());
                         if (w == null || !Objects.equals(w.listedAt(), item.publishedAt())) {
-                            byte[] xml = http.get(URI.create(PRODUCTS + item.productId() + ".xml")).body();
-                            w = parseProduct(xml, item);
-                            if (w == null) {
+                            Warning read;
+                            try {
+                                read = parseProduct(http.get(URI.create(PRODUCTS + item.productId() + ".xml")).body(), item);
+                            } catch (UpstreamException | XMLStreamException | RuntimeException e) {
+                                // Unread, the product stands as last read, or is left out, until the listing is read whole again;
+                                // the rest of the listing is taken in.
+                                unread++;
+                                log.warn("bureau warnings {}: the product {} could not be read: {}", l.state, item.productId(), e.getMessage());
+                                if (w != null) {
+                                    fresh.add(w);
+                                }
                                 continue;
                             }
+                            if (read == null) {
+                                continue;
+                            }
+                            w = read;
                             l.held.put(item.productId(), w);
                         }
                         fresh.add(w);
@@ -217,7 +229,7 @@ public class Warnings {
                         http.forget(l.uri);
                     }
                     ledger.record(ID, 0, true, Duration.ofNanos(System.nanoTime() - started), "warnings " + l.state + ", " + fresh.size() + " in force"
-                            + (unread > 0 ? ", " + unread + " page" + (unread == 1 ? "" : "s") + " unread" : ""));
+                            + (unread > 0 ? ", " + unread + " unread" : ""));
                 }
                 l.readAt = now;
                 l.failure = null;
