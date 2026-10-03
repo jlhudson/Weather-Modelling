@@ -56,8 +56,8 @@ key is never rate-limited.
 
 On your PC, with Docker Desktop running:
 
-1. In The-Hub-Database, run make-env: `bash env/make-env.sh` in Git Bash, or `.\env\make-env.cmd` in
-   PowerShell ([Which terminal](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development.md#which-terminal)). It writes this checkout's `.env.development` (and
+1. In IntelliJ's terminal, in The-Hub-Database, run make-env: `.\env\make-env.cmd`
+   ([Which terminal](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development.md#which-terminal)). It writes this checkout's `.env.development` (and
    `.env.production`). Never edit or commit either: change `~/cranklyradix-env/secrets.env` and run it again.
    **Check:** `.env.development` is in the root of this checkout.
 2. Open `compose.development.yaml` in IntelliJ and click the ▶ beside `services:`, or pick **Weather
