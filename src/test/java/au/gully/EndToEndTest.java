@@ -605,7 +605,7 @@ class EndToEndTest {
         }
         // Every warning as a shape (W-50): a FeatureCollection beside the list, under the same key, refused without one.
         Map<String, Object> shapes = client().get().uri("/api/v1/warnings.geojson").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class);
-        assertThat(shapes).containsOnlyKeys("type", "features", "readAt").containsEntry("type", "FeatureCollection");
+        assertThat(shapes).containsOnlyKeys("type", "features", "readAt", "failure", "stale").containsEntry("type", "FeatureCollection");
         assertThat((List<?>) shapes.get("features")).hasSameSizeAs((List<?>) client().get().uri("/api/v1/warnings").header("X-Api-Key", HUB_KEY).retrieve().body(Map.class).get("warnings"));
         assertThat(client().get().uri("/api/v1/warnings.geojson").retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(client().get().uri("/api/v1/upstreams/open-meteo/spend/daily?from=2026-01-01&to=2026-09-01").header("X-Api-Key", HUB_KEY).retrieve().toEntity(String.class).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
