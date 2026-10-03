@@ -1,11 +1,11 @@
-# CLAUDE.md: building Weather (Gully) with an AI agent
+# CLAUDE.md: building Weather (Gully)
 
 Read this before changing anything here. People start at [README.md](README.md); the shared run and
 deploy docs live in [The-Hub-Database/docs](https://github.com/jlhudson/The-Hub-Database/tree/main/docs).
 The repository is Weather-Modelling, the app is called Gully in the code (`au.gully`), and Weather in
 compose, the Hub and the env files. Port 8082.
 
-## 1. What this app is and where it fits
+## What this is and where it fits
 
 - South Australia's weather from the Bureau's stations, each with a terrain-drawn *reach*; readings,
   drought, fire danger, warnings, forecasts. See `docs/01-what-it-is.md`.
@@ -24,7 +24,7 @@ compose, the Hub and the env files. Port 8082.
   `env/make-env.sh` from `~/cranklyradix-env/secrets.env`. **Never hand-edit or commit them**
   (`.gitignore` has `.env` and `.env.*`). A new variable is added to `env.template` in this repository's root, which make-env reads.
 
-## 2. Build, test, run
+## Build, test, run
 
 | Task | Command |
 |---|---|
@@ -45,7 +45,7 @@ compose, the Hub and the env files. Port 8082.
 - `tools/WarningAreasGen.java` is run by hand when the Bureau changes a shapefile; it writes
   `src/main/resources/bureau/warning-areas.geojson`. Its header has the command.
 
-## 3. Layout
+## Layout
 
 One Maven module, `src/main/java/au/gully/`:
 
@@ -68,7 +68,7 @@ Resources: `application.yaml` (+ `-development`, `-production`), `db/migration/V
 `V11__fire_danger_day.sql`, `bureau/warning-areas.geojson`, `templates/`, `static/`. Tests mirror the
 packages; fixtures in `src/test/resources/fixtures`; contract in `src/test/resources/contract/consumers.json`.
 
-## 4. Conventions used here
+## Conventions used in the code
 
 - **Settings:** `platform/GullyProperties` (and `platform/diagnostics/DiagnosticsProperties`), a record
   with `@DefaultValue` on each field, found by `@ConfigurationPropertiesScan("au.gully")`; `Settings`
@@ -92,7 +92,7 @@ packages; fixtures in `src/test/resources/fixtures`; contract in `src/test/resou
   `weather-backup`, `weather-tunnel`; volumes `weather-db`, `weather-backups`; image
   `ghcr.io/jlhudson/weather-app`. The Hub's docs and Portainer rely on these; do not change them.
 
-## 5. Contracts with other apps
+## Contracts with other applications
 
 - Keys in `X-Api-Key` or `Authorization: Bearer`; scopes `ALL`, `READINGS` (`/api/v1`),
   `DIAGNOSTICS` (`platform/access/ApiKey.Scope`).
@@ -105,7 +105,7 @@ packages; fixtures in `src/test/resources/fixtures`; contract in `src/test/resou
 - **A contract change is one round across repos:** change those readers (and the Hub's tests, e.g.
   `WeatherPanelTest`) in the same round as this repo's answer, `consumers.json`, and the README's API table.
 
-## 6. Before you finish a change
+## Before you finish a change
 
 1. `./mvnw -B -ntp verify` passes, with Docker running so `EndToEndTest` is not skipped.
 2. Docs match the new behaviour:
@@ -120,17 +120,19 @@ packages; fixtures in `src/test/resources/fixtures`; contract in `src/test/resou
 5. A contract change made in the other repos as well (section 5).
 6. CI runs only on `main`, so nothing checks a branch for you: verify locally before merging.
 
-## 7. Deploying
+## Deploying
 
-1. Merge to `main`. CI (`.github/workflows/ci.yml`) runs `./mvnw -B -ntp verify`, then pushes
-   `ghcr.io/jlhudson/weather-app:main` and `:<sha>` (last ten kept).
-2. Watchtower on the server sees the new `:main` image and replaces `weather-app` within five minutes
-   (label `com.centurylinklabs.watchtower.enable` in `compose.production.yaml`).
-3. A change to `compose.production.yaml` is picked up by Portainer's GitOps polling (every five
-   minutes) and the stack is redeployed. A new migration runs on the new container's first start.
-4. **Check:** the Actions tab is green, then `https://weather.cranklyradix.com.au/actuator/health/readiness`
-   says `UP`.
+1. Merge to `main` and push. CI (`.github/workflows/ci.yml`) runs `./mvnw -B -ntp verify`, then
+   pushes `ghcr.io/jlhudson/weather-app:main` and `:<commit>`, keeping the last ten.
+2. Watchtower on the Database & Core (`vps-a`) server replaces `weather-app` within five minutes (label
+   `com.centurylinklabs.watchtower.enable` in `compose.production.yaml`). Production is https://weather.cranklyradix.com.au, through the
+   tunnel **Production - Weather** → `http://weather-app:8082`.
+3. A change to `compose.production.yaml` is picked up by Portainer's GitOps polling of `main`.
+4. Settings change in `~/cranklyradix-env/secrets.env` (and `env.template` for a new variable), then
+   make-env and the Portainer stack's **Load variables from .env file**; never in this repository.
+5. **Check:** the Actions tab is green, then https://weather.cranklyradix.com.au/actuator/health/readiness says `UP`.
 
-Details, settings and fixes: [Production](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/production.md),
-[Development](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development.md),
-[Lightsail](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/lightsail.md).
+Every repository's CLAUDE.md ends with this section in the same words. The fleet's guides, in
+The-Hub-Database: [Applications](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/applications.md) (every port, address, tunnel, file and branch),
+[Development](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/development.md), [Production](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/production.md),
+[Set up the servers](https://github.com/jlhudson/The-Hub-Database/blob/main/docs/server-setup.md).

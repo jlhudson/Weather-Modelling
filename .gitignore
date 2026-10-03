@@ -1,21 +1,34 @@
+# Every application's .gitignore is this file, plus its own lines at the end.
+
 # Build
 target/
 *.class
 *.log
+HELP.md
 
-# Secrets: D-101, never in code, never in git
+# Secrets: never in git. The-Hub-Database/env/make-env.sh writes .env.development and .env.production
+# from ~/cranklyradix-env/secrets.env.
 .env
 .env.*
 
-# Local runtime state
-data/
-
-# IDE
+# IDE: IntelliJ makes its project files on opening. The run configurations in .run/ are shared, in git.
 .idea/
+*.iws
+*.iml
+*.ipr
 out/
 .vscode/
 .DS_Store
 Thumbs.db
 
+# Claude Code (local agent state: worktrees, settings)
+.claude/
+
+# Node is lint and test tooling only; nothing here is served or bundled.
+node_modules/
+
 # Development database backups (compose.development.yaml)
 backups/
+
+# Local runtime state
+/data/
