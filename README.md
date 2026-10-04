@@ -88,10 +88,10 @@ The unit tests need nothing; the one end-to-end test starts a throwaway Postgres
 2. Merge to `main` and push. CI (`.github/workflows/ci.yml`) builds and tests, then pushes
    `ghcr.io/jlhudson/weather-app`, tagged `main` and the commit.
 3. Nothing more to do: the `weather` Portainer stack on the Database & Core (`vps-a`) server runs `compose.production.yaml`
-   from `main` with `.env.production`, and Watchtower replaces the container within five minutes. A
+   from `main` with `.env.production`, and Watchtower replaces the container at the next :00 or :30 past the hour. A
    change to `compose.production.yaml` itself is redeployed by Portainer when `main` changes.
 
-**Check:** the CI run on `main` is green, and within five minutes Portainer shows `weather-app` recreated on
+**Check:** the CI run on `main` is green, and after the next :00 or :30 past the hour Portainer shows `weather-app` recreated on
 the new image. CI keeps the last ten images, each also tagged by its commit, to roll back to.
 
 | | Development | Production |
