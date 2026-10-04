@@ -124,7 +124,7 @@ packages; fixtures in `src/test/resources/fixtures`; contract in `src/test/resou
 
 1. Merge to `main` and push. CI (`.github/workflows/ci.yml`) runs `./mvnw -B -ntp verify`, then
    pushes `ghcr.io/jlhudson/weather-app:main` and `:<commit>`, keeping the last ten.
-2. Watchtower on the Database & Core (`vps-a`) server replaces `weather-app` within five minutes (label
+2. Watchtower on the Database & Core (`vps-a`) server replaces `weather-app` at the next :00 or :30 past the hour (label
    `com.centurylinklabs.watchtower.enable` in `compose.production.yaml`). Production is https://weather.cranklyradix.com.au, through the
    tunnel **Production - Weather** → `http://weather-app:8082`.
 3. A change to `compose.production.yaml` is picked up by Portainer's GitOps polling of `main`.
